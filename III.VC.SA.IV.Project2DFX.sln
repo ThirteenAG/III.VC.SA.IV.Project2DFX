@@ -1,0 +1,68 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IIILodLights", "IIILodLights\IIILodLights.vcxproj", "{B42AC8DF-B9B8-4B39-852B-259C71EFDA35}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VCLodLights", "VCLodLights\VCLodLights.vcxproj", "{4304D8B7-2551-42BA-B62F-B898C42EABF2}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SALodLights", "SALodLights\SALodLights.vcxproj", "{32E8A22B-F9D9-4A3C-B524-9632BEC56A51}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IVLodLights", "IVLodLights\IVLodLights.vcxproj", "{586D45F0-B4A6-4EEA-9AC5-15B2C2AAFE4D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "includes", "includes", "{C3D6CE2B-BA5B-4F07-BB5D-DA6361526A8A}"
+	ProjectSection(SolutionItems) = preProject
+		includes\Camera.h = includes\Camera.h
+		includes\CLODLightManager.h = includes\CLODLightManager.h
+		includes\General.cpp = includes\General.cpp
+		includes\General.h = includes\General.h
+		includes\IniReader.h = includes\IniReader.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "injector", "injector", "{AA98E65A-C4CF-484F-A2E0-68D2C3BBABBE}"
+	ProjectSection(SolutionItems) = preProject
+		includes\injector\assembly.hpp = includes\injector\assembly.hpp
+		includes\injector\calling.hpp = includes\injector\calling.hpp
+		includes\injector\hooking.hpp = includes\injector\hooking.hpp
+		includes\injector\injector.hpp = includes\injector\injector.hpp
+		includes\injector\utility.hpp = includes\injector\utility.hpp
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "gvm", "gvm", "{2201EC13-514E-440A-A4D2-7D6640D24D6C}"
+	ProjectSection(SolutionItems) = preProject
+		includes\injector\gvm\gvm.hpp = includes\injector\gvm\gvm.hpp
+		includes\injector\gvm\translator.hpp = includes\injector\gvm\translator.hpp
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B42AC8DF-B9B8-4B39-852B-259C71EFDA35}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B42AC8DF-B9B8-4B39-852B-259C71EFDA35}.Debug|Win32.Build.0 = Debug|Win32
+		{B42AC8DF-B9B8-4B39-852B-259C71EFDA35}.Release|Win32.ActiveCfg = Release|Win32
+		{B42AC8DF-B9B8-4B39-852B-259C71EFDA35}.Release|Win32.Build.0 = Release|Win32
+		{4304D8B7-2551-42BA-B62F-B898C42EABF2}.Debug|Win32.ActiveCfg = Debug|Win32
+		{4304D8B7-2551-42BA-B62F-B898C42EABF2}.Debug|Win32.Build.0 = Debug|Win32
+		{4304D8B7-2551-42BA-B62F-B898C42EABF2}.Release|Win32.ActiveCfg = Release|Win32
+		{4304D8B7-2551-42BA-B62F-B898C42EABF2}.Release|Win32.Build.0 = Release|Win32
+		{32E8A22B-F9D9-4A3C-B524-9632BEC56A51}.Debug|Win32.ActiveCfg = Debug|Win32
+		{32E8A22B-F9D9-4A3C-B524-9632BEC56A51}.Debug|Win32.Build.0 = Debug|Win32
+		{32E8A22B-F9D9-4A3C-B524-9632BEC56A51}.Release|Win32.ActiveCfg = Release|Win32
+		{32E8A22B-F9D9-4A3C-B524-9632BEC56A51}.Release|Win32.Build.0 = Release|Win32
+		{586D45F0-B4A6-4EEA-9AC5-15B2C2AAFE4D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{586D45F0-B4A6-4EEA-9AC5-15B2C2AAFE4D}.Debug|Win32.Build.0 = Debug|Win32
+		{586D45F0-B4A6-4EEA-9AC5-15B2C2AAFE4D}.Release|Win32.ActiveCfg = Release|Win32
+		{586D45F0-B4A6-4EEA-9AC5-15B2C2AAFE4D}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{AA98E65A-C4CF-484F-A2E0-68D2C3BBABBE} = {C3D6CE2B-BA5B-4F07-BB5D-DA6361526A8A}
+		{2201EC13-514E-440A-A4D2-7D6640D24D6C} = {AA98E65A-C4CF-484F-A2E0-68D2C3BBABBE}
+	EndGlobalSection
+EndGlobal
