@@ -545,6 +545,12 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 	if (TimedObjectsDrawDistance)
 	{
 		injector::MakeJMP(0x5B3F43, asm_IncreaseDrawDistanceForTimedObjects);
+		if ((TimedObjectsDrawDistance > 2.0f && TimedObjectsDrawDistance <= 10.0f) || (TimedObjectsDrawDistance > 300.0f))
+		{
+			injector::WriteMemory<unsigned char>(0x5D95B0, 0xC3u);
+			injector::WriteMemory<unsigned char>(0x810CA0, 0xC3u);
+			injector::WriteMemory(0x56420F, 0xB83074);
+		}
 	}
 
 	if (LODObjectsDrawDistance || GenericObjectsDrawDistance || AllNormalObjectsDrawDistance || VegetationDrawDistance)
