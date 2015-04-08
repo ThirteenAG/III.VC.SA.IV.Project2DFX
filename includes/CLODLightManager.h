@@ -2,9 +2,12 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <algorithm>
 #include "General.h"
 #include "Camera.h"
 #include "..\includes\injector\injector.hpp"
+#include "..\includes\injector\hooking.hpp"
+#include "..\includes\injector\calling.hpp"
 #include "..\includes\injector\assembly.hpp"
 #include "IniReader.h"
 
@@ -18,7 +21,7 @@ float LODObjectsDrawDistance;
 float GenericObjectsDrawDistance;
 float AllNormalObjectsDrawDistance;
 float VegetationDrawDistance;
-bool bLoadAllBinaryIPLs;
+bool bLoadAllBinaryIPLs, bPreloadLODs;
 int RenderStaticShadowsForLODs, IncreasePedsCarsShadowsDrawDistance;
 float TrafficLightsShadowsIntensity, TrafficLightsShadowsDrawDistance;
 float StaticShadowsIntensity, StaticShadowsDrawDistance;

@@ -463,6 +463,14 @@ void LoadAllBinaryIPLs()
 	CIplStoreLoadAll();
 }
 
+static std::vector<void*> lods; // CEntity*
+static auto RequestModel = injector::cstd<void(int, int)>::call<0x4087E0>;
+static auto LoadAllRequestedModels = injector::cstd<void(bool)>::call<0x40EA10>;
+static void RequestLod(uint16_t id)
+{
+	return RequestModel(id, 2); // STREAMING_CANNOT_DELETE
+}
+
 void CLODLightManager::SA::ApplyMemoryPatches()
 {
 	if (bRenderLodLights)
@@ -583,6 +591,43 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 	{
 		injector::MakeCALL(0x5D19A4, LoadAllBinaryIPLs);
 	}
+
+	if (bPreloadLODs)
+{
+		using h53BCAB = injector::function_hooker<0x53BCAB, void()>;
+		
+		injector::MakeInline<0x5B5295, 0x5B5295 + 8>([](injector::reg_pack& regs)
+		{
+			regs.ecx = *(uint16_t*)(regs.eax + 0x22);  // mah let's make it unsigned
+			regs.edx = *(uint16_t*)(regs.esi + 0x22);
+			lods.push_back( (void*)regs.eax );
+		});
+
+		injector::make_static_hook<h53BCAB>([](h53BCAB::func_type AfterInit2)
+		{
+			// Put the id of the lods in another container
+			std::vector<uint16_t> lods_id(lods.size());
+			std::transform(lods.begin(), lods.end(), lods_id.begin(), [](void* entity)
+			{
+				return *(uint16_t*)((uintptr_t)(entity) + 0x22);
+			});
+
+			// Load all lod models
+			std::for_each(lods_id.begin(), std::unique(lods_id.begin(), lods_id.end()), RequestLod);
+			LoadAllRequestedModels(false);
+
+			// Instantiate all lod entities RwObject
+			if(false)
+				std::for_each(lods.begin(), lods.end(), [](void* entity)
+				{
+					auto rwObject = *(void**)((uintptr_t)(entity) + 0x18);
+					if(rwObject == nullptr)
+						injector::thiscall<void(void*)>::vtbl<7>(entity);
+				});
+
+			return AfterInit2();
+		});
+	}
 }
 
 void CLODLightManager::SA::Init()
@@ -626,6 +671,7 @@ void CLODLightManager::SA::Init()
 	AllNormalObjectsDrawDistance = iniReader.ReadFloat("IDETweaker", "AllNormalObjectsDrawDistance", 0.0f);
 	VegetationDrawDistance = iniReader.ReadFloat("IDETweaker", "VegetationDrawDistance", 0.0f);
 	bLoadAllBinaryIPLs = iniReader.ReadInteger("IDETweaker", "LoadAllBinaryIPLs", 0) == 1;
+	bPreloadLODs = iniReader.ReadInteger("IDETweaker", "PreloadLODs", 0) == 1;
 
 	ApplyMemoryPatches();
 }
