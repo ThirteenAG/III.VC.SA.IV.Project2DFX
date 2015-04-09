@@ -1,5 +1,4 @@
 
-
 void CLODLightManager::SA::RenderSearchLights()
 {
     static CPool **pObjectPool = (CPool **)0xB7449C;
@@ -31,7 +30,7 @@ void CLODLightManager::SA::RenderSearchLights()
                             //{
                             if (!(C2dfxData->color.r == 255 && C2dfxData->color.g == 0 && C2dfxData->color.b == 0)
                             && !(C2dfxData->color.r == 0 && C2dfxData->color.g == 255 && C2dfxData->color.b == 0)
-                            && !(C2dfxData->color.r == 255 && (C2dfxData->color.g == 128 || C2dfxData->color.g == 142) && C2dfxData->color.b == 0 && (ObjectInst->m_nModelIndex == GetModelInfoUInt16("CJ_TRAFFIC_LIGHT4") || ObjectInst->m_nModelIndex == GetModelInfoUInt16("GAY_TRAFFIC_LIGHT")))
+                            && !(C2dfxData->color.r == 255 && (C2dfxData->color.g == 128 || C2dfxData->color.g == 142) && C2dfxData->color.b == 0 && (ObjectInst->m_nModelIndex == CJ_TRAFFIC_LIGHT4 || ObjectInst->m_nModelIndex == GAY_TRAFFIC_LIGHT))
                             && !(C2dfxData->coronaSize == 0.0f))
                             {
                                 RwV3D StartPoint;
@@ -46,14 +45,14 @@ void CLODLightManager::SA::RenderSearchLights()
                                     float grZ = FindGroundZFor3DCoord(StartPoint.x, StartPoint.y, StartPoint.z, 0, 0);
                                     EndPoint.z = grZ;
 
-                                    if (ObjectInst->m_nModelIndex != GetModelInfoUInt16("Streetlamp1") && ObjectInst->m_nModelIndex != GetModelInfoUInt16("Streetlamp2")
-                                        && ObjectInst->m_nModelIndex != GetModelInfoUInt16("bollardlight") && ObjectInst->m_nModelIndex != GetModelInfoUInt16("Gay_lamppost"))
+                                    if (ObjectInst->m_nModelIndex != Streetlamp1 && ObjectInst->m_nModelIndex != Streetlamp2
+                                        && ObjectInst->m_nModelIndex != bollardlight && ObjectInst->m_nModelIndex != Gay_lamppost)
                                     {
                                         //yellow
                                         drawCustomSpotLight(StartPoint, EndPoint, 8.0f * (StartPoint.z - grZ), C2dfxData->coronaSize / 6.0f, 5.0f, 8, fSearchlightEffectVisibilityFactor);
 
                                     }
-                                    else if (ObjectInst->m_nModelIndex != GetModelInfoUInt16("Gay_lamppost"))
+                                    else if (ObjectInst->m_nModelIndex != Gay_lamppost)
                                     {
                                         //white
                                         drawCustomSpotLight(StartPoint, EndPoint, 8.0f * (StartPoint.z - grZ), C2dfxData->coronaSize / 6.0f, 255.0f, 8, fSearchlightEffectVisibilityFactor);

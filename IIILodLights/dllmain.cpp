@@ -242,6 +242,7 @@ void CLODLightManager::III::LoadDatFile()
 	}
 	else
 	{
+		RenderSearchlightEffects = 0;
 		bRenderLodLights = 0;
 	}
 
@@ -292,6 +293,23 @@ void __declspec(naked) CLODLightManager::III::GenericIDEHook()
 				strncpy(tempptr, "300  ", 5);
 				strncpy(tempptr + 5, Flags2, 15);
 				//MessageBox(0, buffer, "0", 0);
+			}
+		}
+		if (bPreloadLODs)
+		{
+			if (modelID == 404 || modelID == 405 || modelID == 416 || modelID == 402 || modelID == 403 || modelID == 1177 || modelID == 1179)
+			{
+				if (IDEDrawDistance == 3000)
+				{
+					sprintf(sIDEDrawDistance, "%d", IDEDrawDistance);
+					tempptr = strstr(buffer + 10, sIDEDrawDistance);
+
+					strncpy(Flags2, tempptr + 5, 15);
+
+					strncpy(tempptr, "0    ", 5);
+					strncpy(tempptr + 6, Flags2, 15);
+					//MessageBox(0, buffer, "0", 0);
+				}
 			}
 		}
 	}
@@ -364,9 +382,6 @@ void CLODLightManager::III::Init()
 	else
 		autoFarClip = true;
 
-	DrawDistance = iniReader.ReadFloat("DistanceLimits", "DrawDistance", 0.0f);
-	MaxDrawDistanceForNormalObjects = iniReader.ReadFloat("DistanceLimits", "MaxDrawDistanceForNormalObjects", 0.0f);
-
 	RenderStaticShadowsForLODs = iniReader.ReadInteger("StaticShadows", "RenderStaticShadowsForLODs", 0);
 	IncreasePedsCarsShadowsDrawDistance = iniReader.ReadInteger("StaticShadows", "IncreasePedsCarsShadowsDrawDistance", 0);
 	StaticShadowsIntensity = iniReader.ReadFloat("StaticShadows", "StaticShadowsIntensity", 0.0f);
@@ -389,7 +404,12 @@ void CLODLightManager::III::Init()
 	MaxFPSValue = iniReader.ReadInteger("AdaptiveDrawDistance", "MaxFPSValue", 0);
 	MaxPossibleDrawDistance = iniReader.ReadFloat("AdaptiveDrawDistance", "MaxPossibleDrawDistance", 0.0f);
 
+	MaxDrawDistanceForNormalObjects = iniReader.ReadFloat("DistanceLimits", "MaxDrawDistanceForNormalObjects", 0.0f);
+	DrawDistance = iniReader.ReadFloat("DistanceLimits", "DrawDistance", 0.0f);
+	bPreloadLODs = iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0) == 1;
+
 	LoadDatFile();
+
 	if (bRenderLodLights)
 	{
 		RegisterAllLampposts();
@@ -413,6 +433,29 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 				injector::MakeJMP(0x4787F8, CLODLightManager::III::IPLDataHook1);
 				injector::MakeJMP(0x47899B, CLODLightManager::III::IPLDataHook2);
 				injector::MakeCALL(0x48C09F, CLODLightManager::III::Init);
+
+				CIniReader iniReader("");
+				if (iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0) == 1)
+				{
+					injector::WriteMemory(0x591E0B, &nLevelPortland, true);
+					injector::WriteMemory(0x591E16, &nLevelPortland, true);
+					injector::WriteMemory(0x591E28, &nLevelPortland, true);
+					injector::WriteMemory(0x591E3B, &nLevelPortland, true);
+
+					injector::WriteMemory(0x4A8F79 + 0x1, &nLevelPortland, true);
+
+					injector::WriteMemory(0x4B61BC, nLevelPortland, true);
+
+					injector::MakeInline<0x40B7DA, 0x40B8F4>([](injector::reg_pack& regs)
+					{
+						CPopulationDealWithZoneChange(0x8F6250, *(char*)0x941514, 0);
+						LoadCollisionFile1(*(char*)0x941514);
+						*(DWORD*)0x8F6250 = *(char*)0x941514;
+						sub_595BD0();
+					});
+
+					injector::MakeNOP(0x4764AF, 5, true); //CFileLoader::LoadMapZones((char const *))
+				}
 			}
 		}
 	}

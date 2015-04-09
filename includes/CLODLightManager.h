@@ -44,6 +44,10 @@ __int16 TempBufferRenderIndexList[4096];
 RxObjSpace3dVertex TempVertexBuffer[500];
 int TempBufferIndicesStored = 0;
 unsigned int TempBufferVerticesStored = 0;
+static int nLevelPortland = 1;
+static auto CPopulationDealWithZoneChange = injector::cstd<void(int a1, int a2, char a3)>::call<0x4F6200>;
+static auto LoadCollisionFile1 = injector::cstd<void(int a1)>::call<0x476520>;
+static auto sub_595BD0 = injector::cstd<void()>::call<0x595BD0>;
 
 typedef struct { float X, Y, Z; } Vector3;
 #define RwV3D RwV3d
@@ -507,7 +511,8 @@ RwV3D * GetCamPos()
 {
 	return (RwV3D *)(0xB6F338 + (*(BYTE *)0xB6F081 * 0x238));
 }
-int MTraffic1, MTraffic2, MTraffic3, MTraffic4, trafficlight1, VGSSTRIPTLIGHTS1, CJ_TRAFFIC_LIGHT3;
+short MTraffic1, MTraffic2, MTraffic3, MTraffic4, trafficlight1, VGSSTRIPTLIGHTS1, CJ_TRAFFIC_LIGHT3;
+short CJ_TRAFFIC_LIGHT4, GAY_TRAFFIC_LIGHT, Streetlamp1, Streetlamp2, Gay_lamppost, bollardlight;
 bool CLODLightManager::SA::IsModelALamppostNotTrafficLight(unsigned short nModelIndex)
 {
 	if (!MTraffic1)
@@ -519,6 +524,12 @@ bool CLODLightManager::SA::IsModelALamppostNotTrafficLight(unsigned short nModel
 		trafficlight1 = GetModelInfoUInt16("trafficlight1");
 		VGSSTRIPTLIGHTS1 = GetModelInfoUInt16("VGSSTRIPTLIGHTS1");
 		CJ_TRAFFIC_LIGHT3 = GetModelInfoUInt16("CJ_TRAFFIC_LIGHT3");
+		CJ_TRAFFIC_LIGHT4 = GetModelInfoUInt16("CJ_TRAFFIC_LIGHT4");
+		GAY_TRAFFIC_LIGHT = GetModelInfoUInt16("GAY_TRAFFIC_LIGHT");
+		Streetlamp1 = GetModelInfoUInt16("Streetlamp1");
+		Streetlamp2 = GetModelInfoUInt16("Streetlamp2");
+		Gay_lamppost = GetModelInfoUInt16("Gay_lamppost");
+		bollardlight = GetModelInfoUInt16("bollardlight");
 	}
 
 	if (nModelIndex != MTraffic1

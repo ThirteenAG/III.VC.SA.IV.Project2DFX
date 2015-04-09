@@ -217,6 +217,7 @@ void CLODLightManager::SA::LoadDatFile()
 	}
 	else
 	{
+		//RenderSearchlightEffects = 0;
 		bRenderLodLights = 0;
 		injector::MakeNOP(0x53C131, 5);
 	}
@@ -456,11 +457,12 @@ void __cdecl CIplStoreLoadAll()
 	}
 }
 
-void LoadAllBinaryIPLs()
+char LoadAllBinaryIPLs()
 {	
 	static auto CIplStoreLoad = (char *(__cdecl *)()) 0x5D54A0;
 	CIplStoreLoad();
 	CIplStoreLoadAll();
+	return 1;
 }
 
 static std::vector<void*> lods; // CEntity*
@@ -509,8 +511,6 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 		injector::MakeCALL(0x53E184, RenderSearchLights, true);
 	}
 
-	injector::WriteMemory(0x6FC051 + 0x2, 0x7080 * 0xA, true); // sun reflection
-
 	/*if (SmoothEffect)
 	{
 		SmoothEffect = 1;
@@ -528,6 +528,7 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 		injector::MakeNOP(0x6FAE1F, 6, true);
 	}
 
+	injector::WriteMemory(0x6FC051 + 0x2, 0x7080 * 0xA, true); // sun reflection
 	injector::WriteMemory<float>(0x49DCF4, 550.0f, true); //Traffic lights corona draw distance
 	injector::MakeJMP(0x6FCFC4, LamppostsCoronaFarclpHook, true);
 
@@ -555,8 +556,12 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 		injector::MakeJMP(0x5B3F43, asm_IncreaseDrawDistanceForTimedObjects);
 		if ((TimedObjectsDrawDistance > 2.0f && TimedObjectsDrawDistance <= 10.0f) || (TimedObjectsDrawDistance > 300.0f))
 		{
-			injector::WriteMemory<unsigned char>(0x5D95B0, 0xC3u);
-			injector::WriteMemory<unsigned char>(0x810CA0, 0xC3u);
+			injector::MakeInline<0x53C9B7, 0x53C9B7+5>([](injector::reg_pack& regs)
+			{
+				injector::WriteMemory<unsigned char>(0x5D95B0, 0xC3u);
+				injector::WriteMemory<unsigned char>(0x810CA0, 0xC3u);
+				injector::WriteMemory<unsigned char>(0x5D9730, 0xC3u);
+			});
 			injector::WriteMemory(0x56420F, 0xB83074);
 		}
 	}

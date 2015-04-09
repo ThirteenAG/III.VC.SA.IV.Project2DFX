@@ -399,19 +399,31 @@ int _tmain(int argc, _TCHAR* argv[])
 					line2.find("mtraffic4") != std::string::npos || line2.find("trafficlight1") != std::string::npos)
 					{
 						Size = 0.45f;
-						LodLights << R << " " << G << " " << B << " " << offsetX << " " << offsetY << " " << offsetZ << " " << std::fixed << std::setprecision(2) << Size << std::setprecision(-1) << endl;
+						LodLights << R << " " << G << " " << B << " " << offsetX << " " << offsetY << " " << offsetZ << " " << std::fixed << std::setprecision(2) << Size << std::setprecision(-1);
 						PrevID = ID;
 						continue;
 					}
 
-					LodLights << R << " " << G << " " << B << " " << offsetX << " " << offsetY << " " << offsetZ << " " << std::fixed << std::setprecision(2) << Size << std::setprecision(-1) << endl;
+					LodLights << R << " " << G << " " << B << " " << offsetX << " " << offsetY << " " << offsetZ << " " << std::fixed << std::setprecision(2) << Size << std::setprecision(-1);
 					PrevID = ID;
 				}
 				else
 				{
+					std::transform(line2.begin(), line2.end(), line2.begin(), ::tolower);
 					if (!(line2.find("mtraffic1") != std::string::npos || line2.find("mtraffic2") != std::string::npos ||
 						line2.find("mtraffic4") != std::string::npos || line2.find("trafficlight1") != std::string::npos))
-					LodLights << R << " " << G << " " << B << " " << offsetX << " " << offsetY << " " << offsetZ << " " << std::fixed << std::setprecision(2) << Size << std::setprecision(-1) << endl;
+					LodLights << R << " " << G << " " << B << " " << offsetX << " " << offsetY << " " << offsetZ << " " << std::fixed << std::setprecision(2) << Size << std::setprecision(-1);
+				}
+				if (line2.find("lamppost1") != std::string::npos || line2.find("lamppost2") != std::string::npos ||
+					line2.find("lamppost3") != std::string::npos || line2.find("sub_floodlite") != std::string::npos ||
+					line2.find("mlamppost") != std::string::npos || line2.find("doublestreetlght1") != std::string::npos ||
+					line2.find("bollardlight") != std::string::npos || line2.find("lampost_coast") != std::string::npos)
+				{
+					LodLights << " " << "0" << " " << "1" << endl;
+				}
+				else
+				{
+					LodLights << endl;
 				}
 			}
 		}

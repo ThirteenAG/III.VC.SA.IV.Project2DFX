@@ -159,6 +159,9 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 	if (bRenderLodLights)
 	{
 		injector::MakeCALL(0x4A6547, RenderLODLights, true);
+
+		injector::MakeNOP(0x544186, 6, true); //disable ambientBrightness change
+		injector::MakeNOP(0x544533, 6, true);
 	}
 
 	if (RenderSearchlightEffects)
@@ -166,15 +169,12 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 		injector::MakeJMP(0x4A6560, RenderSearchLights, true);
 	}
 
-	injector::WriteMemory<char>(0x542E66, 127, true); // sun reflection
-
 	if (SmoothEffect)
 	{
 		SmoothEffect = 1;
 	}
 
-	injector::MakeNOP(0x544186, 6, true); //disable ambientBrightness change
-	injector::MakeNOP(0x544533, 6, true);
+	injector::WriteMemory<char>(0x542E66, 127, true); // sun reflection
 
 	injector::WriteMemory<float>(0x68A860, 300.0f, true); // Traffic lights coronas draw distance
 
@@ -292,6 +292,7 @@ void CLODLightManager::VC::LoadDatFile()
 	}
 	else
 	{
+		RenderSearchlightEffects = 0;
 		bRenderLodLights = 0;
 	}
 }
@@ -396,9 +397,6 @@ void CLODLightManager::VC::Init()
 	else
 		autoFarClip = true;
 
-	DrawDistance = iniReader.ReadFloat("DistanceLimits", "DrawDistance", 0.0);
-	MaxDrawDistanceForNormalObjects = iniReader.ReadFloat("DistanceLimits", "MaxDrawDistanceForNormalObjects", 0.0);
-
 	RenderStaticShadowsForLODs = iniReader.ReadInteger("StaticShadows", "RenderStaticShadowsForLODs", 0);
 	IncreasePedsCarsShadowsDrawDistance = iniReader.ReadInteger("StaticShadows", "IncreasePedsCarsShadowsDrawDistance", 0);
 	StaticShadowsIntensity = iniReader.ReadFloat("StaticShadows", "StaticShadowsIntensity", 0.0f);
@@ -420,6 +418,10 @@ void CLODLightManager::VC::Init()
 	MinFPSValue = iniReader.ReadInteger("AdaptiveDrawDistance", "MinFPSValue", 0);
 	MaxFPSValue = iniReader.ReadInteger("AdaptiveDrawDistance", "MaxFPSValue", 0);
 	MaxPossibleDrawDistance = iniReader.ReadFloat("AdaptiveDrawDistance", "MaxPossibleDrawDistance", 0.0f);
+
+	MaxDrawDistanceForNormalObjects = iniReader.ReadFloat("DistanceLimits", "MaxDrawDistanceForNormalObjects", 0.0);
+	DrawDistance = iniReader.ReadFloat("DistanceLimits", "DrawDistance", 0.0);
+	bPreloadLODs = iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0) == 1;
 
 	LoadDatFile();
 	if (bRenderLodLights)

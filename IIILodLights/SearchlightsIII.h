@@ -289,7 +289,7 @@ void CLODLightManager::III::RenderSearchLights()
 				}
 			}
 		} while (nObjectPoolSize);
-		RenderHeliSearchLights();
+		true ? RenderHeliSearchLights() : nullptr;
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, 1);
 		RwRenderStateSet(rwRENDERSTATEZTESTENABLE, 1);
 		RwRenderStateSet(rwRENDERSTATESRCBLEND, 5);
