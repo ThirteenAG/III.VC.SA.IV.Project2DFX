@@ -329,6 +329,23 @@ void __declspec(naked) CLODLightManager::VC::GenericIDEHook()
 				strncpy(tempptr + 5, Flags2, 15);
 			}
 		}
+		if (bPreloadLODs)
+		{
+			if (IDEmodelID == 2600 || IDEmodelID == 2544 || IDEmodelID == 2634 || IDEmodelID == 2545)
+			{
+				if (IDEDrawDistance == 3000 || IDEDrawDistance == 1000)
+				{
+					sprintf(sIDEDrawDistance, "%d", IDEDrawDistance);
+					tempptr = strstr(buffer + 10, sIDEDrawDistance);
+
+					strncpy(Flags2, tempptr + 5, 15);
+
+					strncpy(tempptr, "0    ", 5);
+					strncpy(tempptr + 6, Flags2, 15);
+					//MessageBox(0, buffer, "0", 0);
+				}
+			}
+		}
 	}
 	else
 	{
@@ -448,6 +465,17 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 				injector::MakeJMP(0x48AD96, CLODLightManager::VC::IPLDataHook1);
 				injector::MakeJMP(0x48AF51, CLODLightManager::VC::IPLDataHook2);
 				injector::MakeCALL(0x4A4D10, CLODLightManager::VC::Init);
+
+				CIniReader iniReader("");
+				if (bPreloadLODs = iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0) == 1)
+				{
+					injector::WriteMemory(0x4DE4A7, nLevelPortland, true);
+
+					injector::MakeInline<0x40EEB8, 0x40EEB8 + 5>([](injector::reg_pack& regs)
+					{	});
+
+					injector::WriteMemory(0x691538, 0x4DDDDD, true); //CFileLoader::LoadMapZones((char const *))
+				}
 			}
 		}
 	}
