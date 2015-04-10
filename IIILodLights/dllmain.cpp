@@ -297,7 +297,7 @@ void __declspec(naked) CLODLightManager::III::GenericIDEHook()
 		}
 		if (bPreloadLODs)
 		{
-			if (modelID == 404 || modelID == 405 || modelID == 416 || modelID == 402 || modelID == 403 || modelID == 1177 || modelID == 1179)
+			if (modelID == 404 || modelID == 405 || modelID == 416 || modelID == 402 || modelID == 403)
 			{
 				if (IDEDrawDistance == 3000)
 				{
@@ -435,12 +435,15 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 				injector::MakeCALL(0x48C09F, CLODLightManager::III::Init);
 
 				CIniReader iniReader("");
-				if (iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0) == 1)
+				if (bPreloadLODs = iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0) == 1)
 				{
-					injector::WriteMemory(0x591E0B, &nLevelPortland, true);
+					/*injector::WriteMemory(0x591E0B, &nLevelPortland, true);
 					injector::WriteMemory(0x591E16, &nLevelPortland, true);
 					injector::WriteMemory(0x591E28, &nLevelPortland, true);
-					injector::WriteMemory(0x591E3B, &nLevelPortland, true);
+					injector::WriteMemory(0x591E3B, &nLevelPortland, true);*/
+
+					injector::WriteMemory<unsigned char>(0x40A6E6, 0xBD, true); //mov ebp
+					injector::WriteMemory(0x40A6E6 + 0x1, nLevelPortland, true);
 
 					injector::WriteMemory(0x4A8F79 + 0x1, &nLevelPortland, true);
 

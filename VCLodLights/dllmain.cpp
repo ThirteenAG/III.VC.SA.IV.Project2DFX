@@ -471,6 +471,8 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 				{
 					injector::WriteMemory(0x4DE4A7, nLevelPortland, true);
 
+					injector::WriteMemory(0x4C8C31 + 0x1, &nLevelPortland, true);
+
 					injector::MakeInline<0x40EEB8, 0x40EEB8 + 5>([](injector::reg_pack& regs)
 					{	});
 
