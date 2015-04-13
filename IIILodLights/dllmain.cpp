@@ -185,7 +185,32 @@ void CLODLightManager::III::ApplyMemoryPatches()
 
 	if (MaxDrawDistanceForNormalObjects)
 	{
-		injector::WriteMemory<float>(0x5F72A4, MaxDrawDistanceForNormalObjects, true);
+		//injector::WriteMemory<float>(0x5F72A4, MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8AB1, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8AC6, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8AD9, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8B0E, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8B21, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8B34, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8B82, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8B97, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8BAA, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8BDF, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8BF2, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8C05, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4A8DA6, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA391, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA3A6, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA3B9, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA3EE, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA401, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA414, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA462, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA477, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA48A, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA4BF, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA4D2, &MaxDrawDistanceForNormalObjects, true);
+		injector::WriteMemory(0x4AA4E5, &MaxDrawDistanceForNormalObjects, true);
 	}
 
 	if (EnableDrawDistanceChanger)
@@ -444,6 +469,11 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 
 					injector::WriteMemory<unsigned char>(0x40A6E6, 0xBD, true); //mov ebp
 					injector::WriteMemory(0x40A6E6 + 0x1, nLevelPortland, true);
+
+					//opcode
+					injector::MakeNOP(0x5887FD, 5, true);
+					injector::MakeNOP(0x588809, 5, true);
+					injector::MakeNOP(0x58881A, 5, true);
 
 					injector::WriteMemory(0x4A8F79 + 0x1, &nLevelPortland, true);
 

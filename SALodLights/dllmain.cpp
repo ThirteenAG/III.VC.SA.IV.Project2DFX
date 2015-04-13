@@ -361,7 +361,7 @@ void IncreaseDrawDistanceForObjects()
 {
 	if (VegetationDrawDistance)
 	{
-		if (modelID >= 615 && modelID <= 792)
+		if (modelID >= 615 && modelID <= 792 && drawDist <= 300.0f)
 		{
 			if (VegetationDrawDistance <= 10.0f)
 				drawDist *= VegetationDrawDistance;
@@ -381,6 +381,7 @@ void IncreaseDrawDistanceForObjects()
 			if (LODObjectsDrawDistance <= 10.0f)
 				drawDist *= LODObjectsDrawDistance;
 			else
+				if (LODObjectsDrawDistance > drawDist)
 				drawDist = LODObjectsDrawDistance;
 		}
 	}
