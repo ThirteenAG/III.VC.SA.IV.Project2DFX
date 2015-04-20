@@ -77,6 +77,17 @@ void ConvertDFFTo2DFX()
 	ofstream LodLights;
 	LodLights.open(Filename, fstream::trunc);
 
+	LodLights << "#%modelname" << endl;
+	LodLights << "#coronaColour.r, coronaColour.g, coronaColour.b, vecOffset.x, vecOffset.y, vecOffset.z, fCustomSize" << endl;
+	LodLights << "#coronaColour2.r, coronaColour2.g, coronaColour2.b, vecOffset2.x, vecOffset2.y, vecOffset2.z, fCustomSize2" << endl;
+	LodLights << "#%modelname2" << endl;
+	LodLights << "#coronaColour.r, coronaColour.g, coronaColour.b, vecOffset.x, vecOffset.y, vecOffset.z, fCustomSize" << endl;
+	LodLights << "#%additional_coronas" << endl;
+	LodLights << "#coronaColour.r, coronaColour.g, coronaColour.b, position.x, position.y, position.z, fCustomSize, 1" << endl;
+	LodLights << "#place you coronas here" << endl;
+	LodLights << "#0.45 - reserved for traffic lights" << endl;
+	LodLights << endl;
+
 	SetCurrentDirectory(".\\2dfx\\");
 
 	HANDLE TXTFile = FindFirstFile("*.txt", &fd);
@@ -363,6 +374,17 @@ int _tmain(int argc, _TCHAR* argv[])
 	FX2DData.open("2DFXData.txt", std::ifstream::in);
 	if (FX2DData.is_open())
 	{
+		LodLights << "#%modelname" << endl;
+		LodLights << "#coronaColour.r, coronaColour.g, coronaColour.b, vecOffset.x, vecOffset.y, vecOffset.z, fCustomSize" << endl;
+		LodLights << "#coronaColour2.r, coronaColour2.g, coronaColour2.b, vecOffset2.x, vecOffset2.y, vecOffset2.z, fCustomSize2" << endl;
+		LodLights << "#%modelname2" << endl;
+		LodLights << "#coronaColour.r, coronaColour.g, coronaColour.b, vecOffset.x, vecOffset.y, vecOffset.z, fCustomSize" << endl;
+		LodLights << "#%additional_coronas" << endl;
+		LodLights << "#coronaColour.r, coronaColour.g, coronaColour.b, position.x, position.y, position.z, fCustomSize, 1" << endl;
+		LodLights << "#place you coronas here" << endl;
+		LodLights << "#0.45 - reserved for traffic lights" << endl;
+		LodLights << endl;
+
 		static int PrevID;
 		while (getline(FX2DData, line))
 		{
@@ -374,7 +396,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				if (Size > 1.0f)
 					Size = 1.2f;
 
-				if (!Size)
+				if (!Size || ID == 4481 || ID == 4483) //destruct2 destruct03
 					continue;
 
 				if (PrevID != ID)

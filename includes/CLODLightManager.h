@@ -39,6 +39,8 @@ float MinDrawDistanceOnTheGround, Factor1, Factor2, StaticSunSize;
 float fNewFarClip, MaxPossibleDrawDistance;
 bool autoFarClip, SlightlyIncreaseRadiusWithDistance;
 int MinFPSValue, MaxFPSValue;
+bool bRandomExplosionEffects, bReplaceSmokeTrailWithBulletTrail, bDisableTrailsBlurEffect;
+std::vector<int> ExplosionTypes;
 
 __int16 TempBufferRenderIndexList[4096];
 RxObjSpace3dVertex TempVertexBuffer[500];

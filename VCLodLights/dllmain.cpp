@@ -154,6 +154,21 @@ static void __declspec(naked) RenderSirenParticlesBlue()
 	__asm jmp jmpAddr
 }
 
+template<uintptr_t addr>
+void CExplosionAddModifiedExplosion()
+{
+	using printstr_hook = injector::function_hooker<addr, void(DWORD*, DWORD*, int, CVector const&, unsigned int, unsigned char, float)>;
+	injector::make_static_hook<printstr_hook>([](printstr_hook::func_type AddExplosion, DWORD* CEntity, DWORD* CEntity2, int eExplosionType, CVector const& a1, unsigned int a2, unsigned char a3, float a4)
+	{
+		std::random_shuffle(ExplosionTypes.begin(), ExplosionTypes.end());
+		for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
+		{
+			AddExplosion(CEntity, CEntity2, *it, a1, a2, a3, a4);
+		}
+		return;
+	});
+}
+
 void CLODLightManager::VC::ApplyMemoryPatches()
 {
 	if (bRenderLodLights)
@@ -243,7 +258,43 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 		injector::MakeJMP(0x4A65CD, DrawDistanceChanger, true);
 
 		injector::WriteMemory(0x4A602B + 0x2, &fNewFarClip, true);
-		injector::WriteMemory(0x4A6037 + 0x2, &fNewFarClip, true);
+		//injector::WriteMemory(0x4A6037 + 0x2, &fNewFarClip, true);
+	}
+
+	if (bRandomExplosionEffects)
+	{
+		for (int i = 0; i < 12; ++i)
+		{
+			if (i != 1)
+			ExplosionTypes.push_back(i);
+		}
+
+		CExplosionAddModifiedExplosion<(0x44038A)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x4579A7)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5869B5)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x588DC9)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5997C6)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x59F819)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5AD18F)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5AD3F2)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5AFEC2)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5B0320)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5B040F)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5B0867)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5C6DB9)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5C6DDC)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float) 
+		CExplosionAddModifiedExplosion<(0x5C6E23)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5C6EDE)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		//CExplosionAddModifiedExplosion<(0x5C6EFD)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float) molotov expl
+		CExplosionAddModifiedExplosion<(0x5C6F3D)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5C704E)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5C706D)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5C70AD)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5C71C5)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5C720F)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x5C8B89)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x60A51D)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		CExplosionAddModifiedExplosion<(0x630168)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
 	}
 }
 
@@ -439,6 +490,10 @@ void CLODLightManager::VC::Init()
 	MaxDrawDistanceForNormalObjects = iniReader.ReadFloat("DistanceLimits", "MaxDrawDistanceForNormalObjects", 0.0);
 	DrawDistance = iniReader.ReadFloat("DistanceLimits", "DrawDistance", 0.0);
 	bPreloadLODs = iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0) == 1;
+
+	bRandomExplosionEffects = iniReader.ReadInteger("Misc", "RandomExplosionEffects", 0) == 1;
+	bReplaceSmokeTrailWithBulletTrail = iniReader.ReadInteger("Misc", "ReplaceSmokeTrailWithBulletTrail", 0) == 1;
+	bDisableTrailsBlurEffect = iniReader.ReadInteger("Misc", "DisableTrailsBlurEffect", 0) == 1;
 
 	LoadDatFile();
 	if (bRenderLodLights)

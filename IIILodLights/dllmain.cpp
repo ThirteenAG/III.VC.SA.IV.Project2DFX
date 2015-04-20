@@ -121,6 +121,21 @@ void CLODLightManager::III::RegisterCustomCoronas()
 		m_pLampposts->push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nNoDistance, it->second.nDrawSearchlight));
 }
 
+template<uintptr_t addr>
+void CExplosionAddModifiedExplosion()
+{
+	using printstr_hook = injector::function_hooker<addr, void(DWORD*, DWORD*, int, CVector const&, unsigned int)>;
+	injector::make_static_hook<printstr_hook>([](printstr_hook::func_type AddExplosion, DWORD* CEntity, DWORD* CEntity2, int eExplosionType, CVector const& a1, unsigned int a2)
+	{
+		std::random_shuffle(ExplosionTypes.begin(), ExplosionTypes.end());
+		for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
+		{
+			AddExplosion(CEntity, CEntity2, *it, a1, a2);
+		}
+		return;
+	});
+}
+
 void CLODLightManager::III::ApplyMemoryPatches()
 {
 	if (bRenderLodLights)
@@ -218,7 +233,7 @@ void CLODLightManager::III::ApplyMemoryPatches()
 		injector::MakeJMP(0x48E072, DrawDistanceChanger, true);
 
 		injector::WriteMemory(0x48E5DA + 0x2, &fNewFarClip, true);
-		injector::WriteMemory(0x48E5E6 + 0x2, &fNewFarClip, true);
+		//injector::WriteMemory(0x48E5E6 + 0x2, &fNewFarClip, true);
 	}
 }
 
@@ -284,6 +299,31 @@ void CLODLightManager::III::LoadDatFile()
 		mi_bollardlight = GetModelInfoUInt16("bollardlight");
 		mi_lampost_coast = GetModelInfoUInt16("lampost_coast");
 		mi_doc_floodlite = GetModelInfoUInt16("doc_floodlite");
+	}
+
+	if (bRandomExplosionEffects)
+	{
+		for (int i = 0; i < 10; ++i)
+		{
+			if (i != 1)
+				ExplosionTypes.push_back(i);
+		}
+
+		CExplosionAddModifiedExplosion<(0x4309EB)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x442E65)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x53BF2A)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x53DA3C)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x541DAB)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x549773)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x549F90)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x54A349)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x54C265)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x54C6C0)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x54C7AD)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x54CC04)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		//CExplosionAddModifiedExplosion<(0x55B743)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint)) molotov/grenade expl
+		CExplosionAddModifiedExplosion<(0x55B7A9)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x564ADE)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
 	}
 }
 
@@ -432,6 +472,10 @@ void CLODLightManager::III::Init()
 	MaxDrawDistanceForNormalObjects = iniReader.ReadFloat("DistanceLimits", "MaxDrawDistanceForNormalObjects", 0.0f);
 	DrawDistance = iniReader.ReadFloat("DistanceLimits", "DrawDistance", 0.0f);
 	bPreloadLODs = iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0) == 1;
+
+	bRandomExplosionEffects = iniReader.ReadInteger("Misc", "RandomExplosionEffects", 0) == 1;
+	bReplaceSmokeTrailWithBulletTrail = iniReader.ReadInteger("Misc", "ReplaceSmokeTrailWithBulletTrail", 0) == 1;
+	bDisableTrailsBlurEffect = iniReader.ReadInteger("Misc", "DisableTrailsBlurEffect", 0) == 1;
 
 	LoadDatFile();
 
