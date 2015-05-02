@@ -164,7 +164,7 @@ namespace injector
         };
 
         // Does the actual MakeInline
-        return MakeInline<Caps>(lazy_pointer<at>::get(), lazy_pointer<end>::get());
+        return MakeInline<Caps>(lazy_pointer<at>::get(), lazy_pointer<end>::get(), true);
     }
 
     /*
