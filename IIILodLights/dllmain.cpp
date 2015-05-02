@@ -256,12 +256,14 @@ void CLODLightManager::III::ApplyMemoryPatches()
 			injector::thiscall<void()>::call<0x488CC0>();
 			injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (DrawDistance / 1.8f), true);
 		});
-		injector::MakeInline<0x486B3A, 0x486D16>([](injector::reg_pack&)
+		injector::MakeInline<0x486B3A>([](injector::reg_pack& regs)
 		{
+			*(uintptr_t*)regs.esp = 0x486D16;
 			injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (DrawDistance / 1.8f), true);
 		});
-		injector::MakeInline<0x48B314, 0x48B42C>([](injector::reg_pack&)
+		injector::MakeInline<0x48B314>([](injector::reg_pack& regs)
 		{
+			*(uintptr_t*)regs.esp = 0x48B42C;
 			injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (DrawDistance / 1.8f), true);
 		});
 		injector::WriteMemory<float>(0x487629 + 6, 1.2f * (DrawDistance / 1.8f), true);

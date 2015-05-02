@@ -527,7 +527,7 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 
 	if (LODObjectsDrawDistance || GenericObjectsDrawDistance || AllNormalObjectsDrawDistance || VegetationDrawDistance)
 	{
-		injector::MakeJMP(0x5B3DA5, asm_IncreaseDrawDistanceForObjects); //multiply dist
+		injector::MakeJMP(0x5B3DA5, asm_IncreaseDrawDistanceForObjects, true); //multiply dist
 
 		if (GenericObjectsDrawDistance || AllNormalObjectsDrawDistance || VegetationDrawDistance)
 		{
@@ -553,7 +553,7 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 
 	if (bLoadAllBinaryIPLs)
 	{
-		injector::MakeCALL(0x5D19A4, LoadAllBinaryIPLs);
+		injector::MakeCALL(0x5D19A4, LoadAllBinaryIPLs, true);
 	}
 
 	if (bPreloadLODs)

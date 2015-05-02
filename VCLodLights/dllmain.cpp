@@ -270,11 +270,12 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 	if (DrawDistance)
 	{
 		injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (DrawDistance / 1.8f), true);
-		injector::MakeInline<0x498B65, 0x498CC8>([](injector::reg_pack&)
+		injector::MakeInline<0x498B65>([](injector::reg_pack& regs)
 		{
+			*(uintptr_t*)regs.esp = 0x498CC8;
 			injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (DrawDistance / 1.8f), true);
 		});
-		injector::MakeInline<0x490132, 0x490132 + 5>([](injector::reg_pack&)
+		injector::MakeInline<0x490132>([](injector::reg_pack&)
 		{
 			_asm fstp dword ptr ds: [00690220h]
 			injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (DrawDistance / 1.8f), true);
@@ -566,7 +567,7 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 
 					injector::WriteMemory(0x4C8C31 + 0x1, &nLevelPortland, true);
 
-					injector::MakeInline<0x40EEB8, 0x40EEB8 + 5>([](injector::reg_pack&)
+					injector::MakeInline<0x40EEB8>([](injector::reg_pack&)
 					{	});
 
 					injector::WriteMemory(0x691538, 0x4DDDDD, true); //CFileLoader::LoadMapZones((char const *))

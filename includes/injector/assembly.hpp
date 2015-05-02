@@ -138,9 +138,8 @@ namespace injector
      *      Same as above, but it NOPs everything between at and end (exclusive), then performs MakeInline
      */
     template<class FuncT>
-    void MakeInline(memory_pointer_tr at, memory_pointer_tr end, bool bMakeRangedNOP = false)
+    void MakeInline(memory_pointer_tr at, memory_pointer_tr end)
     {
-        if (bMakeRangedNOP)
         MakeRangedNOP(at, end);
         MakeInline<FuncT>(at);
     }
@@ -164,7 +163,7 @@ namespace injector
         };
 
         // Does the actual MakeInline
-        return MakeInline<Caps>(lazy_pointer<at>::get(), lazy_pointer<end>::get(), true);
+        return MakeInline<Caps>(lazy_pointer<at>::get(), lazy_pointer<end>::get());
     }
 
     /*
