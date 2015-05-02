@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "..\includes\CLODLightManager.h"
 #include "SearchlightsSA.h"
 
@@ -289,63 +289,6 @@ static void __declspec(naked) LamppostsCoronaFarclpHook()
 	}
 }
 
-DWORD jmpAddr;
-static void __declspec(naked)LamppostsShadowsHook1()
-{
-	_asm
-	{
-		cmp eax, 0x55
-		jna label1
-		mov eax, 0xFF
-		jmp label2
-	label1:
-		imul eax, nStaticShadowsIntensity
-	label2:
-		PUSH EAX
-		FMUL ST, ST(1)
-		FMUL DWORD PTR SS : [ESP + 30h]
-		mov jmpAddr, 0x006FD3D8
-		jmp jmpAddr
-	}
-}
-
-static void __declspec(naked)LamppostsShadowsHook2()
-{
-	_asm
-	{
-		cmp eax, 0x55
-		jna label1
-		mov eax, 0xFF
-		jmp label2
-	label1:
-		imul eax, nStaticShadowsIntensity
-	label2:
-		PUSH EAX
-		MOVZX EAX, BYTE PTR DS : [ESI + 10h]	
-		mov jmpAddr, 0x006FD3E8
-		jmp jmpAddr
-	}
-}
-
-static void __declspec(naked)LamppostsShadowsHook3()
-{
-	_asm
-	{
-		cmp eax, 0x55
-		jna label1
-		mov eax, 0xFF
-		jmp label2
-	label1:
-		imul eax, nStaticShadowsIntensity
-	label2:
-		PUSH EAX
-		MOV EAX, DWORD PTR DS : [ESI + 34h]
-		PUSH 80h
-		mov jmpAddr, 0x006FD415
-		jmp jmpAddr
-	}
-}
-
 float drawDist; DWORD modelID;
 void __declspec(naked) IncreaseDrawDistanceForTimedObjects()
 {
@@ -452,18 +395,25 @@ void __cdecl CIplStoreLoadAll()
 	static auto IplFilePoolLocate = (int (__cdecl *)(const char *name)) 0x404AC0;
 	static auto CIplStoreRequestIplAndIgnore = (char *(__cdecl *)(int a1)) 0x405850;
 
+	injector::address_manager::singleton().IsHoodlum() ?
+		injector::WriteMemory<char>(0x015651C1 + 3, 0, true) :
+		injector::WriteMemory<char>(0x405881 + 3, 0, true);
+
 	for (auto it = IPLStreamNames.cbegin(); it != IPLStreamNames.cend(); it++)
 	{
 		CIplStoreRequestIplAndIgnore(IplFilePoolLocate(it->c_str()));
 	}
+
+	injector::address_manager::singleton().IsHoodlum() ?
+		injector::WriteMemory<char>(0x015651C1 + 3, 1, true) :
+		injector::WriteMemory<char>(0x405881 + 3, 1, true);
 }
 
-char LoadAllBinaryIPLs()
+void LoadAllBinaryIPLs()
 {	
 	static auto CIplStoreLoad = (char *(__cdecl *)()) 0x5D54A0;
 	CIplStoreLoad();
 	CIplStoreLoadAll();
-	return 1;
 }
 
 static std::vector<void*> lods; // CEntity*
@@ -545,11 +495,19 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 		injector::WriteMemory<float>(0x70C9F4, StaticShadowsDrawDistance, true);
 	}
 
-	if (nStaticShadowsIntensity)
+	if (StaticShadowsIntensity)
 	{
-		injector::MakeJMP(0x6FD3D1, LamppostsShadowsHook1, true);
-		injector::MakeJMP(0x6FD3E3, LamppostsShadowsHook2, true);
-		injector::MakeJMP(0x6FD40C, LamppostsShadowsHook3, true);
+		StaticShadowsIntensity *= 0.00390625f;
+		injector::WriteMemory(0x6FD13C, &StaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
+		injector::WriteMemory(0x6FD16E, &StaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
+		injector::WriteMemory(0x6FD17C, &StaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
+		injector::WriteMemory(0x6FD1CE, &StaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
+		injector::WriteMemory(0x6FD2C0, &StaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
+		injector::WriteMemory(0x6FD301, &StaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
+		injector::WriteMemory(0x6FD30F, &StaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
+		injector::WriteMemory(0x6FD3BC, &StaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
+		injector::WriteMemory(0x6FD3DA, &StaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
+		injector::WriteMemory(0x6FD3F8, &StaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
 	}
 
 	if (TimedObjectsDrawDistance)
@@ -557,7 +515,7 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 		injector::MakeJMP(0x5B3F43, asm_IncreaseDrawDistanceForTimedObjects, true);
 		if ((TimedObjectsDrawDistance > 2.0f && TimedObjectsDrawDistance <= 10.0f) || (TimedObjectsDrawDistance > 300.0f))
 		{
-			injector::MakeInline<0x53C9B7, 0x53C9B7+5>([](injector::reg_pack& regs)
+			injector::MakeInline<0x53C9B7>([](injector::reg_pack& regs)
 			{
 				injector::WriteMemory<unsigned char>(0x5D95B0, 0xC3u, true);
 				injector::WriteMemory<unsigned char>(0x810CA0, 0xC3u, true);
@@ -650,7 +608,7 @@ void CLODLightManager::SA::Init()
 
 	RenderStaticShadowsForLODs = iniReader.ReadInteger("StaticShadows", "RenderStaticShadowsForLODs", 0);
 	IncreasePedsCarsShadowsDrawDistance = iniReader.ReadInteger("StaticShadows", "IncreaseCarsShadowsDrawDistance", 0);
-	nStaticShadowsIntensity = iniReader.ReadInteger("StaticShadows", "StaticShadowsIntensity", 0);
+	StaticShadowsIntensity = iniReader.ReadFloat("StaticShadows", "StaticShadowsIntensity", 0.0f);
 	StaticShadowsDrawDistance = iniReader.ReadFloat("StaticShadows", "StaticShadowsDrawDistance", 0.0f);
 	TrafficLightsShadowsIntensity = iniReader.ReadFloat("StaticShadows", "TrafficLightsShadowsIntensity", 0.0f);
 	TrafficLightsShadowsDrawDistance = iniReader.ReadFloat("StaticShadows", "TrafficLightsShadowsDrawDistance", 0.0f);

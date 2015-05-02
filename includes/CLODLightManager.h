@@ -26,7 +26,6 @@ int RenderStaticShadowsForLODs, IncreasePedsCarsShadowsDrawDistance;
 float TrafficLightsShadowsIntensity, TrafficLightsShadowsDrawDistance;
 float StaticShadowsIntensity, StaticShadowsDrawDistance;
 char* szCustomCoronaTexturePath;
-int nStaticShadowsIntensity;
 DWORD nCoronasLimit;
 uintptr_t hookJmpAddr, hookJmpAddr2;
 int currentCamera;
@@ -39,7 +38,7 @@ float MinDrawDistanceOnTheGround, Factor1, Factor2, StaticSunSize;
 float fNewFarClip, MaxPossibleDrawDistance;
 bool autoFarClip, SlightlyIncreaseRadiusWithDistance;
 int MinFPSValue, MaxFPSValue;
-bool bRandomExplosionEffects, bReplaceSmokeTrailWithBulletTrail, bDisableTrailsBlurEffect;
+bool bRandomExplosionEffects, bReplaceSmokeTrailWithBulletTrail;
 std::vector<int> ExplosionTypes;
 
 __int16 TempBufferRenderIndexList[4096];

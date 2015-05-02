@@ -136,6 +136,61 @@ void CExplosionAddModifiedExplosion()
 	});
 }
 
+template<uintptr_t addr>
+void CBulletTracesAddTrace()
+{
+	using printstr_hook = injector::function_hooker<addr, void(CVector *, CVector *)>;
+	injector::make_static_hook<printstr_hook>([](printstr_hook::func_type AddTrace, CVector* start, CVector* end)
+	{
+		injector::MakeNOP(0x563B56, 5);  //    sub_50D140
+		injector::MakeNOP(0x563BBB, 5);  //    sub_510790
+		injector::MakeNOP(0x563BDD, 5);  //    sub_4AF970
+		//injector::MakeNOP(0x563C43, 5);  //    sub_50D140
+		injector::MakeNOP(0x563CB6, 5);  //    sub_4CCE20
+		injector::MakeNOP(0x563CC1, 5);  //    sub_4E67F0
+		injector::MakeNOP(0x563CD4, 5);  //    sub_403620
+		injector::MakeNOP(0x563D0C, 5);  //    sub_4EA420
+		injector::MakeNOP(0x563D23, 5);  //    sub_474CC0
+		injector::MakeNOP(0x563D40, 5);  //    sub_5A41D0
+		injector::MakeNOP(0x563D68, 5);  //    sub_5A41D0
+		injector::MakeNOP(0x563D90, 5);  //    sub_5A41D0
+		injector::MakeNOP(0x563DD4, 5);  //    sub_50D140
+		injector::MakeNOP(0x563E0D, 5);  //    sub_551950
+		injector::MakeNOP(0x563E37, 5);  //    sub_57C5F0
+		injector::MakeNOP(0x563E7E, 5);  //    sub_50D140
+		injector::MakeNOP(0x563EA0, 5);  //    sub_57C840
+		injector::MakeNOP(0x563EBF, 5);  //    sub_57C840
+		injector::MakeNOP(0x563ECA, 5);  //    sub_4E5A10
+		injector::MakeNOP(0x563F0B, 5);  //    sub_5552C0
+		injector::MakeNOP(0x563F73, 5);  //    sub_50D140
+		injector::MakeNOP(0x563F85, 5);  //    sub_57C5F0
+		injector::cstd<void(CVector *startPoint, CVector *endPoint, int intensity)>::call<0x563B00>(start, end, 0);
+		injector::MakeCALL(0x563B56, 0x50D140, true);
+		injector::MakeCALL(0x563BBB, 0x510790, true);
+		injector::MakeCALL(0x563BDD, 0x4AF970, true);
+		injector::MakeCALL(0x563C43, 0x50D140, true);
+		injector::MakeCALL(0x563CB6, 0x4CCE20, true);
+		injector::MakeCALL(0x563CC1, 0x4E67F0, true);
+		injector::MakeCALL(0x563CD4, 0x403620, true);
+		injector::MakeCALL(0x563D0C, 0x4EA420, true);
+		injector::MakeCALL(0x563D23, 0x474CC0, true);
+		injector::MakeCALL(0x563D40, 0x5A41D0, true);
+		injector::MakeCALL(0x563D68, 0x5A41D0, true);
+		injector::MakeCALL(0x563D90, 0x5A41D0, true);
+		injector::MakeCALL(0x563DD4, 0x50D140, true);
+		injector::MakeCALL(0x563E0D, 0x551950, true);
+		injector::MakeCALL(0x563E37, 0x57C5F0, true);
+		injector::MakeCALL(0x563E7E, 0x50D140, true);
+		injector::MakeCALL(0x563EA0, 0x57C840, true);
+		injector::MakeCALL(0x563EBF, 0x57C840, true);
+		injector::MakeCALL(0x563ECA, 0x4E5A10, true);
+		injector::MakeCALL(0x563F0B, 0x5552C0, true);
+		injector::MakeCALL(0x563F73, 0x50D140, true);
+		injector::MakeCALL(0x563F85, 0x57C5F0, true);
+		return;
+	});
+}
+
 void CLODLightManager::III::ApplyMemoryPatches()
 {
 	if (bRenderLodLights)
@@ -195,7 +250,21 @@ void CLODLightManager::III::ApplyMemoryPatches()
 
 	if (DrawDistance)
 	{
-		injector::WriteMemory<float>(0x5F726C, DrawDistance, true);
+		injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (DrawDistance / 1.8f), true);
+		injector::MakeInline<0x486AF2>([](injector::reg_pack&)
+		{
+			injector::thiscall<void()>::call<0x488CC0>();
+			injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (DrawDistance / 1.8f), true);
+		});
+		injector::MakeInline<0x486B3A, 0x486D16>([](injector::reg_pack&)
+		{
+			injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (DrawDistance / 1.8f), true);
+		});
+		injector::MakeInline<0x48B314, 0x48B42C>([](injector::reg_pack&)
+		{
+			injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (DrawDistance / 1.8f), true);
+		});
+		injector::WriteMemory<float>(0x487629 + 6, 1.2f * (DrawDistance / 1.8f), true);
 	}
 
 	if (MaxDrawDistanceForNormalObjects)
@@ -234,6 +303,41 @@ void CLODLightManager::III::ApplyMemoryPatches()
 
 		injector::WriteMemory(0x48E5DA + 0x2, &fNewFarClip, true);
 		//injector::WriteMemory(0x48E5E6 + 0x2, &fNewFarClip, true);
+	}
+
+	if (bRandomExplosionEffects)
+	{
+		for (int i = 0; i < 10; ++i)
+		{
+			if (i != 1)
+			ExplosionTypes.push_back(i);
+		}
+
+		CExplosionAddModifiedExplosion<(0x4309EB)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x442E65)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x53BF2A)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x53DA3C)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x541DAB)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x549773)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x549F90)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x54A349)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x54C265)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x54C6C0)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x54C7AD)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x54CC04)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		//CExplosionAddModifiedExplosion<(0x55B743)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint)) molotov/grenade expl
+		CExplosionAddModifiedExplosion<(0x55B7A9)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		CExplosionAddModifiedExplosion<(0x564ADE)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+	}
+
+	if (bReplaceSmokeTrailWithBulletTrail)
+	{
+		CBulletTracesAddTrace<(0x55F9C7)>(); // = 0x518E90 + 0x0  -> call    sub_518E90
+		CBulletTracesAddTrace<(0x560599)>(); // = 0x518E90 + 0x0  -> call    sub_518E90
+		CBulletTracesAddTrace<(0x560F21)>(); // = 0x518E90 + 0x0  -> call    sub_518E90
+		CBulletTracesAddTrace<(0x56186B)>(); // = 0x518E90 + 0x0  -> call    sub_518E90
+		CBulletTracesAddTrace<(0x562B07)>(); // = 0x518E90 + 0x0  -> call    sub_518E90
+		CBulletTracesAddTrace<(0x562E4F)>(); // = 0x518E90 + 0x0  -> call    sub_518E90
 	}
 }
 
@@ -299,31 +403,6 @@ void CLODLightManager::III::LoadDatFile()
 		mi_bollardlight = GetModelInfoUInt16("bollardlight");
 		mi_lampost_coast = GetModelInfoUInt16("lampost_coast");
 		mi_doc_floodlite = GetModelInfoUInt16("doc_floodlite");
-	}
-
-	if (bRandomExplosionEffects)
-	{
-		for (int i = 0; i < 10; ++i)
-		{
-			if (i != 1)
-				ExplosionTypes.push_back(i);
-		}
-
-		CExplosionAddModifiedExplosion<(0x4309EB)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x442E65)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x53BF2A)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x53DA3C)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x541DAB)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x549773)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x549F90)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x54A349)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x54C265)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x54C6C0)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x54C7AD)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x54CC04)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		//CExplosionAddModifiedExplosion<(0x55B743)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint)) molotov/grenade expl
-		CExplosionAddModifiedExplosion<(0x55B7A9)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x564ADE)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
 	}
 }
 
@@ -475,7 +554,6 @@ void CLODLightManager::III::Init()
 
 	bRandomExplosionEffects = iniReader.ReadInteger("Misc", "RandomExplosionEffects", 0) == 1;
 	bReplaceSmokeTrailWithBulletTrail = iniReader.ReadInteger("Misc", "ReplaceSmokeTrailWithBulletTrail", 0) == 1;
-	bDisableTrailsBlurEffect = iniReader.ReadInteger("Misc", "DisableTrailsBlurEffect", 0) == 1;
 
 	LoadDatFile();
 

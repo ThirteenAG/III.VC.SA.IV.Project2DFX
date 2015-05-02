@@ -120,51 +120,77 @@ void CLODLightManager::VC::RegisterCustomCoronas()
 		m_pLampposts->push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nNoDistance, it->second.nDrawSearchlight));
 }
 
-
-DWORD SirenParticlesPosRed, SirenParticlesPosBlue;
-DWORD jmpAddr;
-static void __declspec(naked) StoreSirenParticlesRed()
+template<uintptr_t addr>
+void RenderSirenParticles()
 {
-	__asm mov SirenParticlesPosRed, eax
-	__asm mov dl, [esp + 00000090h]
-	__asm mov jmpAddr, 0x58C6D5
-	__asm jmp jmpAddr
-}
-
-static void __declspec(naked) RenderSirenParticlesRed()
-{
-	CLODLightManager::VC::CShadowsStoreStaticShadow(rand(), 2, *(RwTexture **)0x978DB4, (CVector*)SirenParticlesPosRed, 8.0f, 0.0f, 0.0f, -8.0f, 128, 25, 0, 0, 15.0f, 1.0f, 100.0f, false, 8.0f);
-	__asm mov jmpAddr, 0x58C796
-	__asm jmp jmpAddr
-}
-
-static void __declspec(naked) StoreSirenParticlesBlue()
-{
-	__asm mov SirenParticlesPosBlue, eax
-	__asm mov     cl, [esp + 80h]
-	__asm mov jmpAddr, 0x58C71F
-	__asm jmp jmpAddr
-}
-
-static void __declspec(naked) RenderSirenParticlesBlue()
-{
-	__asm add     esp, 40h
-	CLODLightManager::VC::CShadowsStoreStaticShadow(rand(), 2, *(RwTexture **)0x978DB4, (CVector*)SirenParticlesPosBlue, 8.0f, 0.0f, 0.0f, -8.0f, 128, 0, 0, 25, 15.0f, 1.0f, 100.0f, false, 8.0f);
-	__asm mov jmpAddr, 0x58C796
-	__asm jmp jmpAddr
+	using func_hook = injector::function_hooker<addr, void(int id, char r, char g, char b, char alpha, RwV3D *pos, float radius, float farClp, char a9, char lensflare, char a11, char see_through_effect, char trace, float a14, char a15, float a16)>;
+	injector::make_static_hook<func_hook>([](func_hook::func_type RegisterCorona, int id, char r, char g, char b, char alpha, RwV3D *pos, float radius, float farClp, char a9, char lensflare, char a11, char see_through_effect, char trace, float a14, char a15, float a16)
+	{
+		RegisterCorona(id, r, g, b, alpha, pos, radius, farClp, a9, lensflare, a11, see_through_effect, trace, a14, a15, a16);
+		CLODLightManager::VC::CShadowsStoreStaticShadow(id, 2, *(RwTexture **)0x978DB4, (CVector*)pos, 8.0f, 0.0f, 0.0f, -8.0f, 80, r != 0 ? 25 : 0, 0, b != 0 ? 25 : 0, 15.0f, 1.0f, farClp, false, 8.0f);
+		return;
+	});
 }
 
 template<uintptr_t addr>
 void CExplosionAddModifiedExplosion()
 {
-	using printstr_hook = injector::function_hooker<addr, void(DWORD*, DWORD*, int, CVector const&, unsigned int, unsigned char, float)>;
-	injector::make_static_hook<printstr_hook>([](printstr_hook::func_type AddExplosion, DWORD* CEntity, DWORD* CEntity2, int eExplosionType, CVector const& a1, unsigned int a2, unsigned char a3, float a4)
+	using func_hook = injector::function_hooker<addr, void(DWORD*, DWORD*, int, CVector const&, unsigned int, unsigned char, float)>;
+	injector::make_static_hook<func_hook>([](func_hook::func_type AddExplosion, DWORD* CEntity, DWORD* CEntity2, int eExplosionType, CVector const& a1, unsigned int a2, unsigned char a3, float a4)
 	{
 		std::random_shuffle(ExplosionTypes.begin(), ExplosionTypes.end());
 		for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
 		{
 			AddExplosion(CEntity, CEntity2, *it, a1, a2, a3, a4);
 		}
+		return;
+	});
+}
+
+template<uintptr_t addr>
+void CBulletTracesAddTrace()
+{
+	using func_hook = injector::function_hooker<addr, void(CVector *, CVector *, float, unsigned int, unsigned char)>;
+	injector::make_static_hook<func_hook>([](func_hook::func_type AddTrace, CVector* start, CVector* end, float, unsigned int, unsigned char)
+	{
+		injector::MakeNOP(0x5C9C06, 5, true);  //CParticle__AddParticle 5648F0
+		//injector::MakeNOP(0x5C9CF5, 5, true);  //CParticle__AddParticle 5648F0
+		injector::MakeNOP(0x5C9E85, 5, true);  //CParticle__AddParticle   5648F0
+		injector::MakeNOP(0x5C9F6C, 5, true);  //CParticle__AddParticle   5648F0
+		injector::MakeNOP(0x5CA073, 5, true);  //CParticle__AddParticle   5648F0
+		injector::MakeNOP(0x5C9C6B, 5, true);  //sub_567700
+		injector::MakeNOP(0x5C9C8F, 5, true);  //sub_4D92D0
+		injector::MakeNOP(0x5C9D68, 5, true);  //sub_5035F0
+		injector::MakeNOP(0x5C9D73, 5, true);  //sub_52CF70
+		injector::MakeNOP(0x5C9D86, 5, true);  //sub_4058B0
+		injector::MakeNOP(0x5C9DBE, 5, true);  //sub_525B20
+		injector::MakeNOP(0x5C9DD5, 5, true);  //sub_4885D0
+		injector::MakeNOP(0x5C9EFB, 5, true);  //sub_5B9020
+		injector::MakeNOP(0x5C9F25, 5, true);  //sub_5F9210
+		injector::MakeNOP(0x5C9F94, 5, true);  //CAudio__?PlayAudioEventOnEntity     5F9DA0
+		injector::MakeNOP(0x5C9FB9, 5, true);  //CAudio__?PlayAudioEventOnEntity     5F9DA0
+		injector::MakeNOP(0x5C9FC4, 5, true);  //sub_5226B0
+		injector::MakeNOP(0x5CA00B, 5, true);  //sub_5C2C80
+		injector::MakeNOP(0x5CA085, 5, true);  //sub_5F9210
+		injector::cstd<void(CVector *startPoint, CVector *endPoint, int intensity)>::call<0x5C9BB0>(start, end, 0);
+		injector::MakeCALL(0x5C9C06, (void*)0x5648F0, true);
+		injector::MakeCALL(0x5C9E85, (void*)0x5648F0, true);
+		injector::MakeCALL(0x5C9F6C, (void*)0x5648F0, true);
+		injector::MakeCALL(0x5CA073, (void*)0x5648F0, true);
+		injector::MakeCALL(0x5C9C6B, (void*)0x567700, true);
+		injector::MakeCALL(0x5C9C8F, (void*)0x4D92D0, true);
+		injector::MakeCALL(0x5C9D68, (void*)0x5035F0, true);
+		injector::MakeCALL(0x5C9D73, (void*)0x52CF70, true);
+		injector::MakeCALL(0x5C9D86, (void*)0x4058B0, true);
+		injector::MakeCALL(0x5C9DBE, (void*)0x525B20, true);
+		injector::MakeCALL(0x5C9DD5, (void*)0x4885D0, true);
+		injector::MakeCALL(0x5C9EFB, (void*)0x5B9020, true);
+		injector::MakeCALL(0x5C9F25, (void*)0x5F9210, true);
+		injector::MakeCALL(0x5C9F94, (void*)0x5F9DA0, true);
+		injector::MakeCALL(0x5C9FB9, (void*)0x5F9DA0, true);
+		injector::MakeCALL(0x5C9FC4, (void*)0x5226B0, true);
+		injector::MakeCALL(0x5CA00B, (void*)0x5C2C80, true);
+		injector::MakeCALL(0x5CA085, (void*)0x5F9210, true);
 		return;
 	});
 }
@@ -193,10 +219,8 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 
 	injector::WriteMemory<float>(0x68A860, 300.0f, true); // Traffic lights coronas draw distance
 
-	injector::MakeJMP(0x58C6CE, StoreSirenParticlesRed, true);
-	injector::MakeJMP(0x58C70C, RenderSirenParticlesRed, true);
-	injector::MakeJMP(0x58C718, StoreSirenParticlesBlue, true);
-	injector::MakeJMP(0x58C769, RenderSirenParticlesBlue, true);
+	RenderSirenParticles<(0x58C704)>();
+	RenderSirenParticles<(0x58C764)>();
 
 	if (TrafficLightsShadowsDrawDistance)
 	{
@@ -245,7 +269,17 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 
 	if (DrawDistance)
 	{
-		injector::WriteMemory<float>(0x690220, DrawDistance, true);
+		injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (DrawDistance / 1.8f), true);
+		injector::MakeInline<0x498B65, 0x498CC8>([](injector::reg_pack&)
+		{
+			injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (DrawDistance / 1.8f), true);
+		});
+		injector::MakeInline<0x490132, 0x490132 + 5>([](injector::reg_pack&)
+		{
+			_asm fstp dword ptr ds: [00690220h]
+			injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (DrawDistance / 1.8f), true);
+		});
+		injector::WriteMemory<float>(0x499800 + 3, 1.2f * (DrawDistance / 1.8f), true);
 	}
 
 	if (MaxDrawDistanceForNormalObjects)
@@ -295,6 +329,11 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 		CExplosionAddModifiedExplosion<(0x5C8B89)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
 		CExplosionAddModifiedExplosion<(0x60A51D)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
 		CExplosionAddModifiedExplosion<(0x630168)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+	}
+
+	if (bReplaceSmokeTrailWithBulletTrail)
+	{
+		CBulletTracesAddTrace<(0x573E69)>();
 	}
 }
 
@@ -493,7 +532,6 @@ void CLODLightManager::VC::Init()
 
 	bRandomExplosionEffects = iniReader.ReadInteger("Misc", "RandomExplosionEffects", 0) == 1;
 	bReplaceSmokeTrailWithBulletTrail = iniReader.ReadInteger("Misc", "ReplaceSmokeTrailWithBulletTrail", 0) == 1;
-	bDisableTrailsBlurEffect = iniReader.ReadInteger("Misc", "DisableTrailsBlurEffect", 0) == 1;
 
 	LoadDatFile();
 	if (bRenderLodLights)
@@ -528,7 +566,7 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 
 					injector::WriteMemory(0x4C8C31 + 0x1, &nLevelPortland, true);
 
-					injector::MakeInline<0x40EEB8, 0x40EEB8 + 5>([](injector::reg_pack& regs)
+					injector::MakeInline<0x40EEB8, 0x40EEB8 + 5>([](injector::reg_pack&)
 					{	});
 
 					injector::WriteMemory(0x691538, 0x4DDDDD, true); //CFileLoader::LoadMapZones((char const *))
