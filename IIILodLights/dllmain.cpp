@@ -124,14 +124,18 @@ void CLODLightManager::III::RegisterCustomCoronas()
 template<uintptr_t addr>
 void CExplosionAddModifiedExplosion()
 {
-	using printstr_hook = injector::function_hooker<addr, void(DWORD*, DWORD*, int, CVector const&, unsigned int)>;
-	injector::make_static_hook<printstr_hook>([](printstr_hook::func_type AddExplosion, DWORD* CEntity, DWORD* CEntity2, int eExplosionType, CVector const& a1, unsigned int a2)
+	using printstr_hook = injector::function_hooker<addr, void(int a1, int a2, int a3, int a4, int a5)>;
+	injector::make_static_hook<printstr_hook>([](printstr_hook::func_type AddExplosion, int a1, int a2, int eExplosionType, int a4, int a5)
 	{
 		std::random_shuffle(ExplosionTypes.begin(), ExplosionTypes.end());
+		injector::MakeNOP(0x559FD3, 5, true);
 		for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
 		{
-			AddExplosion(CEntity, CEntity2, *it, a1, a2);
+			AddExplosion(a1, a2, *it, a4, a5);
+			if (*it == eExplosionType)
+				break;
 		}
+		injector::MakeCALL(0x559FD3, 0x4B1140, true);
 		return;
 	});
 }

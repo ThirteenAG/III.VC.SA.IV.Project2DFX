@@ -135,14 +135,18 @@ void RenderSirenParticles()
 template<uintptr_t addr>
 void CExplosionAddModifiedExplosion()
 {
-	using func_hook = injector::function_hooker<addr, void(DWORD*, DWORD*, int, CVector const&, unsigned int, unsigned char, float)>;
-	injector::make_static_hook<func_hook>([](func_hook::func_type AddExplosion, DWORD* CEntity, DWORD* CEntity2, int eExplosionType, CVector const& a1, unsigned int a2, unsigned char a3, float a4)
+	using func_hook = injector::function_hooker<addr, void(uintptr_t *vehicle, CPed *ped, int type, RwV3d *pos, int delay, char a6)>;
+	injector::make_static_hook<func_hook>([](func_hook::func_type AddExplosion, uintptr_t *vehicle, CPed *ped, int type, RwV3d *pos, int delay, char a6)
 	{
 		std::random_shuffle(ExplosionTypes.begin(), ExplosionTypes.end());
+		injector::MakeNOP(0x5C6661, 5, true);
 		for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
 		{
-			AddExplosion(CEntity, CEntity2, *it, a1, a2, a3, a4);
+			AddExplosion(vehicle, ped, *it, pos, delay, a6);
+			if (*it == type)
+				break;
 		}
+		injector::MakeCALL(0x5C6661, 0x4D82D0, true);
 		return;
 	});
 }
@@ -323,11 +327,11 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 		//CExplosionAddModifiedExplosion<(0x5C6EFD)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float) molotov expl
 		CExplosionAddModifiedExplosion<(0x5C6F3D)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
 		CExplosionAddModifiedExplosion<(0x5C704E)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
-		CExplosionAddModifiedExplosion<(0x5C706D)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		//CExplosionAddModifiedExplosion<(0x5C706D)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float) molotov expl
 		CExplosionAddModifiedExplosion<(0x5C70AD)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
 		CExplosionAddModifiedExplosion<(0x5C71C5)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
 		CExplosionAddModifiedExplosion<(0x5C720F)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
-		CExplosionAddModifiedExplosion<(0x5C8B89)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
+		//CExplosionAddModifiedExplosion<(0x5C8B89)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float) barrels
 		CExplosionAddModifiedExplosion<(0x60A51D)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
 		CExplosionAddModifiedExplosion<(0x630168)>(); //0x5C5720 + 0x0  -> call    CExplosion::AddExplosion(CEntity *,CEntity *,eExplosionType,CVector const&,uint,uchar,float)
 	}
