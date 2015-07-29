@@ -276,7 +276,7 @@ void __declspec(naked) CLODLightManager::IV::LoadObjectInstanceHook()
 	PossiblyAddThisEntity(pInstance);
 	_asm
 	{
-		mov     ebx, [ebp + 8]
+		//mov     ebx, [ebp + 8]
 		mov     ecx, [ebx + 1Ch]
 		jmp hookJmpAddr
 	}

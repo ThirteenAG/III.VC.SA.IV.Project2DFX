@@ -131,11 +131,12 @@ void CExplosionAddModifiedExplosion()
 		injector::MakeNOP(0x559FD3, 5, true);
 		for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
 		{
-			AddExplosion(a1, a2, *it, a4, a5);
 			if (*it == eExplosionType)
 				break;
+			AddExplosion(a1, a2, *it, a4, a5);
 		}
 		injector::MakeCALL(0x559FD3, 0x4B1140, true);
+		AddExplosion(a1, a2, eExplosionType, a4, a5);
 		return;
 	});
 }

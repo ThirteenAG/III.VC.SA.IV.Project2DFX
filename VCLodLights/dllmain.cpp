@@ -142,11 +142,12 @@ void CExplosionAddModifiedExplosion()
 		injector::MakeNOP(0x5C6661, 5, true);
 		for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
 		{
-			AddExplosion(vehicle, ped, *it, pos, delay, a6);
 			if (*it == type)
 				break;
+			AddExplosion(vehicle, ped, *it, pos, delay, a6);
 		}
 		injector::MakeCALL(0x5C6661, 0x4D82D0, true);
+		AddExplosion(vehicle, ped, type, pos, delay, a6);
 		return;
 	});
 }
