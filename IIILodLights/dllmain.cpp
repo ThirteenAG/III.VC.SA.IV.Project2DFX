@@ -124,8 +124,8 @@ void CLODLightManager::III::RegisterCustomCoronas()
 template<uintptr_t addr>
 void CExplosionAddModifiedExplosion()
 {
-	using printstr_hook = injector::function_hooker<addr, void(int a1, int a2, int a3, int a4, int a5)>;
-	injector::make_static_hook<printstr_hook>([](printstr_hook::func_type AddExplosion, int a1, int a2, int eExplosionType, int a4, int a5)
+	using func_hook = injector::function_hooker<addr, void(int a1, int a2, int a3, int a4, int a5)>;
+	injector::make_static_hook<func_hook>([](func_hook::func_type AddExplosion, int a1, int a2, int eExplosionType, int a4, int a5)
 	{
 		std::random_shuffle(ExplosionTypes.begin(), ExplosionTypes.end());
 		injector::MakeNOP(0x559FD3, 5, true);
@@ -144,8 +144,8 @@ void CExplosionAddModifiedExplosion()
 template<uintptr_t addr>
 void CBulletTracesAddTrace()
 {
-	using printstr_hook = injector::function_hooker<addr, void(CVector *, CVector *)>;
-	injector::make_static_hook<printstr_hook>([](printstr_hook::func_type AddTrace, CVector* start, CVector* end)
+	using func_hook = injector::function_hooker<addr, void(CVector *, CVector *)>;
+	injector::make_static_hook<func_hook>([](func_hook::func_type AddTrace, CVector* start, CVector* end)
 	{
 		injector::MakeNOP(0x563B56, 5);  //    sub_50D140
 		injector::MakeNOP(0x563BBB, 5);  //    sub_510790
@@ -334,7 +334,7 @@ void CLODLightManager::III::ApplyMemoryPatches()
 		CExplosionAddModifiedExplosion<(0x54CC04)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
 		//CExplosionAddModifiedExplosion<(0x55B743)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint)) molotov/grenade expl
 		CExplosionAddModifiedExplosion<(0x55B7A9)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
-		CExplosionAddModifiedExplosion<(0x564ADE)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint))
+		//CExplosionAddModifiedExplosion<(0x564ADE)>(); // = 0x5591C0 + 0x0  -> call    AddExplosion__10CExplosionFP7CEntityP7CEntity14eExplosionTypeRC7CVectorUi; CExplosion::AddExplosion((CEntity *,CEntity *,eExplosionType,CVector const &,uint)) barrels
 	}
 
 	if (bReplaceSmokeTrailWithBulletTrail)
@@ -360,7 +360,7 @@ void CLODLightManager::III::LoadDatFile()
 	if (FILE* hFile = CFileMgr::OpenFile(DataFilePath, "r"))
 	{
 		unsigned short	nModel = 0xFFFF, nCurIndexForModel = 0;
-		pFileContent = new std::map<unsigned int, const CLamppostInfo>;
+		pFileContent = new std::map<unsigned int, CLamppostInfo>;
 
 		while (const char* pLine = CFileMgr::LoadLine(hFile))
 		{
@@ -387,7 +387,7 @@ void CLODLightManager::III::LoadDatFile()
 			}
 		}
 
-		m_pLampposts = new std::vector<const CLamppostInfo>;
+		m_pLampposts = new std::vector<CLamppostInfo>;
 
 		CFileMgr::CloseFile(hFile);
 	}
@@ -446,23 +446,6 @@ void __declspec(naked) CLODLightManager::III::GenericIDEHook()
 				//MessageBox(0, buffer, "0", 0);
 			}
 		}
-		if (bPreloadLODs)
-		{
-			if (modelID == 404 || modelID == 405 || modelID == 416 || modelID == 402 || modelID == 403)
-			{
-				if (IDEDrawDistance == 3000)
-				{
-					sprintf(sIDEDrawDistance, "%d", IDEDrawDistance);
-					tempptr = strstr(buffer + 10, sIDEDrawDistance);
-
-					strncpy(Flags2, tempptr + 5, 15);
-
-					strncpy(tempptr, "0    ", 5);
-					strncpy(tempptr + 6, Flags2, 15);
-					//MessageBox(0, buffer, "0", 0);
-				}
-			}
-		}
 	}
 	else
 	{
@@ -496,7 +479,7 @@ void __declspec(naked) CLODLightManager::III::IPLDataHook1()
 		call eax
 		mov eax, _EAX
 		push    ebp
-			mov EntityIII, ebp
+		mov EntityIII, ebp
 	}
 
 	VecEntities.push_back(*EntityIII);
@@ -508,9 +491,15 @@ void __declspec(naked) CLODLightManager::III::IPLDataHook2()
 	_asm
 	{
 		push    ebp
-			mov EntityIII, ebp
+		mov EntityIII, ebp
 	}
-
+	if (bPreloadLODs)
+	{
+		if (EntityIII->m_nModelIndex == 404 || EntityIII->m_nModelIndex == 405 || EntityIII->m_nModelIndex == 416 || EntityIII->m_nModelIndex == 402 || EntityIII->m_nModelIndex == 403)
+		{
+			EntityIII->m_bIsVisible = 0;
+		}
+	}
 	VecEntities.push_back(*EntityIII);
 	_asm
 	{
@@ -589,7 +578,7 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 				injector::MakeCALL(0x48C09F, CLODLightManager::III::Init);
 
 				CIniReader iniReader("");
-				if (bPreloadLODs = iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0) == 1)
+				if ((bPreloadLODs = iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0)) == 1)
 				{
 					/*injector::WriteMemory(0x591E0B, &nLevelPortland, true);
 					injector::WriteMemory(0x591E16, &nLevelPortland, true);

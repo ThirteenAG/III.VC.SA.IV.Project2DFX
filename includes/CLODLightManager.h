@@ -88,8 +88,8 @@ public:
 class CLODLightManager
 {
 private:
-	static std::vector<const CLamppostInfo>*	          m_pLampposts;
-	static std::map<unsigned int, const CLamppostInfo>*	  pFileContent;
+	static std::vector<CLamppostInfo>*	          m_pLampposts;
+	static std::map<unsigned int, CLamppostInfo>*	  pFileContent;
 	static bool							                  m_bCatchLamppostsNow;
 
 	static bool							IsModelALamppost(unsigned short nModel);
@@ -122,7 +122,7 @@ private:
 	static char* CurrentTimeMinutes;
 	static float** fCurrentFarClip;
 	static char* DataFilePath;
-	static std::vector<const CEntityIII> VecEntities;
+	static std::vector<CEntityIII> VecEntities;
 
 public:
 	static void							Init();
@@ -173,7 +173,7 @@ private:
 	static char* CurrentTimeMinutes;
 	static float** fCurrentFarClip;
 	static char* DataFilePath;
-	static std::vector<const CEntityVC> VecEntities;
+	static std::vector<CEntityVC> VecEntities;
 
 public:
 	static void							Init();
@@ -392,10 +392,10 @@ public:
 	static void                     RenderLODLights();
 };
 
-std::map<unsigned int, const CLamppostInfo>*	 CLODLightManager::pFileContent;
-std::vector<const CLamppostInfo>*	             CLODLightManager::m_pLampposts = nullptr;
-std::vector<const CEntityVC>                     CLODLightManager::VC::VecEntities;
-std::vector<const CEntityIII>                    CLODLightManager::III::VecEntities;
+std::map<unsigned int, CLamppostInfo>*	 CLODLightManager::pFileContent;
+std::vector<CLamppostInfo>*	             CLODLightManager::m_pLampposts = nullptr;
+std::vector<CEntityVC>                     CLODLightManager::VC::VecEntities;
+std::vector<CEntityIII>                    CLODLightManager::III::VecEntities;
 bool						                     CLODLightManager::m_bCatchLamppostsNow = false;
 
 bool CLODLightManager::IsModelALamppost(unsigned short nModel)
@@ -640,7 +640,7 @@ void CLODLightManager::IV::LoadDatFile()
 	if (FILE* hFile = CFileMgr::OpenFile(DataFilePath, "r"))
 	{
 		DWORD nModel = 0xFFFFFFFF;  unsigned short nCurIndexForModel = 0;
-		pFileContent = new std::map<unsigned int, const CLamppostInfo>;
+		pFileContent = new std::map<unsigned int, CLamppostInfo>;
 
 		while (const char* pLine = CFileMgr::LoadLine(hFile))
 		{
@@ -668,7 +668,7 @@ void CLODLightManager::IV::LoadDatFile()
 			}
 		}
 
-		m_pLampposts = new std::vector<const CLamppostInfo>;
+		m_pLampposts = new std::vector<CLamppostInfo>;
 		m_bCatchLamppostsNow = true;
 
 		CFileMgr::CloseFile(hFile);

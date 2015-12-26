@@ -183,7 +183,7 @@ void CLODLightManager::SA::LoadDatFile()
 	if (FILE* hFile = CFileMgr::OpenFile(DataFilePath, "r"))
 	{
 		unsigned short	nModel = 0xFFFF, nCurIndexForModel = 0;
-		pFileContent = new std::map<unsigned int, const CLamppostInfo>;
+		pFileContent = new std::map<unsigned int, CLamppostInfo>;
 
 		while (const char* pLine = CFileMgr::LoadLine(hFile))
 		{
@@ -210,7 +210,7 @@ void CLODLightManager::SA::LoadDatFile()
 			}
 		}
 
-		m_pLampposts = new std::vector<const CLamppostInfo>;
+		m_pLampposts = new std::vector<CLamppostInfo>;
 		m_bCatchLamppostsNow = true;
 
 		CFileMgr::CloseFile(hFile);

@@ -1,4 +1,5 @@
-#include "stdafx.h"
+//#include "stdafx.h"
+#include <windows.h>
 #include "..\includes\CLODLightManager.h"
 #include "SearchlightsVC.h"
 
@@ -127,7 +128,7 @@ void RenderSirenParticles()
 	injector::make_static_hook<func_hook>([](func_hook::func_type RegisterCorona, int id, char r, char g, char b, char alpha, RwV3D *pos, float radius, float farClp, char a9, char lensflare, char a11, char see_through_effect, char trace, float a14, char a15, float a16)
 	{
 		RegisterCorona(id, r, g, b, alpha, pos, radius, farClp, a9, lensflare, a11, see_through_effect, trace, a14, a15, a16);
-		CLODLightManager::VC::CShadowsStoreStaticShadow(id, 2, *(RwTexture **)0x978DB4, (CVector*)pos, 8.0f, 0.0f, 0.0f, -8.0f, 80, r != 0 ? 25 : 0, 0, b != 0 ? 25 : 0, 15.0f, 1.0f, farClp, false, 8.0f);
+		CLODLightManager::VC::CShadowsStoreStaticShadow(id, 2, *(RwTexture **)0x978DB4, (CVector*)pos, 8.0f, 0.0f, 0.0f, -8.0f, 80, r != 0 ? 25 : 0, g != 0 ? 25 : 0, b != 0 ? 25 : 0, 15.0f, 1.0f, farClp, false, 8.0f);
 		return;
 	});
 }
@@ -355,7 +356,7 @@ void CLODLightManager::VC::LoadDatFile()
 	if (FILE* hFile = CFileMgr::OpenFile(DataFilePath, "r"))
 	{
 		unsigned short	nModel = 0xFFFF, nCurIndexForModel = 0;
-		pFileContent = new std::map<unsigned int, const CLamppostInfo>;
+		pFileContent = new std::map<unsigned int, CLamppostInfo>;
 
 		while (const char* pLine = CFileMgr::LoadLine(hFile))
 		{
@@ -382,7 +383,7 @@ void CLODLightManager::VC::LoadDatFile()
 			}
 		}
 
-		m_pLampposts = new std::vector<const CLamppostInfo>;
+		m_pLampposts = new std::vector<CLamppostInfo>;
 
 		CFileMgr::CloseFile(hFile);
 	}
@@ -545,6 +546,7 @@ void CLODLightManager::VC::Init()
 		RegisterAllLampposts();
 		RegisterCustomCoronas();
 	}
+
 	ApplyMemoryPatches();
 
 	//delete pFileContent;
@@ -566,7 +568,7 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 				injector::MakeCALL(0x4A4D10, CLODLightManager::VC::Init);
 
 				CIniReader iniReader("");
-				if (bPreloadLODs = iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0) == 1)
+				if ((bPreloadLODs = iniReader.ReadInteger("DistanceLimits", "PreloadLODs", 0)) == 1)
 				{
 					injector::WriteMemory(0x4DE4A7, nLevelPortland, true);
 
@@ -576,6 +578,8 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 					{	});
 
 					injector::WriteMemory(0x691538, 0x4DDDDD, true); //CFileLoader::LoadMapZones((char const *))
+
+					injector::WriteMemory<unsigned char>(0x4C7946, 0xEB, true); //Lods in the interiors
 				}
 			}
 		}
