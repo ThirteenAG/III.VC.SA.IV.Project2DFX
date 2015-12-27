@@ -426,23 +426,6 @@ void __declspec(naked) CLODLightManager::VC::GenericIDEHook()
 				strncpy(tempptr + 5, Flags2, 15);
 			}
 		}
-		if (bPreloadLODs)
-		{
-			if (IDEmodelID == 2600 || IDEmodelID == 2544 || IDEmodelID == 2634 || IDEmodelID == 2545)
-			{
-				if (IDEDrawDistance == 3000 || IDEDrawDistance == 1000)
-				{
-					sprintf(sIDEDrawDistance, "%d", IDEDrawDistance);
-					tempptr = strstr(buffer + 10, sIDEDrawDistance);
-
-					strncpy(Flags2, tempptr + 5, 15);
-
-					strncpy(tempptr, "0    ", 5);
-					strncpy(tempptr + 6, Flags2, 15);
-					//MessageBox(0, buffer, "0", 0);
-				}
-			}
-		}
 	}
 	else
 	{
@@ -464,7 +447,6 @@ DWORD ipljmpAddress1 = 0x48AD9C;
 DWORD ipljmpAddress2 = 0x48AF57;
 DWORD _EAX;
 CEntityVC* EntityVC;
-
 void __declspec(naked) CLODLightManager::VC::IPLDataHook1()
 {
 	_asm
@@ -474,7 +456,7 @@ void __declspec(naked) CLODLightManager::VC::IPLDataHook1()
 		call eax
 		mov eax, _EAX
 		push    ebx
-			mov EntityVC, ebx
+		mov EntityVC, ebx
 	}
 
 	VecEntities.push_back(*EntityVC);
@@ -486,9 +468,15 @@ void __declspec(naked) CLODLightManager::VC::IPLDataHook2()
 	_asm
 	{
 		push    esi
-			mov EntityVC, esi
+		mov EntityVC, esi
 	}
-
+	if (bPreloadLODs)
+	{
+		if (EntityVC->m_nModelIndex == 2600 || EntityVC->m_nModelIndex == 2544 || EntityVC->m_nModelIndex == 2634 || EntityVC->m_nModelIndex == 2545)
+		{
+			EntityVC->m_bIsVisible = 0;
+		}
+	}
 	VecEntities.push_back(*EntityVC);
 	_asm
 	{
@@ -499,6 +487,28 @@ void __declspec(naked) CLODLightManager::VC::IPLDataHook2()
 		jmp ipljmpAddress2
 	}
 }
+
+void __declspec(naked) SetupBigBuildingVisibilityHook()
+{
+	_asm
+	{
+		mov eax, dword ptr ds: [0x978810]
+		test eax, eax
+		jz label2
+	label1:
+		mov eax, 0x4C7961
+		jmp eax
+	label2:
+		xor     eax, eax
+		add     esp, 20h
+		pop     ebp
+		pop     edi
+		pop     esi
+		pop     ebx
+		retn
+	}
+}
+
 
 void CLODLightManager::VC::Init()
 {
@@ -579,7 +589,7 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 
 					injector::WriteMemory(0x691538, 0x4DDDDD, true); //CFileLoader::LoadMapZones((char const *))
 
-					injector::WriteMemory<unsigned char>(0x4C7946, 0xEB, true); //Lods in the interiors
+					injector::MakeJMP(0x4C7957, SetupBigBuildingVisibilityHook, true); //Lods in the interiors
 				}
 			}
 		}

@@ -807,7 +807,17 @@ struct CEntityVC	// sizeof = 0x64
 	DWORD rwObject;
 	BYTE flags;
 	BYTE type;
-	BYTE field_52;
+
+	//unsigned char m_nFlags2;
+	unsigned char b2_1 : 1;
+	unsigned char m_bExplosionProof : 1;
+	unsigned char m_bIsVisible : 1;
+	unsigned char b2_8 : 1;
+	unsigned char b2_10 : 1;
+	unsigned char m_bFlashing : 1;
+	unsigned char m_bIsBIGBuilding : 1;
+	unsigned char m_bRenderDamaged : 1;
+
 	BYTE field_53;
 	BYTE field_54;
 	BYTE field_55;

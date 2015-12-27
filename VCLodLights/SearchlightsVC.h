@@ -182,8 +182,8 @@ void CLODLightManager::VC::RenderHeliSearchLights()
 			{
 				if (HeliInst->unk > 0.0f)
 				{
-					RwV3D StartPoint;
-					RwV3D EndPoint;
+					RwV3D StartPoint = { 0.0f,0.0f,0.0f };
+					RwV3D EndPoint = { 0.0f,0.0f,0.0f };
 					StartPoint.x = HeliInst->pos.x;
 					EndPoint.x = HeliInst->shadowPos.x;
 
@@ -235,7 +235,7 @@ void CLODLightManager::VC::RenderSearchLights()
 				ObjectInst = (CEntityVC *)(nOffset + (*pObjectPool)->objects);
 				if (ObjectInst)
 				{
-					int IsObjectDamaged = ((ObjectInst->field_53 & 1) == 1 || !((ObjectInst->field_52 >> 2) & 1));
+					int IsObjectDamaged = ((ObjectInst->field_53 & 1) == 1 || (ObjectInst->m_bRenderDamaged));
 					if (!IsObjectDamaged)
 					{
 						auto	itEnd = pFileContent->upper_bound(PackKey(ObjectInst->m_nModelIndex, 0xFFFF));
