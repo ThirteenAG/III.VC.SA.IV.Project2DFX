@@ -1,414 +1,94 @@
-#include <math.h>
-#include <stdio.h>
 #ifndef __GENERAL
 #define __GENERAL
-#pragma warning(disable:4996)
-
-#define RAD_TO_DEG								(180.0/M_PI)
-#define DEG_TO_RAD								(M_PI/180.0)
-#define RwV3D RwV3d
-
-// TODO: Reverse it
-#define FUNC_CPlaceable__GetRotation			0x441DB0
 
 #define FUNC_CEntity__GetBoundCentre				0x534250
+#define NOVMT __declspec(novtable)
+#define SETVMT(a) *((DWORD_PTR*)this) = (DWORD_PTR)a
 
-struct CBaseModelInfo
-{
-	int _vmt, m_dwKey;
-	short usageCount, m_wTxdIndex;
-	char _fC, m_nbCount2dfx;
-	short m_w2dfxIndex, m_wObjectInfoIndex, m_wFlags;
-	int m_pColModel;
-	float m_fDrawDistance;
-	int m_pRwObject;
-};
+#include "rwsdk\rwcore.h"
+#include "rwsdk\rpworld.h"
 
-struct RwV2D
+enum SShadType
 {
-	float x, y;
-};
-
-struct RwV3d
-{
-	float x, y, z;
+	SSHADT_NONE,
+	SSHADT_DEFAULT,		// SSHAD_RM_COLORONLY (shad_car, shad_ped, shad_heli, shad_bike, shad_rcbaron, bloodpool_64, wincrack_32, lamp_shad_64)
+	SSHADT_INTENSIVE,	// SSHAD_RM_OVERLAP (shad_exp, headlight, headlight1, handman)
+	SSHADT_NEGATIVE,	// SSHAD_RM_INVCOLOR
+	SSHADT4,			// SSHAD_RM_COLORONLY
+	SSHADT5,			// SSHAD_RM_COLORONLY
+	SSHADT6,			// SSHAD_RM_COLORONLY
+	SSHADT8 = 8			// SSHAD_RM_COLORONLY
 };
 
-struct RwMatrix
+enum SShadRenderMode
 {
-	RwV3d right;
-	DWORD flags;
-	RwV3d up;
-	DWORD _pad1;
-	RwV3d at;
-	DWORD _pad2;
-	RwV3d pos;
-	DWORD _pad3;
-};
-struct RwRGBA
-{
-	unsigned char r, g, b, a;
-};
-struct RwRGBAReal
-{
-	float red, green, blue, alpha;
-};
-struct RwObject
-{
-	char type, subType, flags, privateFlags;
-	struct RwFrame *parent;
-};
-struct RwLLLink
-{
-	void *next;
-	void *prev;
-};
-struct RwLinkList
-{
-	RwLLLink link;
-};
-struct RpClump
-{
-	RwObject object;
-	RwLinkList atomicList, lightList, cameraList;
-	RwLLLink inWorldList;
-	DWORD callback;
+	SSHAD_RM_NONE,		// Shadow type: <0, 0, >8.
+	SSHAD_RM_COLORONLY, // Shadow type: 1, 4, 5, 6, 8. The texture alpha is present if the alpha channel is set.
+	SSHAD_RM_OVERLAP,	// Shadow type: 2. Any shadow alpha greater than 0 does not make any difference.
+	SSHAD_RM_INVCOLOR	// Shadow type: 3. Same tip above goes here.
 };
 
-struct RwRaster
+#define RwV3D RwV3d
+
+class CFileMgr
 {
-	void *parent;
-	char *cpPixels;
-	char *palette;
-	int width, height, depth, stride;
-	short u, v;
-	char cType, cFlags, privateFlags, cFormat;
-	char *originalPixels;
-	int originalWidth, originalHeight, originalStride;
-};
-
-
-struct RwTexDictionary
-{
-	RwObject object;
-	RwLinkList texturesInDict;
-	RwLLLink lInInstance;
-};
-
-struct RwTexture
-{
-	RwRaster *raster;
-	RwTexDictionary *dict;
-	RwLLLink lInDictionary;
-	char name[32];
-	char mask[32];
-	char filterAddressing;
-	char _pad[3];
-	int refCount;
-};
-
-struct RwImage
-{
-	int             flags;
-
-	int             width;  /* Device may have different ideas */
-	int             height; /* internally !! */
-
-	int             depth;  /* Of referenced image */
-	int             stride;
-
-	unsigned int    *cpPixels;
-	RwRGBA          *palette;
-};
-
-struct RwObjectHasFrame
-{
-	RwObject object;
-	RwLLLink lFrame;
-	DWORD sync;
-};
-
-struct RwPlane
-{
-	RwV3d normal;
-	float distance;
-};
-
-struct RwFrustumPlane
-{
-	RwPlane plane;
-	char closestX, closestY, closestZ, _pad;
-};
-
-struct RwBBox
-{
-	RwV3d sup, inf;
-};
-
-struct RwCamera
-{
-	RwObjectHasFrame object;
-	DWORD projectionType, beginUpdate, endUpdate;
-	RwMatrix viewMatrix;
-	RwRaster *frameBuffer;
-	RwRaster *zBuffer;
-	RwV2D viewWindow, recipViewWindow, viewOffset;
-	float nearPlane, farPlane, fogPlane, zScale, zShift;
-	RwFrustumPlane frustrumPlanes[6];
-	RwBBox frustrumBoundBox;
-	RwV3d frustrumCorners[8];
-};
-
-struct CShadowImage
-{
-	RwCamera *camera;
-	RwTexture *texture;
-};
-
-struct RpLight
-{
-	RwObjectHasFrame object;
-	float radius;
-	RwRGBAReal color;
-	float minusCosAngle;
-	RwLinkList WorldSectorsInLight;
-	RwLLLink InWorld;
-	WORD lightFrame, _pad;
-};
-
-struct RwSphere
-{
-	RwV3d center;
-	float radius;
-};
-
-struct CShadowData
-{
-	int *owner;
-	char isExist, intensity, _pad1[2];
-	CShadowImage image;
-	char isBlurred, _pad2[3];
-	CShadowImage blurredImage;
-	int blurLevel;
-	char createBlurTypeB, _pad3[3];
-	int objectType;
-	RpLight *light;
-	RwSphere boundingSphere, baseSphere;
-};
-
-struct CRegisteredShadow
-{
-	RwV3d position;
-	float x1, y1, x2, y2, zDistance, scale;
-	RwTexture *texture;
-	CShadowData *shadowData;
-	short intensity;
-	char type, red, green, blue;
-	short flags; /*
-				 0001 DRAW_ON_WATER
-				 0010 IGNORE_MAP_OBJECTS
-				 0100 DRAW_ON_BUILDINGS
-				 */
-};
-
-struct CPool
-{
-	int objects;
-	int flags, size, top;
-	char initialized, _f11;
-	short _pad;
-};
-
-struct CObjectInfo
-{
-	float  m_fMass;
-	float  m_fTurnMass;
-	float  m_fAirResistance;
-	float  m_fElasticity;
-	float  m_fBuoyancyConstant;
-	float  m_fUprootLimit;
-	float  m_fColDamageMultiplier;
-	BYTE   m_bColDamageEffect;
-	BYTE   m_bSpecialColResponseCase;
-	BYTE   m_bCameraAvoidObject;
-	BYTE   m_bCausesExplosion;
-	BYTE   m_bFxType;
-	BYTE   field_21;
-	BYTE   field_22;
-	BYTE   field_23;
-	RwV3D  m_vFxOffset;
-	void  *m_pFxSystem;              // CFxSystem
-	int    field_34;
-	RwV3D  m_vBreakVelocity;
-	float  m_fBreakVelocityRand;
-	float  m_fSmashMultiplier;
-	DWORD  m_dwSparksOnImpact;
-};
-
-struct C2dfx
-{
-	RwV3D offset;
-	int type;
-	RwRGBA color;
-	float coronaFarClip;
-	float pointlightRange;
-	float coronaSize;
-	float shadowSize;
-	union flagsInfo;
-	char coronaFlashType;
-	char coronaEnableReflection;
-	char coronaFlareType;
-	char shadowColorMultiplier;
-	char shadowZDistance;
-	char offsetX;
-	char offsetY;
-	char offsetZ;
-	char __pad[2];
-	RwTexture *coronaTex;
-	RwTexture *shadowTex;
-	int field_38;
-	int field_3C;
-};
-
-struct VehAddonCtrl
-{
-	struct VehicleAdditional *additional;
-	DWORD _pad[2];
-};
-
-struct Placement
-{
-	union
+public:
+	static inline FILE*  OpenFile(const char* path, const char* mode)
 	{
-		RwV3D pos;
-		VehAddonCtrl ctrl;
-	} base;
-	float angle;
-};
-
-class CVector
-{
-public:
-	float	x, y, z;
-
-	CVector()
-	{}
-
-	CVector(float fX, float fY, float fZ=0.0f)
-		: x(fX), y(fY), z(fZ)
-	{}
-
-	CVector(const RwV3d& rwVec)
-		: x(rwVec.x), y(rwVec.y), z(rwVec.z)
-	{}
-
-	CVector&		operator+=(const CVector& vec)
-			{ x += vec.x; y += vec.y; z += vec.z;
-			return *this; }
-
-	inline float	Magnitude()
-		{ return sqrt(x * x + y * y + z * z); }
-
-	friend inline float DotProduct(const CVector& vec1, const CVector& vec2)
-		{ return vec1.x * vec2.x + vec1.x * vec2.y + vec1.z * vec2.z; }
-
-	friend inline CVector CrossProduct(const CVector& vec1, const CVector& vec2)
+		return fopen(path, mode);
+	};
+	static inline  int  CloseFile(FILE* stream)
 	{
-		return CVector(vec1.y * vec2.z - vec1.z * vec2.y, vec1.z * vec2.x - vec1.x * vec2.z, vec1.x * vec2.y - vec1.y * vec2.x);
-	}
-
-	friend inline CVector operator*(const CVector& in, float fMul)
-		{ return CVector(in.x * fMul, in.y * fMul, in.z * fMul); }
-	friend inline CVector operator+(const CVector& vec1, const CVector& vec2)
-		{ return CVector(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z + vec2.z); }
-	friend inline CVector operator-(const CVector& vec1, const CVector& vec2)
-		{ return CVector(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z); }
-};
-
-class CVector2D
-{
-public:
-	float	x, y;
-
-	CVector2D()
-	{}
-
-	CVector2D(float fX, float fY)
-		: x(fX), y(fY)
-	{}
-};
-
-class CMatrix
-{
-public:
-	RwMatrix	matrix;
-	RwMatrix*	pMatrix;
-	BOOL		haveRwMatrix;
-
-public:
-	CMatrix()
-		: pMatrix(nullptr), haveRwMatrix(FALSE)
-	{}
-
-	CMatrix(RwMatrix* rwMatrix, bool bAttach=false)
-		: matrix(*rwMatrix), haveRwMatrix(bAttach), pMatrix(bAttach ? rwMatrix : nullptr)
-	{}
-
-	CMatrix(const CVector& vecRight, const CVector& vecUp, const CVector& vecAt, const CVector& vecPos)
+		return fclose(stream);
+	};
+	static inline bool  ReadLine(FILE* stream, char* str, int num)
 	{
-		matrix.right.x = vecRight.x;
-		matrix.right.y = vecRight.y;
-		matrix.right.z = vecRight.z;
+		return fgets(str, num, stream) != nullptr;
+	};
+	static inline size_t Read(FILE* stream, void* buf, size_t len)
+	{
+		return fread(buf, 1, len, stream);
+	};
+	static inline size_t Write(FILE* stream, const char* ptr, size_t len)
+	{
+		return fwrite(ptr, 1, len, stream);
+	};
+	static inline bool  Seek(FILE* stream, long pos, int from)
+	{
+		return fseek(stream, pos, from) != 0;
+	};
+	static inline const char* LoadLine(FILE* hFile)
+	{
+		static char		cLineBuffer[512];
 
-		matrix.up.x = vecUp.x;
-		matrix.up.y = vecUp.y;
-		matrix.up.z = vecUp.z;
+		if (!CFileMgr::ReadLine(hFile, cLineBuffer, sizeof(cLineBuffer)))
+			return nullptr;
 
-		matrix.at.x = vecAt.x;
-		matrix.at.y = vecAt.y;
-		matrix.at.z = vecAt.z;
+		for (int i = 0; cLineBuffer[i]; ++i)
+		{
+			if (cLineBuffer[i] == '\n')
+				cLineBuffer[i] = '\0';
+			else if (cLineBuffer[i] < ' ' || cLineBuffer[i] == ',')
+				cLineBuffer[i] = ' ';
+		}
 
-		matrix.pos.x = vecPos.x;
-		matrix.pos.y = vecPos.y;
-		matrix.pos.z = vecPos.z;
-	}
+		const char* p = cLineBuffer;
+		while (*p <= ' ')
+		{
+			if (!*p++)
+				break;
+		}
+		return p;
+	};
+};
 
-	friend inline CMatrix operator*(const CMatrix& Rot1, const CMatrix& Rot2)
-		{ return CMatrix(	CVector(Rot1.matrix.right.x * Rot2.matrix.right.x + Rot1.matrix.right.y * Rot2.matrix.up.x + Rot1.matrix.right.z * Rot2.matrix.at.x + Rot2.matrix.pos.x,
-								Rot1.matrix.right.x * Rot2.matrix.right.y + Rot1.matrix.right.y * Rot2.matrix.up.y + Rot1.matrix.right.z * Rot2.matrix.at.y + Rot2.matrix.pos.y,
-								Rot1.matrix.right.x * Rot2.matrix.right.z + Rot1.matrix.right.y * Rot2.matrix.up.z + Rot1.matrix.right.z * Rot2.matrix.at.z + Rot2.matrix.pos.z),
-						CVector(Rot1.matrix.up.x * Rot2.matrix.right.x + Rot1.matrix.up.y * Rot2.matrix.up.x + Rot1.matrix.up.z * Rot2.matrix.at.x + Rot2.matrix.pos.x,
-								Rot1.matrix.up.x * Rot2.matrix.right.y + Rot1.matrix.up.y * Rot2.matrix.up.y + Rot1.matrix.up.z * Rot2.matrix.at.y + Rot2.matrix.pos.y,
-								Rot1.matrix.up.x * Rot2.matrix.right.z + Rot1.matrix.up.y * Rot2.matrix.up.z + Rot1.matrix.up.z * Rot2.matrix.at.z + Rot2.matrix.pos.z),
-						CVector(Rot1.matrix.at.x * Rot2.matrix.right.x + Rot1.matrix.at.y * Rot2.matrix.up.x + Rot1.matrix.at.z * Rot2.matrix.at.x + Rot2.matrix.pos.x,
-								Rot1.matrix.at.x * Rot2.matrix.right.y + Rot1.matrix.at.y * Rot2.matrix.up.y + Rot1.matrix.at.z * Rot2.matrix.at.y + Rot2.matrix.pos.y,
-								Rot1.matrix.at.x * Rot2.matrix.right.z + Rot1.matrix.at.y * Rot2.matrix.up.z + Rot1.matrix.at.z * Rot2.matrix.at.z + Rot2.matrix.pos.z),
-						CVector(Rot1.matrix.pos.x * Rot2.matrix.right.x + Rot1.matrix.pos.y * Rot2.matrix.up.x + Rot1.matrix.pos.z * Rot2.matrix.at.x + Rot2.matrix.pos.x,
-								Rot1.matrix.pos.x * Rot2.matrix.right.y + Rot1.matrix.pos.y * Rot2.matrix.up.y + Rot1.matrix.pos.z * Rot2.matrix.at.y + Rot2.matrix.pos.y,
-								Rot1.matrix.pos.x * Rot2.matrix.right.z + Rot1.matrix.pos.y * Rot2.matrix.up.z + Rot1.matrix.pos.z * Rot2.matrix.at.z + Rot2.matrix.pos.z)); };
-
-	friend inline CVector operator*(const CMatrix& matrix, const CVector& vec)
-			{ return CVector(matrix.matrix.up.x * vec.y + matrix.matrix.right.x * vec.x + matrix.matrix.at.x * vec.z + matrix.matrix.pos.x,
-								matrix.matrix.up.y * vec.y + matrix.matrix.right.y * vec.x + matrix.matrix.at.y * vec.z + matrix.matrix.pos.y,
-								matrix.matrix.up.z * vec.y + matrix.matrix.right.z * vec.x + matrix.matrix.at.z * vec.z + matrix.matrix.pos.z); };
-
-	inline CVector*	GetUp()
-		{ return reinterpret_cast<CVector*>(&matrix.up); }
-
-	inline CVector*	GetAt()
-		{ return reinterpret_cast<CVector*>(&matrix.at); }
-
-	inline CVector* GetPos()
-		{ return reinterpret_cast<CVector*>(&matrix.pos); }
-
-	inline void		SetTranslateOnly(float fX, float fY, float fZ)
-		{ matrix.pos.x = fX; matrix.pos.y = fY; matrix.pos.z = fZ; }
-
-	void			SetRotateXOnly(float fAngle);
-	void			SetRotateYOnly(float fAngle);
-	void			SetRotateZOnly(float fAngle);
-
-	void			SetRotateOnly(float fAngleX, float fAngleY, float fAngleZ);
+class CTimer
+{
+public:
+	static int&				m_snTimeInMilliseconds;
+	static int&				m_snTimeInMillisecondsPauseMode;
+	static float&			ms_fTimeStep;
+	//static unsigned int&	m_FrameCounter;
 };
 
 class CSimpleTransform
@@ -416,6 +96,42 @@ class CSimpleTransform
 public:
 	CVector                         m_translate;
 	float                           m_heading;
+
+public:
+	void							UpdateMatrix(CMatrix* pMatrix) const
+	{
+		pMatrix->SetTranslate(m_translate.x, m_translate.y, m_translate.z);
+		pMatrix->SetRotateZOnly(m_heading);
+	}
+
+	void							UpdateRwMatrix(RwMatrix* pMatrix) const
+	{
+		pMatrix->right.x = cos(m_heading);
+		pMatrix->right.y = sin(m_heading);
+		pMatrix->right.z = 0.0f;
+
+		pMatrix->at.x = 0.0f;
+		pMatrix->at.y = 0.0f;
+		pMatrix->at.z = 1.0f;
+
+		pMatrix->up.x = -sin(m_heading);
+		pMatrix->up.y = cos(m_heading);
+		pMatrix->up.z = 0.0f;
+
+		pMatrix->pos.x = m_translate.x;
+		pMatrix->pos.y = m_translate.y;
+		pMatrix->pos.z = m_translate.z;
+
+		pMatrix->flags &= ~(0x00000003 | 0x00020000);
+	}
+
+	void							Invert(const CSimpleTransform& src)
+	{
+		m_translate.x = -(cos(src.m_heading) * src.m_translate.x - sin(src.m_heading) * src.m_translate.y);;
+		m_translate.y = sin(src.m_heading) * src.m_translate.x - cos(m_heading) * src.m_translate.y;
+		m_translate.z = -src.m_translate.z;
+		m_heading = -src.m_heading;
+	}
 };
 
 class CRGBA
@@ -433,10 +149,25 @@ public:
 		: r(in.r), g(in.g), b(in.b), a(alpha)
 	{}
 
-
 	inline CRGBA(BYTE red, BYTE green, BYTE blue, BYTE alpha = 255)
 		: r(red), g(green), b(blue), a(alpha)
 	{}
+
+	template <typename T>
+	friend CRGBA Blend(const CRGBA& One, T OneStrength, const CRGBA& Two, T TwoStrength)
+		{	T	TotalStrength = OneStrength + TwoStrength;
+			return CRGBA(	((One.r * OneStrength) + (Two.r * TwoStrength))/TotalStrength,
+							((One.g * OneStrength) + (Two.g * TwoStrength))/TotalStrength,
+							((One.b * OneStrength) + (Two.b * TwoStrength))/TotalStrength,
+							((One.a * OneStrength) + (Two.a * TwoStrength))/TotalStrength); }
+
+	template <typename T>
+	friend CRGBA Blend(const CRGBA& One, T OneStrength, const CRGBA& Two, T TwoStrength, const CRGBA& Three, T ThreeStrength)
+		{	T	TotalStrength = OneStrength + TwoStrength + ThreeStrength;
+			return CRGBA(	((One.r * OneStrength) + (Two.r * TwoStrength) + (Three.r * ThreeStrength))/TotalStrength,
+							((One.g * OneStrength) + (Two.g * TwoStrength) + (Three.g * ThreeStrength))/TotalStrength,
+							((One.b * OneStrength) + (Two.b * TwoStrength) + (Three.b * ThreeStrength))/TotalStrength,
+							((One.a * OneStrength) + (Two.a * TwoStrength) + (Three.a * ThreeStrength))/TotalStrength); }
 
 	void	BaseColors__Constructor();
 };
@@ -458,7 +189,6 @@ class CPlaceable
 {
 private:
 	CSimpleTransform				m_transform;
-public:
 	CMatrix*						m_pCoords;
 
 public:
@@ -473,25 +203,28 @@ public:
 		UNREFERENCED_PARAMETER(dummy);
 	}
 
-	inline CVector*					GetCoords()
-		{ return m_pCoords ? reinterpret_cast<CVector*>(&m_pCoords->matrix.pos) : &m_transform.m_translate; }
+	inline CVector&					GetCoords()
+		{ return m_pCoords ? reinterpret_cast<CVector&>(m_pCoords->matrix.pos) : m_transform.m_translate; }
 	inline CMatrix*					GetMatrix()
 		{ return m_pCoords; }
 	inline CSimpleTransform&		GetTransform()
 		{ return m_transform; }
+	inline float					GetHeading()
+		{ return m_pCoords ? atan2(-m_pCoords->GetUp()->x, m_pCoords->GetUp()->y) : m_transform.m_heading; }
 
 	inline void						SetCoords(const CVector& pos)
 	{	if ( m_pCoords ) { m_pCoords->matrix.pos.x = pos.x; m_pCoords->matrix.pos.y = pos.y; m_pCoords->matrix.pos.z = pos.z; }
 		else m_transform.m_translate = pos; }
 	inline void						SetHeading(float fHeading)
 		{ if ( m_pCoords ) m_pCoords->SetRotateZOnly(fHeading); else m_transform.m_heading = fHeading; }
+
+	void							AllocateMatrix();
 };
 
 // TODO: May not be the best place to put it?
-class __declspec(novtable) CEntity : public CPlaceable
+class NOVMT CEntity	: public CPlaceable
 {
 public:
-	/********** BEGIN VTBL **************/
 	virtual void	Add_CRect();
 	virtual void	Add();
 	virtual void	Remove();
@@ -515,7 +248,7 @@ public:
 	virtual void	FlagToDestroyWhenNextProcessed();
 
 //private:
-	RpClump*		m_pRwObject;						// 0x18
+	RwObject*		m_pRwObject;						// 0x18
 
 	/********** BEGIN CFLAGS (0x1C) **************/
 	unsigned long	bUsesCollision : 1;				// does entity use collision
@@ -571,6 +304,9 @@ public:
 	BYTE			nStatus : 5;						// control status			// 0x36
 	//********* END CEntityInfo ************//
 
+	// VCS PC class extension
+	bool			bIveBeenRenderedOnce : 1;		// for realtime shadows
+
 public:
 	explicit inline CEntity(int dummy)
 		: CPlaceable(dummy)
@@ -583,166 +319,174 @@ public:
 	inline short	GetModelIndex()
 					{ return m_nModelIndex; }
 
+	class CRealTimeShadow*		GetRealTimeShadow();
+	void						SetRealTimeShadow(class CRealTimeShadow* pShadow);
+
 	void			UpdateRW();
 	void			RegisterReference(CEntity** pAddress);
 	void			CleanUpOldReference(CEntity** pAddress);
 };
 
-class __declspec(novtable) CPhysical : public CEntity
+class NOVMT CPhysical : public CEntity
 {
 private:
-	float			pad1; // 56
-	int				__pad2; // 60
+	float				pad1; // 56
+	int					__pad2; // 60
 
-	unsigned int	b0x01 : 1; // 64
-	unsigned int	bApplyGravity : 1;
-	unsigned int	bDisableFriction : 1;
-	unsigned int	bCollidable : 1;
-	unsigned int	b0x10 : 1;
-	unsigned int	bDisableMovement : 1;
-	unsigned int	b0x40 : 1;
-	unsigned int	b0x80 : 1;
+	unsigned int		b0x01 : 1; // 64
+	unsigned int		bApplyGravity : 1;
+	unsigned int		bDisableFriction : 1;
+	unsigned int		bCollidable : 1;
+	unsigned int		b0x10 : 1;
+	unsigned int		bDisableMovement : 1;
+	unsigned int		b0x40 : 1;
+	unsigned int		b0x80 : 1;
 
-	unsigned int	bSubmergedInWater : 1; // 65
-	unsigned int	bOnSolidSurface : 1;
-	unsigned int	bBroken : 1;
-	unsigned int	b0x800 : 1; // ref @ 0x6F5CF0
-	unsigned int	b0x1000 : 1;//
-	unsigned int	b0x2000 : 1;//
-	unsigned int	b0x4000 : 1;//
-	unsigned int	b0x8000 : 1;//
+	unsigned int		bSubmergedInWater : 1; // 65
+	unsigned int		bOnSolidSurface : 1;
+	unsigned int		bBroken : 1;
+	unsigned int		b0x800 : 1; // ref @ 0x6F5CF0
+	unsigned int		b0x1000 : 1;//
+	unsigned int		b0x2000 : 1;//
+	unsigned int		b0x4000 : 1;//
+	unsigned int		b0x8000 : 1;//
 
-	unsigned int	b0x10000 : 1; // 66
-	unsigned int	b0x20000 : 1; // ref @ CPhysical__processCollision
-	unsigned int	bBulletProof : 1;
-	unsigned int	bFireProof : 1;
-	unsigned int	bCollisionProof : 1;
-	unsigned int	bMeeleProof : 1;
-	unsigned int	bInvulnerable : 1;
-	unsigned int	bExplosionProof : 1;
+	unsigned int		b0x10000 : 1; // 66
+	unsigned int		b0x20000 : 1; // ref @ CPhysical__processCollision
+	unsigned int		bBulletProof : 1;
+	unsigned int		bFireProof : 1;
+	unsigned int		bCollisionProof : 1;
+	unsigned int		bMeeleProof : 1;
+	unsigned int		bInvulnerable : 1;
+	unsigned int		bExplosionProof : 1;
 
-	unsigned int	b0x1000000 : 1; // 67
-	unsigned int	bAttachedToEntity : 1;
-	unsigned int	b0x4000000 : 1;
-	unsigned int	bTouchingWater : 1;
-	unsigned int	bEnableCollision : 1;
-	unsigned int	bDestroyed : 1;
-	unsigned int	b0x40000000 : 1;
-	unsigned int	b0x80000000 : 1;
+	unsigned int		b0x1000000 : 1; // 67
+	unsigned int		bAttachedToEntity : 1;
+	unsigned int		b0x4000000 : 1;
+	unsigned int		bTouchingWater : 1;
+	unsigned int		bEnableCollision : 1;
+	unsigned int		bDestroyed : 1;
+	unsigned int		b0x40000000 : 1;
+	unsigned int		b0x80000000 : 1;
 
-	CVector			m_vecLinearVelocity; // 68
-	CVector			m_vecAngularVelocity; // 80
-	CVector			m_vecCollisionLinearVelocity; // 92
-	CVector			m_vecCollisionAngularVelocity; // 104
-	CVector			m_vForce;							// 0x74
-	CVector			m_vTorque;							// 0x80
-	float			fMass;								// 0x8C
-	float			fTurnMass;							// 0x90
-	float			m_fVelocityFrequency;					// 0x94
-	float			m_fAirResistance;						// 0x98
-	float			m_fElasticity;						// 0x9C
-	float			m_fBuoyancyConstant;					// 0xA0
+	CVector				m_vecLinearVelocity; // 68
+	CVector				m_vecAngularVelocity; // 80
+	CVector				m_vecCollisionLinearVelocity; // 92
+	CVector				m_vecCollisionAngularVelocity; // 104
+	CVector				m_vForce;							// 0x74
+	CVector				m_vTorque;							// 0x80
+	float				fMass;								// 0x8C
+	float				fTurnMass;							// 0x90
+	float				m_fVelocityFrequency;					// 0x94
+	float				m_fAirResistance;						// 0x98
+	float				m_fElasticity;						// 0x9C
+	float				m_fBuoyancyConstant;					// 0xA0
 
-	CVector			vecCenterOfMass;					// 0xA4
-	DWORD			dwUnk1;								// 0xB0
-	void*			unkCPtrNodeDoubleLink;				// 0xB4
-	BYTE			byUnk: 8;								// 0xB8
-	BYTE			byCollisionRecords: 8;					// 0xB9
-	BYTE			byUnk2: 8;								// 0xBA (Baracus)
-	BYTE			byUnk3: 8;								// 0xBB
+	CVector				vecCenterOfMass;					// 0xA4
+	DWORD				dwUnk1;								// 0xB0
+	void*				unkCPtrNodeDoubleLink;				// 0xB4
+	BYTE				byUnk: 8;								// 0xB8
+	BYTE				byCollisionRecords: 8;					// 0xB9
+	BYTE				byUnk2: 8;								// 0xBA (Baracus)
+	BYTE				byUnk3: 8;								// 0xBB
 
-	float			pad4[6];								// 0xBC
+	float				pad4[6];								// 0xBC
 
-	float			fDistanceTravelled;					// 0xD4
-	float			fDamageImpulseMagnitude;				// 0xD8
-	CEntity*		damageEntity;						// 0xDC
-	BYTE			pad2[28];								// 0xE0
-	CEntity*		pAttachedEntity;					// 0xFC
-	CVector			m_vAttachedPosition;				// 0x100
-	CVector			m_vAttachedRotation;				// 0x10C
-	BYTE			pad3[20];								// 0x118
-	float			fLighting;							// 0x12C col lighting? CPhysical::GetLightingFromCol
-	float			fLighting_2;							// 0x130 added to col lighting in CPhysical::GetTotalLighting
-	BYTE			pad3a[4];								// 0x134
+	float				fDistanceTravelled;					// 0xD4
+	float				fDamageImpulseMagnitude;				// 0xD8
+	CEntity*			damageEntity;						// 0xDC
+	BYTE				pad2[28];								// 0xE0
+	CEntity*			pAttachedEntity;					// 0xFC
+	CVector				m_vAttachedPosition;				// 0x100
+	CVector				m_vAttachedRotation;				// 0x10C
+	BYTE				pad3[20];								// 0x118
+	float				fLighting;							// 0x12C col lighting? CPhysical::GetLightingFromCol
+	float				fLighting_2;							// 0x130 added to col lighting in CPhysical::GetTotalLighting
+	class CRealTimeShadow*	m_pShadow;							// 0x134
 
 public:
+	inline class CRealTimeShadow*	GetRealTimeShadow()
+		{ return m_pShadow; }
+	inline CVector&					GetLinearVelocity()
+		{ return m_vecLinearVelocity; }
+
+	inline void						SetRealTimeShadow(class CRealTimeShadow* pShadow)
+		{ m_pShadow = pShadow; }
+
 	// Temp
 	CPhysical()
 	: CEntity(0) {}
 };
 
-// TODO: Move it away
-class CKeyGen
+struct C2dfx
 {
-public:
-	static unsigned int		GetUppercaseKey(const char* pEntry);
+	RwV3D offset;
+	int type;
+	RwRGBA color;
+	float coronaFarClip;
+	float pointlightRange;
+	float coronaSize;
+	float shadowSize;
+	union flagsInfo;
+	char coronaFlashType;
+	char coronaEnableReflection;
+	char coronaFlareType;
+	char shadowColorMultiplier;
+	char shadowZDistance;
+	char offsetX;
+	char offsetY;
+	char offsetZ;
+	char __pad[2];
+	RwTexture *coronaTex;
+	RwTexture *shadowTex;
+	int field_38;
+	int field_3C;
 };
 
-// TODO: Move away?
-class CGame
+struct CBaseModelInfo
 {
-private:
-	static bool&			bMissionPackGame;
-
-public:
-	static inline bool		IsMissionPackGame()
-		{ return bMissionPackGame; }
+	int _vmt, m_dwKey;
+	short usageCount, m_wTxdIndex;
+	char _fC, m_nbCount2dfx;
+	short m_w2dfxIndex, m_wObjectInfoIndex, m_wFlags;
+	int m_pColModel;
+	float m_fDrawDistance;
+	int m_pRwObject;
 };
 
-
-bool CalcScreenCoors(const CVector& vecIn, CVector* vecOut);
-void LoadingScreenLoadingFile(const char* pText);
-
-class CFileMgr
+struct RxObjSpace3dVertex	// sizeof = 0x24
 {
-public:
-	static inline FILE*  OpenFile(const char* path, const char* mode)
-	{
-		return fopen(path, mode);
-	};
-	static inline  int  CloseFile(FILE* stream)
-	{
-		return fclose(stream);
-	};
-	static inline bool  ReadLine(FILE* stream, char* str, int num)
-	{
-		return fgets(str, num, stream) != nullptr;
-	};
-	static inline size_t Read(FILE* stream, void* buf, size_t len)
-	{
-		return fread(buf, 1, len, stream);
-	};
-	static inline size_t Write(FILE* stream, const char* ptr, size_t len)
-	{
-		return fwrite(ptr, 1, len, stream);
-	};
-	static inline bool  Seek(FILE* stream, long pos, int from)
-	{
-		return fseek(stream, pos, from) != 0;
-	};
-	static inline const char* LoadLine(FILE* hFile)
-	{
-		static char		cLineBuffer[512];
+	RwV3D objVertex;
+	RwV3D objNormal;
+	DWORD color;
+	float u;
+	float v;
+};
 
-		if (!CFileMgr::ReadLine(hFile, cLineBuffer, sizeof(cLineBuffer)))
-			return nullptr;
-
-		for (int i = 0; cLineBuffer[i]; ++i)
-		{
-			if (cLineBuffer[i] == '\n')
-				cLineBuffer[i] = '\0';
-			else if (cLineBuffer[i] < ' ' || cLineBuffer[i] == ',')
-				cLineBuffer[i] = ' ';
-		}
-
-		const char* p = cLineBuffer;
-		while (*p <= ' ')
-		{
-			if (!*p++)
-				break;
-		}
-		return p;
-	};
+struct CObjectInfo
+{
+	float  m_fMass;
+	float  m_fTurnMass;
+	float  m_fAirResistance;
+	float  m_fElasticity;
+	float  m_fBuoyancyConstant;
+	float  m_fUprootLimit;
+	float  m_fColDamageMultiplier;
+	BYTE   m_bColDamageEffect;
+	BYTE   m_bSpecialColResponseCase;
+	BYTE   m_bCameraAvoidObject;
+	BYTE   m_bCausesExplosion;
+	BYTE   m_bFxType;
+	BYTE   field_21;
+	BYTE   field_22;
+	BYTE   field_23;
+	RwV3D  m_vFxOffset;
+	void  *m_pFxSystem;              // CFxSystem
+	int    field_34;
+	RwV3D  m_vBreakVelocity;
+	float  m_fBreakVelocityRand;
+	float  m_fSmashMultiplier;
+	DWORD  m_dwSparksOnImpact;
 };
 
 struct CObject : public CPhysical
@@ -775,36 +519,29 @@ struct CObject : public CPhysical
 	float        field_178;
 };
 
-struct CColPoint	// sizeof = 0x2C
-{
-	RwV3D point;
-	DWORD field_C;
-	RwV3D normal;
-	DWORD field_1C;
-	BYTE surfaceTypeA;
-	BYTE pieceTypeA;
-	BYTE lightingA;
-	BYTE surfaceTypeB;
-	BYTE pieceTypeB;
-	BYTE lightingB;
-	BYTE field_26[2];
-	DWORD depth;
-};
 
-struct RxObjSpace3dVertex	// sizeof = 0x24
+bool CalcScreenCoors(const CVector& vecIn, CVector* vecOut);
+void LoadingScreenLoadingFile(const char* pText);
+
+extern CRGBA*				BaseColors;
+extern RwCamera*&			Camera;
+
+static_assert(sizeof(CEntity) == 0x38, "Wrong size: CEntity");
+static_assert(sizeof(CPhysical) == 0x138, "Wrong size: CPhysical");
+
+struct CPool
 {
-	RwV3D objVertex;
-	RwV3D objNormal;
-	DWORD color;
-	float u;
-	float v;
+	int objects;
+	int flags, size, top;
+	char initialized, _f11;
+	short _pad;
 };
 
 struct CEntityVC	// sizeof = 0x64
 {
 	DWORD __vmt;
 	CMatrix matrix;
-	DWORD rwObject;
+	//DWORD rwObject; CMatrix sizeof is +4 for some reason
 	BYTE flags;
 	BYTE type;
 
@@ -836,7 +573,7 @@ class CEntityIII
 public:
 	DWORD __vmt;
 	CMatrix matrix;
-	RwObject *m_pRwObject;
+	//RwObject *m_pRwObject; CMatrix sizeof is +4 for some reason
 	unsigned char m_nType : 3;
 	unsigned char m_nState : 5;
 
@@ -898,7 +635,7 @@ private:
 	unsigned int initial_;
 
 public:
-	inline Interval() : initial_(GetTickCount())    { }
+	inline Interval() : initial_(GetTickCount()) { }
 
 	virtual ~Interval() { }
 
@@ -943,4 +680,5 @@ public:
 		return m_fps;
 	}
 };
+
 #endif
