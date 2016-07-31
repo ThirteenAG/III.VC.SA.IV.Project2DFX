@@ -253,18 +253,18 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 		{
 			void operator()(injector::reg_pack& regs)
 			{
-				*(float*)&regs.ecx = *(float*)(regs.esp + 0xC);
-				regs.edx = (regs.esp + 0x28);
+				regs.edi = regs.eax;
+				*(float*)(regs.esi + 0x18) = *(float*)&regs.ecx;
 
 				if ((fNeonsDrawDistance && strstr((char*)(regs.esp + 0x28), "neon") != NULL) || fTimedObjectsDrawDistance)
 				{
 					if (fTimedObjectsDrawDistance <= 10.0f)
-						*(float*)&regs.ecx *= fTimedObjectsDrawDistance;
+						*(float*)(regs.esi + 0x18) *= fTimedObjectsDrawDistance;
 					else
-						*(float*)&regs.ecx = fTimedObjectsDrawDistance;
+						*(float*)(regs.esi + 0x18) = fTimedObjectsDrawDistance;
 				}
 			}
-		}; injector::MakeInline<IncreaseDrawDistanceForTimedObjectsHook>(0x5B3F43, 0x5B3F43+8);
+		}; injector::MakeInline<IncreaseDrawDistanceForTimedObjectsHook>(0x5B3F4C);
 	}
 
 	if (fLODObjectsDrawDistance || fGenericObjectsDrawDistance || fAllNormalObjectsDrawDistance || fVegetationDrawDistance)
