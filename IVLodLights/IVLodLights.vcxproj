@@ -150,6 +150,7 @@ copy /y "$(TargetPath)" "Z:\WGTA\IV\Episodes from Liberty City\plugins\IVLodLigh
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\includes\CLODLightManager.cpp" />
+    <ClCompile Include="..\includes\hooking\Hooking.Patterns.cpp" />
     <ClCompile Include="dllmain.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -6,6 +6,7 @@ std::map<unsigned int, CLamppostInfo>		FileContent;
 std::vector<CLamppostInfo>*					CLODLightManager::m_pLampposts = &Lampposts;
 std::map<unsigned int, CLamppostInfo>*		CLODLightManager::pFileContent = &FileContent;
 bool							            CLODLightManager::m_bCatchLamppostsNow;
+bool										bIsIVEFLC = false;
 
 bool  CLODLightManager::bRenderLodLights;
 float CLODLightManager::fCoronaRadiusMultiplier;
@@ -61,7 +62,7 @@ void CLODLightManager::LoadDatFile()
 					nCurIndexForModel = 0;
 					if (strcmp(pLine, "%additional_coronas") != 0)
 					{
-						if (injector::address_manager::singleton().IsIV() || injector::address_manager::singleton().IsEFLC())
+						if (bIsIVEFLC)
 							nModel = CLODLightManager::IV::GetHashKey((char *)(pLine + 1), 0);
 						else
 							nModel = GetModelInfoUInt16(pLine + 1);

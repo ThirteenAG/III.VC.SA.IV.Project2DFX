@@ -1,5 +1,6 @@
 #include "..\includes\stdafx.h"
 #include "..\includes\CLODLightManager.h"
+#include "..\includes\hooking\Hooking.Patterns.h"
 
 using namespace injector;
 
@@ -14,9 +15,11 @@ void(__stdcall *CLODLightManager::IV::GetGameCam)(int *camera);
 bool(__cdecl *CLODLightManager::IV::CamIsSphereVisible)(int camera, float pX, float pY, float pZ, float radius);
 void(__cdecl *CLODLightManager::IV::GetCamPos)(int camera, float *pX, float *pY, float *pZ);
 int& CTimer::m_snTimeInMillisecondsPauseMode = *(int*)0xBADDEAD;
+extern bool	bIsIVEFLC;
 
 void CLODLightManager::IV::Init()
 {
+	bIsIVEFLC = true;
 	CIniReader iniReader("");
 	bRenderLodLights = iniReader.ReadInteger("LodLights", "RenderLodLights", 1) != 0;
 	fCoronaRadiusMultiplier = iniReader.ReadFloat("LodLights", "CoronaRadiusMultiplier", 1.0f);
@@ -25,8 +28,6 @@ void CLODLightManager::IV::Init()
 	bool DisableDefaultLodLights = iniReader.ReadInteger("LodLights", "DisableDefaultLodLights", 0) == 1;
 	bool DisableCoronasWaterReflection = iniReader.ReadInteger("LodLights", "DisableCoronasWaterReflection", 0) == 1;
 	fGenericObjectsDrawDistance = iniReader.ReadFloat("IDETweaker", "LamppostsDrawDistance", 0.0f);
-	bool SkipIntro = iniReader.ReadInteger("Misc", "SkipIntro", 0) == 1;
-	bool DoNotPauseOnMinimize = iniReader.ReadInteger("Misc", "DoNotPauseOnMinimize", 0) == 1;
 
 	struct LoadObjectInstanceHook
 	{
@@ -59,213 +60,93 @@ void CLODLightManager::IV::Init()
 		LoadDatFile();
 		RegisterCustomCoronas();
 
-		if (injector::address_manager::singleton().IsIV())
-		{
-			injector::MakeCALL(aslr_ptr(0x00402D6C), RegisterLODLights, true);
-			injector::MakeInline<LoadObjectInstanceHook>(aslr_ptr(0x008D63A1), aslr_ptr(0x008D63A7));
-			injector::MakeInline<ParseIdeObjsHook>(aslr_ptr(0x008D2311), aslr_ptr(0x8D2317));
-		}
-		else
-		{
-			injector::MakeCALL(aslr_ptr(0x0047361F), RegisterLODLights, true);
-			injector::MakeInline<LoadObjectInstanceHook>(aslr_ptr(0x0091C851), aslr_ptr(0x0091C857));
-			injector::MakeInline<ParseIdeObjsHook>(aslr_ptr(0x00918891), aslr_ptr(0x918897));
-		}
+		auto pattern = hook::pattern("E8 ? ? ? ? 83 3D ? ? ? ? 00 74 05 E8 ? ? ? ? 6A 05");
+		injector::MakeCALL(pattern.get(0).get<uintptr_t>(0), RegisterLODLights, true); //0x00402D6C
+		pattern = hook::pattern("8B 5D 08 8B 4B 1C 8D 44 24 14 50 51");
+		injector::MakeInline<LoadObjectInstanceHook>(pattern.get(0).get<uintptr_t>(0), pattern.get(0).get<uintptr_t>(6)); //0x008D63A1 - 0x008D63A7
+		pattern = hook::pattern("F3 0F 10 44 24 1C 0D 00 0C");
+		injector::MakeInline<ParseIdeObjsHook>(pattern.get(0).get<uintptr_t>(0), pattern.get(0).get<uintptr_t>(6)); //0x008D2311 - 0x8D2317
 	}
 
-	if (injector::address_manager::singleton().IsIV())
+	if (DisableDefaultLodLights)
 	{
-		if (SkipIntro) { injector::WriteMemory<uint8_t>(aslr_ptr(0x402B49), 0xEB, true); }
-		if (DoNotPauseOnMinimize) { injector::MakeNOP(aslr_ptr(0x61D06A), 2, true); }
-
-		if (DisableDefaultLodLights) { injector::WriteMemory<unsigned char>(aslr_ptr(0x00903300), 0xC3u, true); }
-		if (DisableCoronasWaterReflection) { injector::MakeNOP(aslr_ptr(0xB54373), 5, true); }
+		auto pattern = hook::pattern("55 8B EC 83 E4 F0 81 EC B4 00 00 00 F3 0F 10 45 08");
+		injector::WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(0), 0xC3, true); //0x00903300
 	}
-	else
+
+	if (DisableCoronasWaterReflection)
 	{
-		injector::WriteMemory<uint8_t>(aslr_ptr(0x7FE12C), 0xEB, true);
-		struct RegPatch
-		{
-			void operator()(injector::reg_pack& regs)
-			{
-				HMODULE hModule = GetModuleHandle(NULL);
-				if (hModule != NULL)
-				{
-					GetModuleFileName(hModule, (char*)regs.esi, 260);
-					auto ptr = strrchr((char*)regs.esi, '\\');
-					*(ptr+1) = '\0';
-				}
-			}
-		}; injector::MakeInline<RegPatch>(aslr_ptr(0x7FE1B8), aslr_ptr(0x7FE1B8 + 6));
-
-		injector::WriteMemory<uint8_t>(aslr_ptr(0x8B329C), 0xEB, true);
-		struct RegPatch2
-		{
-			void operator()(injector::reg_pack& regs)
-			{
-				regs.ecx = *(uintptr_t*)(regs.esp + 0x4);
-				HMODULE hModule = GetModuleHandle(NULL);
-				if (hModule != NULL)
-				{
-					GetModuleFileName(hModule, (char*)regs.esi, 260);
-					auto ptr = strrchr((char*)regs.esi, '\\');
-					*(ptr + 1) = '\0';
-				}
-			}
-		}; injector::MakeInline<RegPatch2>(aslr_ptr(0x8B3315), aslr_ptr(0x8B331B));
-
-
-		if (SkipIntro) { injector::WriteMemory<uint8_t>(aslr_ptr(0x473439), 0xEB, true); }
-		if (DoNotPauseOnMinimize) { injector::MakeNOP(aslr_ptr(0x402D5A), 2, true); }
-
-		if (DisableDefaultLodLights) { injector::WriteMemory<unsigned char>(aslr_ptr(0x00975860), 0xC3u, true); }
-		if (DisableCoronasWaterReflection) { injector::MakeNOP(aslr_ptr(0xC8E183), 5, true); }
+		auto pattern = hook::pattern("E8 ? ? ? ? 83 C4 04 80 3D ? ? ? ?  00 74 ? 6A 00 6A 0C");
+		injector::MakeNOP(pattern.get(0).get<uintptr_t>(0), 5, true); //0xB54373
 	}
 }
 
 void CLODLightManager::IV::GetMemoryAddresses()
 {
-	if (injector::address_manager::singleton().IsIV())
-	{
-		CLODLightManager::IV::CurrentTimeHours = aslr_ptr(0x11D5300).get();
-		CLODLightManager::IV::CurrentTimeMinutes = aslr_ptr(0x11D52FC).get();
-		CLODLightManager::IV::DrawCorona = (int(__cdecl *)(float, float, float, float, unsigned int, float, unsigned char, unsigned char, unsigned char))(aslr_ptr(0xA6E240).get());
-		CLODLightManager::IV::DrawCorona2 = (int(__cdecl *)(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14))(aslr_ptr(0x7E1970).get());
-		CLODLightManager::IV::GetRootCam = (void(__stdcall *)(int *camera))(aslr_ptr(0xB006C0).get());
-		CLODLightManager::IV::GetGameCam = (void(__stdcall *)(int *camera))(aslr_ptr(0xB006E0).get());
-		CLODLightManager::IV::CamIsSphereVisible = (bool(__cdecl *)(int camera, float pX, float pY, float pZ, float radius))(aslr_ptr(0xBB9340).get());
-		CLODLightManager::IV::GetCamPos = (void(__cdecl *)(int camera, float *pX, float *pY, float *pZ))(aslr_ptr(0xBB8510).get());
-	}
-	else
-	{
-		CLODLightManager::EFLC::CurrentTimeHours = injector::aslr_ptr(0x10C9398).get();
-		CLODLightManager::EFLC::CurrentTimeMinutes = injector::aslr_ptr(0x10C9394).get();
-		CLODLightManager::EFLC::DrawCorona = (int(__cdecl *)(float, float, float, float, unsigned int, float, unsigned char, unsigned char, unsigned char))(aslr_ptr(0xAA3100).get());
-		CLODLightManager::EFLC::DrawCorona2 = (int(__cdecl *)(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14))(aslr_ptr(0x89A080).get());
-		CLODLightManager::EFLC::GetRootCam = (void(__stdcall *)(int *camera))(aslr_ptr(0xAFA7E0).get());
-		CLODLightManager::EFLC::GetGameCam = (void(__stdcall *)(int *camera))(aslr_ptr(0xAFA800).get());
-		CLODLightManager::EFLC::CamIsSphereVisible = (bool(__cdecl *)(int camera, float pX, float pY, float pZ, float radius))(aslr_ptr(0xC27DD0).get());
-		CLODLightManager::EFLC::GetCamPos = (void(__cdecl *)(int camera, float *pX, float *pY, float *pZ))(aslr_ptr(0xC26FA0).get());
-	}
+	auto pattern = hook::pattern("01 15 ? ? ? ? 8D 0C 81 89 0D ? ? ? ?"); //820F75
+	CLODLightManager::IV::CurrentTimeHours = *pattern.get(0).get<char*>(2); //0x11D5300
+	CLODLightManager::IV::CurrentTimeMinutes = *pattern.get(0).get<char*>(11); //0x11D52FC
+	pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 20 D9 05 ? ? ? ? F3 0F 10 45 08 6A 00");
+	CLODLightManager::IV::DrawCorona = (int(__cdecl *)(float, float, float, float, unsigned int, float, unsigned char, unsigned char, unsigned char))(pattern.get(0).get<uintptr_t>(0)); //0xA6E240
+	pattern = hook::pattern("A1 ? ? ? ? 56 8D 70 01 81 FE");
+	CLODLightManager::IV::DrawCorona2 = (int(__cdecl *)(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14))(pattern.get(0).get<uintptr_t>(0)); //0x7E1970
+	pattern = hook::pattern("A1 ? ? ? ? 8B 0D ? ? ? ? 50 E8 ? ? ? ? 8B 4C 24 04 89 01 C2 04 00");
+	CLODLightManager::IV::GetRootCam = (void(__stdcall *)(int *camera))(pattern.get(0).get<uintptr_t>(0)); //0xB006C0
+	pattern = hook::pattern("B9 ? ? ? ? E8 ? ? ? ? 8B 0D ? ? ? ? 50 E8 ? ? ? ? 8B 4C 24 04 89 01 C2 04 00");
+	CLODLightManager::IV::GetGameCam = (void(__stdcall *)(int *camera))(pattern.get(0).get<uintptr_t>(0)); //0xB006E0
+	pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 F3 0F 10 45 0C D9 45 18 51");
+	CLODLightManager::IV::CamIsSphereVisible = (bool(__cdecl *)(int camera, float pX, float pY, float pZ, float radius))(pattern.get(0).get<uintptr_t>(0)); //0xBB9340
+	pattern = hook::pattern("55 8B EC 83 E4 F0 8B 4D 08 83 EC 10 8D 04 24 50 51 B9 ? ? ? ? E8 ? ? ? ? F3 ? ? ? ? 8B 55 0C");
+	CLODLightManager::IV::GetCamPos = (void(__cdecl *)(int camera, float *pX, float *pY, float *pZ))(pattern.get(0).get<uintptr_t>(0)); //0xBB8510
 }
 
 void CLODLightManager::IV::IncreaseCoronaLimit()
 {
-	auto nCoronasLimit = static_cast<DWORD>(3 * pow(2.0, NewLimitExponent)); // 49152, default 3 * pow(2, 8) = 768
+	auto nCoronasLimit = static_cast<uint32_t>(3 * pow(2.0, NewLimitExponent)); // 49152, default 3 * pow(2, 8) = 768
 
-	static std::vector<int> aCoronas;
-	static std::vector<int> aCoronas2;
+	static std::vector<uint32_t> aCoronas;
+	static std::vector<uint32_t> aCoronas2;
 	aCoronas.resize(nCoronasLimit * 0x3C * 4);
 	aCoronas2.resize(nCoronasLimit * 0x3C * 4);
 
-	if (injector::address_manager::singleton().IsIV())
+	char pattern_str[20];
+	union {
+		uint32_t* Int;
+		uint8_t Byte[4];
+	} dword_temp;
+
+	dword_temp.Int = *hook::pattern("D9 98 ? ? ? ? F3 0F 10 44 24 20 F3 0F 11 88").get(0).get<uint32_t*>(2);
+	sprintf(pattern_str, "%c %c %02X %02X", '?', '?', dword_temp.Byte[2], dword_temp.Byte[3]);
+	auto array1_pattern = hook::pattern(pattern_str); //0x68C350
+	
+	for (size_t i = 0; i < array1_pattern.size(); i++)
 	{
-		AdjustPointer(aslr_ptr(0x7E19F4), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E19EE), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E0F95), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A02), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A10), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A74), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A7C), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A84), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A8D), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1182), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E19A1), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A39), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A4C), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A5A), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E19C1), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E19DA), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E19B5), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E19AB), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E19CD), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E199A), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A22), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A60), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1A93), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-		AdjustPointer(aslr_ptr(0x7E1AAB), &aCoronas[0], aslr_ptr(0x116AB00), aslr_ptr(0x116AB00 + 0x3C));
-
-		AdjustPointer(aslr_ptr(0x7E10AB), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E14BA), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E10B9), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E10C7), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E10CF), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E14C2), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E10FD), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E14CA), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E10D5), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E1671), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E10DB), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E14A5), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E10E5), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E14AC), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E10F5), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E14B3), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E1103), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-		AdjustPointer(aslr_ptr(0x7E1318), &aCoronas2[0], aslr_ptr(0x115EB00), aslr_ptr(0x115EB00 + 0x1B));
-
-		WriteMemory<unsigned char>(aslr_ptr(0x7E109F + 0x2), NewLimitExponent);
-		WriteMemory<unsigned char>(aslr_ptr(0x7E149A + 0x2), NewLimitExponent);
-		WriteMemory<unsigned char>(aslr_ptr(0x7E130E + 0x2), NewLimitExponent);
-
-		WriteMemory<unsigned int>(aslr_ptr(0x7E1979 + 0x2), nCoronasLimit);
-		WriteMemory<unsigned int>(aslr_ptr(0x7E1072 + 0x2), nCoronasLimit);
-		WriteMemory<unsigned int>(aslr_ptr(0x7E1189 + 0x1), nCoronasLimit * 64);
+		AdjustPointer(array1_pattern.get(i).get<uint32_t>(0), &aCoronas[0], dword_temp.Int, (uintptr_t)dword_temp.Int + 0x3C);
 	}
-	else
+	
+	
+	dword_temp.Int = *hook::pattern("F3 0F 11 90 ? ? ? ? F3 0F 10 54 24 24 F3 0F").get(0).get<uint32_t*>(4);
+	sprintf(pattern_str, "%c %c %02X %02X", '?', '?', dword_temp.Byte[2], dword_temp.Byte[3]);
+	auto array2_pattern = hook::pattern(pattern_str); //0x68C350
+	
+	for (size_t i = 0; i < array2_pattern.size(); i++)
 	{
-		AdjustPointer(aslr_ptr(0x89A104), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A0FE), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x8995C5), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A112), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A120), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A184), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A18C), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A194), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A19D), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x8997B2), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A0B1), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A149), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A15C), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A16A), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A0D1), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A0EA), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A0C5), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A0BB), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A0DD), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A0AA), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A132), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A170), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A1A3), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-		AdjustPointer(aslr_ptr(0x89A1BB), &aCoronas[0], aslr_ptr(0x111A040), aslr_ptr(0x111A040 + 0x3C));
-
-		AdjustPointer(aslr_ptr(0x8996DB), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899BCA), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x8996E9), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x8996F7), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x8996FF), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899BD2), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x89972D), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899BDA), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899705), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899D81), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x89970B), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899BB5), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899715), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899BBC), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899725), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899BC3), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899733), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-		AdjustPointer(aslr_ptr(0x899A28), &aCoronas2[0], aslr_ptr(0x110E040), aslr_ptr(0x110E040 + 0x1B));
-
-		WriteMemory<unsigned char>(aslr_ptr(0x8996CF + 0x2), NewLimitExponent);
-		WriteMemory<unsigned char>(aslr_ptr(0x899A1E + 0x2), NewLimitExponent);
-		WriteMemory<unsigned char>(aslr_ptr(0x899BAA + 0x2), NewLimitExponent);
-
-		WriteMemory<unsigned int>(aslr_ptr(0x89A089 + 0x2), nCoronasLimit);
-		WriteMemory<unsigned int>(aslr_ptr(0x8996A2 + 0x2), nCoronasLimit);
-		WriteMemory<unsigned int>(aslr_ptr(0x8997B9 + 0x1), nCoronasLimit * 64);
+		AdjustPointer(array2_pattern.get(i).get<uint32_t>(0), &aCoronas2[0], dword_temp.Int, (uintptr_t)dword_temp.Int + 0x1B);
 	}
+	
+	auto pattern = hook::pattern("C1 E0 ? 03 C3 C1 E0 ?"); 
+	WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true); //aslr_ptr(0x7E109F + 0x2)
+	pattern = hook::pattern("C1 E1 ? 03 CF C1 E1 ?");
+	WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true); //aslr_ptr(0x7E149A + 0x2)
+	pattern = hook::pattern("C1 E1 ? 03 C8 C1 E1 ?");
+	WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true); //aslr_ptr(0x7E130E + 0x2)
+	
+	pattern = hook::pattern("81 FE ? ? ? ? 0F 8D ? ? ? ? 8B 4C 24 08 8A 54 24 0C");
+	WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(2), nCoronasLimit, true);	   //aslr_ptr(0x7E1979 + 0x2)
+	pattern = hook::pattern("81 FF ? ? ? ? 0F 8D ? ? ? ? 8B 44 24 1C D9 46 20");
+	WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(2), nCoronasLimit, true);	   //aslr_ptr(0x7E1072 + 0x2)
+	pattern = hook::pattern("3D ? ? ? ? 72 ? 89 0D ? ? ? ? C3");
+	WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(1), nCoronasLimit * 64, true); //aslr_ptr(0x7E1189 + 0x1)
 }
 
 
@@ -440,16 +321,7 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 {
 	if (reason == DLL_PROCESS_ATTACH)
 	{
-		auto& gvm = injector::address_manager::singleton();
-
-		if ((gvm.IsIV() && gvm.GetMajorVersion() == 1 && gvm.GetMinorVersion() == 0 && gvm.GetMajorRevisionVersion() == 0 && gvm.GetMinorRevisionVersion() == 7)
-		|| gvm.IsEFLC() && gvm.GetMajorVersion() == 1 && gvm.GetMinorVersion() == 1 && gvm.GetMajorRevisionVersion() == 2 && gvm.GetMinorRevisionVersion() == 0)
-		{
-			if (gvm.IsUS())
-			{
-				CLODLightManager::IV::Init();
-			}
-		}
+		CLODLightManager::IV::Init();
 	}
 	return TRUE;
 }
