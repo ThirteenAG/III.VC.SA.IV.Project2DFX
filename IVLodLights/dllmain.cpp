@@ -16,6 +16,7 @@ bool(__cdecl *CLODLightManager::IV::CamIsSphereVisible)(int camera, float pX, fl
 void(__cdecl *CLODLightManager::IV::GetCamPos)(int camera, float *pX, float *pY, float *pZ);
 int& CTimer::m_snTimeInMillisecondsPauseMode = *(int*)0xBADDEAD;
 extern bool	bIsIVEFLC;
+float fCamHeight;
 
 void CLODLightManager::IV::Init()
 {
@@ -26,7 +27,7 @@ void CLODLightManager::IV::Init()
 	bSlightlyIncreaseRadiusWithDistance = iniReader.ReadInteger("LodLights", "SlightlyIncreaseRadiusWithDistance", 1) != 0;
 	fCoronaFarClip = iniReader.ReadFloat("LodLights", "CoronaFarClip", 0.0f);
 	bool DisableDefaultLodLights = iniReader.ReadInteger("LodLights", "DisableDefaultLodLights", 0) == 1;
-	bool DisableCoronasWaterReflection = iniReader.ReadInteger("LodLights", "DisableCoronasWaterReflection", 0) == 1;
+	int32_t DisableCoronasWaterReflection = iniReader.ReadInteger("LodLights", "DisableCoronasWaterReflection", 0);
 	fGenericObjectsDrawDistance = iniReader.ReadFloat("IDETweaker", "LamppostsDrawDistance", 0.0f);
 
 	struct LoadObjectInstanceHook
@@ -74,10 +75,28 @@ void CLODLightManager::IV::Init()
 		injector::WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(0), 0xC3, true); //0x00903300
 	}
 
-	if (DisableCoronasWaterReflection)
+	auto pattern = hook::pattern("E8 ? ? ? ? 83 C4 04 80 3D ? ? ? ?  00 74 ? 6A 00 6A 0C");
+	static auto jmp = pattern.get(0).get<uintptr_t>(8);
+	if (DisableCoronasWaterReflection == 1)
 	{
-		auto pattern = hook::pattern("E8 ? ? ? ? 83 C4 04 80 3D ? ? ? ?  00 74 ? 6A 00 6A 0C");
 		injector::MakeNOP(pattern.get(0).get<uintptr_t>(0), 5, true); //0xB54373
+	}
+	else
+	{
+		if (DisableCoronasWaterReflection == 2)
+		{
+			struct ReflectionsHook
+			{
+				void operator()(injector::reg_pack& regs)
+				{
+					regs.edx = *(uintptr_t*)(regs.esi + 0x938);
+					if (fCamHeight < 100.0f)
+					{
+						*(uintptr_t*)(regs.esp - 4) = (uintptr_t)jmp;
+					}
+				}
+			}; injector::MakeInline<ReflectionsHook>(pattern.get(0).get<uintptr_t>(-7), pattern.get(0).get<uintptr_t>(-1));
+		}
 	}
 }
 
@@ -109,31 +128,102 @@ void CLODLightManager::IV::IncreaseCoronaLimit()
 	aCoronas.resize(nCoronasLimit * 0x3C * 4);
 	aCoronas2.resize(nCoronasLimit * 0x3C * 4);
 
-	char pattern_str[20];
+	int32_t counter1 = 0;
+	int32_t counter2 = 0;
+
+	char pattern_str[50];
 	union {
 		uint32_t* Int;
 		uint8_t Byte[4];
 	} dword_temp;
 
-	dword_temp.Int = *hook::pattern("D9 98 ? ? ? ? F3 0F 10 44 24 20 F3 0F 11 88").get(0).get<uint32_t*>(2);
-	sprintf(pattern_str, "%c %c %02X %02X", '?', '?', dword_temp.Byte[2], dword_temp.Byte[3]);
-	auto array1_pattern = hook::pattern(pattern_str); //0x68C350
-	
-	for (size_t i = 0; i < array1_pattern.size(); i++)
+	dword_temp.Int = *hook::pattern("D9 98 ? ? ? ? F3 0F 10 44 24 20 F3 0F 11 88").get(0).get<uint32_t*>(2); //0x68C350
+
+	for (size_t i = (size_t)dword_temp.Int; i <= ((size_t)dword_temp.Int + 0x3C); i++)
 	{
-		AdjustPointer(array1_pattern.get(i).get<uint32_t>(0), &aCoronas[0], dword_temp.Int, (uintptr_t)dword_temp.Int + 0x3C);
+		auto GoThroughPatterns = [&](hook::pattern patternl, int32_t pos) -> void
+		{
+			for (size_t j = 0; j < patternl.size(); j++)
+			{
+				if (*patternl.get(j).get<uintptr_t>(pos) == i)
+				{
+					AdjustPointer(patternl.get(j).get<uint32_t>(pos), &aCoronas[0], dword_temp.Int, (uintptr_t)dword_temp.Int + 0x3C);
+					counter1++;
+				}
+			}
+		};
+		auto pattern = hook::pattern("D9 98 ? ? ? ?");
+		GoThroughPatterns(pattern, 2);
+		pattern = hook::pattern("F3 0F 11 80 ? ? ? ?");
+		GoThroughPatterns(pattern, 4);
+		pattern = hook::pattern("F3 0F 11 88 ? ? ? ?");
+		GoThroughPatterns(pattern, 4);
+		pattern = hook::pattern("83 88 ? ? ? ? 10");
+		GoThroughPatterns(pattern, 2);
+		pattern = hook::pattern("83 88 ? ? ? ? 06");
+		GoThroughPatterns(pattern, 2);
+		pattern = hook::pattern("BE ? ? ? ?");
+		GoThroughPatterns(pattern, 1);
+		pattern = hook::pattern("89 88 ? ? ? ?");
+		GoThroughPatterns(pattern, 2);
+		pattern = hook::pattern("88 90 ? ? ? ?");
+		GoThroughPatterns(pattern, 2);
+		pattern = hook::pattern("88 88 ? ? ? ?");
+		GoThroughPatterns(pattern, 2);
+		pattern = hook::pattern("8B 90 ? ? ? ?");
+		GoThroughPatterns(pattern, 2);
 	}
-	
-	
+
+
 	dword_temp.Int = *hook::pattern("F3 0F 11 90 ? ? ? ? F3 0F 10 54 24 24 F3 0F").get(0).get<uint32_t*>(4);
-	sprintf(pattern_str, "%c %c %02X %02X", '?', '?', dword_temp.Byte[2], dword_temp.Byte[3]);
-	auto array2_pattern = hook::pattern(pattern_str); //0x68C350
-	
-	for (size_t i = 0; i < array2_pattern.size(); i++)
+
+	for (size_t i = (size_t)dword_temp.Int; i <= ((size_t)dword_temp.Int + 0x1B); i++)
 	{
-		AdjustPointer(array2_pattern.get(i).get<uint32_t>(0), &aCoronas2[0], dword_temp.Int, (uintptr_t)dword_temp.Int + 0x1B);
+		auto GoThroughPatterns = [&](hook::pattern patternl, int32_t pos) -> void
+		{
+			for (size_t j = 0; j < patternl.size(); j++)
+			{
+				if (*patternl.get(j).get<uintptr_t>(pos) == i)
+				{
+					AdjustPointer(patternl.get(j).get<uint32_t>(pos), &aCoronas2[0], dword_temp.Int, (uintptr_t)dword_temp.Int + 0x1B);
+					counter2++;
+				}
+			}
+		};
+		auto pattern = hook::pattern("0F 28 89 ? ? ? ?");
+		GoThroughPatterns(pattern, 3);
+		pattern = hook::pattern("88 90 ? ? ? ?");
+		GoThroughPatterns(pattern, 2);
+		pattern = hook::pattern("88 88 ? ? ? ?");
+		GoThroughPatterns(pattern, 2);
+		pattern = hook::pattern("F3 0F 11 90 ? ? ? ?");
+		GoThroughPatterns(pattern, 4);
+		pattern = hook::pattern("F3 0F 11 80 ? ? ? ?");
+		GoThroughPatterns(pattern, 4);
+		pattern = hook::pattern("F3 0F 10 81 ? ? ? ?");
+		GoThroughPatterns(pattern, 4);
+		pattern = hook::pattern("F3 0F 11 88 ? ? ? ?");
+		GoThroughPatterns(pattern, 4);
+		pattern = hook::pattern("F3 0F 10 A1 ? ? ? ?");
+		GoThroughPatterns(pattern, 4);
+		pattern = hook::pattern("F3 0F 10 99 ? ? ? ?");
+		GoThroughPatterns(pattern, 4);
+		pattern = hook::pattern("D9 98 ? ? ? ?");
+		GoThroughPatterns(pattern, 2);
+		pattern = hook::pattern("80 B9 ? ? ? ? 00");
+		GoThroughPatterns(pattern, 2);
+		pattern = hook::pattern("0F B6 B1 ? ? ? ?");
+		GoThroughPatterns(pattern, 3);
+		pattern = hook::pattern("0F B6 81 ? ? ? ?");
+		GoThroughPatterns(pattern, 3);
+		pattern = hook::pattern("0F B6 91 ? ? ? ?");
+		GoThroughPatterns(pattern, 3);
 	}
 	
+	if (counter1 != 24 || counter2 != 18)
+		MessageBox(0, "IV.Project2DFX", "Project2DFX is not fully compatible with this version of the game", 0);
+
+
 	auto pattern = hook::pattern("C1 E0 ? 03 C3 C1 E0 ?"); 
 	WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true); //aslr_ptr(0x7E109F + 0x2)
 	pattern = hook::pattern("C1 E1 ? 03 CF C1 E1 ?");
@@ -236,6 +326,7 @@ void CLODLightManager::IV::RegisterLODLights()
 				GetCamPos(currentCamera, &CamPos.x, &CamPos.y, &CamPos.z);
 				CVector*	pCamPos = &CamPos;
 				float		fDistSqr = (pCamPos->x - it->vecPos.x)*(pCamPos->x - it->vecPos.x) + (pCamPos->y - it->vecPos.y)*(pCamPos->y - it->vecPos.y) + (pCamPos->z - it->vecPos.z)*(pCamPos->z - it->vecPos.z);
+				fCamHeight = CamPos.z;
 
 				if ((fDistSqr > 250.0f*250.0f && fDistSqr < fCoronaFarClip*fCoronaFarClip) || it->nNoDistance)
 				{
