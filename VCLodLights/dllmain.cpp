@@ -361,6 +361,13 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 	if (bPreloadLODs)
 	{
 		injector::WriteMemory<uint8_t>(0x487CD8, 0xEB, true);
+		injector::WriteMemory<uint8_t>(0x4A68A0, 0xC3, true);
+
+		injector::MakeNOP(0x40DFE4, 5, true);
+		injector::MakeNOP(0x40E242, 5, true);
+
+		injector::MakeNOP(0x40E150, 5, true);
+		injector::MakeNOP(0x40E157, 5, true);
 
 		struct SetupBigBuildingVisibilityHook //Lods in the interiors
 		{
