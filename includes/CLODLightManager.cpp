@@ -43,7 +43,7 @@ bool CLODLightManager::IsModelALamppost(unsigned short nModel)
 void CLODLightManager::LoadDatFile()
 {
 	CIniReader iniReader("");
-	char* DataFilePath = iniReader.GetIniPath();
+	char* DataFilePath = (char*)iniReader.GetIniPath().c_str();
 	char* tempPointer;
 	tempPointer = strrchr(DataFilePath, '.');
 	*tempPointer = '\0';
