@@ -1,0 +1,5 @@
+III/VC:
+Copy 'gta3.dat' or 'gta_vc.dat' and 'maps' folder from 'data' folder to a place where 2DFXDataGrabber.exe located. Run 2DFXDataGrabber.exe and wait until it finishes creating data file.
+
+SA:
+Copy all DFF files(or all dff files with 2dfx data) from gta3.img to a folder named '2dfx'. Run 2DFXDataGrabber.exe and wait until it finishes creating data file.
