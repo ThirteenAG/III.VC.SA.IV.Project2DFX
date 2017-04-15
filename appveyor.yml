@@ -1,0 +1,18 @@
+version: 1.0.{build}
+image: Visual Studio 2017
+configuration: Release
+install:
+- cmd: >-
+    git submodule update --init --recursive
+
+    premake5.bat
+build:
+  project: build/III.VC.SA.IV.Project2DFX.sln
+  verbosity: minimal
+before_package:
+- cmd: >-
+    cd data
+
+    release.bat
+artifacts:
+- path: data/*.zip

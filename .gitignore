@@ -7,6 +7,7 @@ data/**/*.asi
 data/**/*.zip
 data/**/*.exe
 !data/**/SA2dfx.exe
+!data/7za.exe
 
 # User-specific files
 *.suo

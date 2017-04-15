@@ -1,7 +1,8 @@
-7za a -tzip ".\III.Project2DFXv4.0.zip" ".\IIILodLights\*"   -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
-7za a -tzip ".\VC.Project2DFXv4.0.zip"  ".\VCLodLights\*"    -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
-7za a -tzip ".\SA.Project2DFXv4.0.zip"  ".\SALodLights\*"    -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
-7za a -tzip ".\IV.Project2DFXv4.1.zip"  ".\IVLodLights\*"    -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
+7za a -tzip ".\2DFXDataGrabber.zip"     ".\2DFXDataGrabber\*"   -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
+7za a -tzip ".\III.Project2DFXv4.0.zip" ".\IIILodLights\*"      -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
+7za a -tzip ".\VC.Project2DFXv4.0.zip"  ".\VCLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
+7za a -tzip ".\SA.Project2DFXv4.0.zip"  ".\SALodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
+7za a -tzip ".\IV.Project2DFXv4.1.zip"  ".\IVLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
 EXIT
 
 7-Zip Extra
