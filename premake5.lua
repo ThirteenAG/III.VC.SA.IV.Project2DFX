@@ -18,7 +18,7 @@ workspace "III.VC.SA.IV.Project2DFX"
    defines { "rsc_FileVersion=\"1.0.0.0\"", "rsc_ProductVersion=\"1.0.0.0\"" }
    defines { "rsc_InternalName=\"%{prj.name}\"", "rsc_ProductName=\"%{prj.name}\"", "rsc_OriginalFilename=\"%{prj.name}.asi\"" }
    defines { "rsc_FileDescription=\"https://thirteenag.github.io/wfp\"" }
-   defines { "rsc_UpdateUrl=\"https://github.com/ThirteenAG/WidescreenFixesPack\"" }
+   defines { "rsc_UpdateUrl=\"https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX\"" }
    
    files { "source/%{prj.name}/*.h", "source/%{prj.name}/*.cpp" }
    files { "resources/*.rc" }
