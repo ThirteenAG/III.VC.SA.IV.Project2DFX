@@ -80,6 +80,8 @@ void CLODLightManager::III::Init()
 
 	bRandomExplosionEffects = iniReader.ReadInteger("Misc", "RandomExplosionEffects", 0) != 0;
 	bReplaceSmokeTrailWithBulletTrail = iniReader.ReadInteger("Misc", "ReplaceSmokeTrailWithBulletTrail", 0) != 0;
+	bFestiveLights = iniReader.ReadInteger("Misc", "FestiveLights", 1) != 0;
+	bFestiveLightsAlways = iniReader.ReadInteger("Misc", "bFestiveLightsAlways", 0) != 0;
 
 	ApplyMemoryPatches();
 }
@@ -134,6 +136,30 @@ void CExplosionAddModifiedExplosion()
 		injector::MakeCALL(0x559FD3, 0x4B1140, true);
 
 		return AddExplosion(pTarget, pSource, nType, pVector, uTimer);
+	});
+}
+
+template<uintptr_t addr>
+void CCoronasRegisterFestiveCoronaForEntity()
+{
+	using func_hook = injector::function_hooker<addr, void(unsigned int nID, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, char a10, char a11, char a12, char a13, float a14)>;
+	injector::make_static_hook<func_hook>([](func_hook::func_type RegisterCorona, unsigned int nID, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, char a10, char a11, char a12, char a13, float a14)
+	{
+		auto it = CLODLights::FestiveLights.find(nID);
+		if (it != CLODLights::FestiveLights.end())
+		{
+			RegisterCorona(nID, it->second.r, it->second.g, it->second.b, A, Position, Size, Range, pTex, a10, a11, a12, a13, a14);
+			//RegisterCorona(nID, R, G, B, A, Position, Size / 2.0f, Range, pTex, a10, a11, a12, a13, a14);
+		}
+		else
+		{
+			std::random_device rd;
+			std::default_random_engine dre(rd());
+			std::uniform_int_distribution<int> uid(0, 255);
+			CLODLights::FestiveLights[nID] = CRGBA(uid(rd), uid(rd), uid(rd), 0);
+
+			RegisterCorona(nID, R, G, B, A, Position, Size, Range, pTex, a10, a11, a12, a13, a14);
+		}
 	});
 }
 
@@ -390,6 +416,18 @@ void CLODLightManager::III::ApplyMemoryPatches()
 			*(DWORD*)0x8F6250 = *(char*)0x941514;
 			sub_595BD0();
 		});
+	}
+
+	if (bFestiveLights)
+	{
+		auto now = std::chrono::system_clock::now();
+		std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+		struct tm *date = std::localtime(&now_c);
+		if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 15) || (date->tm_mon == 11 && date->tm_mday >= 15))
+		{
+			CLODLights::RegisterCorona = &CLODLights::RegisterFestiveCorona;
+			CCoronasRegisterFestiveCoronaForEntity<(0x4FA8F0)>();
+		}
 	}
 }
 

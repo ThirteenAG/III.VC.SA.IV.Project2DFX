@@ -1,11 +1,37 @@
 version: 1.0.{build}
+skip_tags: true
 image: Visual Studio 2017
 configuration: Release
+init:
+- ps: >-
+    $releases = "https://github.com/ThirteenAG/III.VC.SA.LimitAdjuster/releases"
+
+    $name = "III.VC.SA.LimitAdjuster.zip"
+
+    $latestRelease = Invoke-WebRequest $releases/latest -Headers @{"Accept"="application/json"}
+
+    $json = $latestRelease.Content | ConvertFrom-Json
+
+    $latestVersion = $json.tag_name
+
+    $url = "$releases/download/$latestVersion/$name"
+
+
+    Start-FileDownload $url -FileName 'C:\III.VC.SA.LimitAdjuster.zip'
+
+    7z e c:\III.VC.SA.LimitAdjuster.zip -oc:\III.VC.SA.LimitAdjuster
 install:
 - cmd: >-
     git submodule update --init --recursive
 
     premake5.bat
+before_build:
+- cmd: >-
+    copy "c:\III.VC.SA.LimitAdjuster\III.VC.SA.LimitAdjuster.asi" "c:\Projects\iii-vc-sa-iv-project2dfx\data\IIILodLights\III.VC.SA.LimitAdjuster.asi"
+
+    copy "c:\III.VC.SA.LimitAdjuster\III.VC.SA.LimitAdjuster.asi" "c:\Projects\iii-vc-sa-iv-project2dfx\data\VCLodLights\III.VC.SA.LimitAdjuster.asi"
+
+    copy "c:\III.VC.SA.LimitAdjuster\III.VC.SA.LimitAdjuster.asi" "c:\Projects\iii-vc-sa-iv-project2dfx\data\SALodLights\III.VC.SA.LimitAdjuster.asi"
 build:
   project: build/III.VC.SA.IV.Project2DFX.sln
   verbosity: minimal

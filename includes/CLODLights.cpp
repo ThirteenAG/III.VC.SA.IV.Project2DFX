@@ -5,6 +5,7 @@ std::map<unsigned int, CLODLightsLinkedListNode*>	CLODLights::UsedMap;
 CLODLightsLinkedListNode							CLODLights::FreeList, CLODLights::UsedList;
 std::vector<CLODLightsLinkedListNode>				CLODLights::aLinkedList;
 std::vector<CRegisteredCorona>					    CLODLights::aCoronas;
+std::map<unsigned int, CRGBA>	                    CLODLights::FestiveLights;
 
 float* CWeatherFoggyness;
 RwTexture** g_TexCoronastar;
@@ -12,6 +13,7 @@ void* RwEngineInstance;
 extern int numCoronas;
 extern void(*_RwRenderStateSet)(RwRenderState nState, void *pParam);
 extern CVector* GetCamPos();
+void(*CLODLights::RegisterCorona)(unsigned int nID, CEntity *pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, unsigned char coronaType, unsigned char flareType, bool enableReflection, bool checkObstacles, int unused, float normalAngle, bool longDistance, float nearClip, unsigned char bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool reflectionDelay) = CLODLights::RegisterNormalCorona;
 
 void CRegisteredCorona::Update()
 {
@@ -27,7 +29,7 @@ void CRegisteredCorona::Update()
 	RegisteredThisFrame = 0;
 }
 
-void CLODLights::RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, unsigned char flareType, unsigned char reflectionType, unsigned char LOSCheck, unsigned char unused, float normalAngle, bool bNeonFade, float PullTowardsCam, bool bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool bWhiteCore)
+void CLODLights::RegisterCoronaMain(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, unsigned char flareType, unsigned char reflectionType, unsigned char LOSCheck, unsigned char unused, float normalAngle, bool bNeonFade, float PullTowardsCam, bool bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool bWhiteCore)
 {
 	UNREFERENCED_PARAMETER(unused);
 
@@ -112,9 +114,24 @@ void CLODLights::RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned c
 	}
 }
 
-void CLODLights::RegisterCorona(unsigned int nID, CEntity *pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, unsigned char coronaType, unsigned char flareType, bool enableReflection, bool checkObstacles, int unused, float normalAngle, bool longDistance, float nearClip, unsigned char bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool reflectionDelay)
+void CLODLights::RegisterNormalCorona(unsigned int nID, CEntity *pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, unsigned char coronaType, unsigned char flareType, bool enableReflection, bool checkObstacles, int unused, float normalAngle, bool longDistance, float nearClip, unsigned char bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool reflectionDelay)
 {
-	CLODLights::RegisterCorona(nID, pAttachTo, R, G, B, A, Position, Size, Range, *(g_TexCoronastar + coronaType), flareType, enableReflection, checkObstacles, unused, normalAngle, longDistance, nearClip, bFadeIntensity, FadeSpeed, bOnlyFromBelow, reflectionDelay);
+	CLODLights::RegisterCoronaMain(nID, pAttachTo, R, G, B, A, Position, Size, Range, *(g_TexCoronastar + coronaType), flareType, enableReflection, checkObstacles, unused, normalAngle, longDistance, nearClip, bFadeIntensity, FadeSpeed, bOnlyFromBelow, reflectionDelay);
+}
+
+void CLODLights::RegisterFestiveCorona(unsigned int nID, CEntity *pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, unsigned char coronaType, unsigned char flareType, bool enableReflection, bool checkObstacles, int unused, float normalAngle, bool longDistance, float nearClip, unsigned char bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool reflectionDelay)
+{
+	auto it = FestiveLights.find(nID);
+	if (it != FestiveLights.end())
+	{
+		CLODLights::RegisterCoronaMain(nID, pAttachTo, it->second.r, it->second.g, it->second.b, A, Position, Size, Range, *(g_TexCoronastar + coronaType), flareType, enableReflection, checkObstacles, unused, normalAngle, longDistance, nearClip, bFadeIntensity, FadeSpeed, bOnlyFromBelow, reflectionDelay);
+	}
+	else
+	{
+		FestiveLights[nID] = CRGBA(random(0, 255), random(0, 255), random(0, 255), 0);
+
+		CLODLights::RegisterCoronaMain(nID, pAttachTo, R, G, B, A, Position, Size, Range, *(g_TexCoronastar + coronaType), flareType, enableReflection, checkObstacles, unused, normalAngle, longDistance, nearClip, bFadeIntensity, FadeSpeed, bOnlyFromBelow, reflectionDelay);
+	}
 }
 
 void CLODLights::Update()

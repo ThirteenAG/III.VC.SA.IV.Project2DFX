@@ -681,4 +681,21 @@ public:
 	}
 };
 
+template <class RandomIt>
+void shuffleRefs(RandomIt first, RandomIt last) {
+	typename std::iterator_traits<RandomIt>::difference_type i, n;
+	n = last - first;
+	for (i = n - 1; i > 0; --i) {
+		using std::swap;
+		swap(first[i].get(), first[std::rand() % (i + 1)].get());
+	}
+}
+
+template <class MapType>
+void shuffleMap(MapType &map) {
+	std::vector<std::reference_wrapper<typename MapType::mapped_type>> v;
+	for (auto &el : map) v.push_back(std::ref(el.second));
+	shuffleRefs(v.begin(), v.end());
+}
+
 #endif

@@ -77,7 +77,7 @@ public:
 	static float fGenericObjectsDrawDistance, fAllNormalObjectsDrawDistance, fVegetationDrawDistance;
 	static bool bLoadAllBinaryIPLs, bPreloadLODs;
 	static float fDrawDistance;
-	static bool bRandomExplosionEffects, bReplaceSmokeTrailWithBulletTrail;
+	static bool bRandomExplosionEffects, bReplaceSmokeTrailWithBulletTrail, bFestiveLights, bFestiveLightsAlways;
 
 	static int*							ActiveInterior;
 	static char*						CurrentTimeHours;
@@ -223,6 +223,7 @@ public:
 
 	static int							(__cdecl *DrawCorona)(float x, float y, float z, float radius, unsigned int unk, float unk2, unsigned char r, unsigned char g, unsigned char b);
 	static int							(__cdecl *DrawCorona2)(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14);
+	static int							(__cdecl *DrawCorona3)(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14);
 	static void							(__stdcall *GetRootCam)(int *camera);
 	static void							(__stdcall *GetGameCam)(int *camera);
 	static bool							(__cdecl *CamIsSphereVisible)(int camera, float pX, float pY, float pZ, float radius);

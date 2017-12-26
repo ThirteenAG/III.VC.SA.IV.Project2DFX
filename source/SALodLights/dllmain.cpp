@@ -113,8 +113,30 @@ void CLODLightManager::SA::Init()
 	fVegetationDrawDistance = iniReader.ReadFloat("IDETweaker", "VegetationDrawDistance", 0.0f);
 	bLoadAllBinaryIPLs = iniReader.ReadInteger("IDETweaker", "LoadAllBinaryIPLs", 0) != 0;
 	bPreloadLODs = iniReader.ReadInteger("IDETweaker", "PreloadLODs", 0) != 0;
+	bFestiveLights = iniReader.ReadInteger("Misc", "FestiveLights", 1) != 0;
+	bFestiveLightsAlways = iniReader.ReadInteger("Misc", "bFestiveLightsAlways", 0) != 0;
 
 	ApplyMemoryPatches();
+}
+
+template<uintptr_t addr>
+void CCoronasRegisterFestiveCoronaForEntity()
+{
+	using func_hook = injector::function_hooker<addr, void(unsigned int nID, CEntity* entity, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, char flare, char enableReflection, char checkObstacles, int notUsed, float angle, char longDistance, float nearClip, char fadeState, float fadeSpeed, char onlyFromBelow, char reflectionDelay)>;
+	injector::make_static_hook<func_hook>([](func_hook::func_type RegisterCorona, unsigned int nID, CEntity* entity, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, char flare, char enableReflection, char checkObstacles, int notUsed, float angle, char longDistance, float nearClip, char fadeState, float fadeSpeed, char onlyFromBelow, char reflectionDelay)
+	{
+		auto it = CLODLights::FestiveLights.find(nID);
+		if (it != CLODLights::FestiveLights.end())
+		{
+			RegisterCorona(nID, entity, it->second.r, it->second.g, it->second.b, A, Position, Size, Range, pTex, flare, enableReflection, checkObstacles, notUsed, angle, longDistance, nearClip, fadeState, fadeSpeed, onlyFromBelow, reflectionDelay);
+		}
+		else
+		{
+			CLODLights::FestiveLights[nID] = CRGBA(random(0, 255), random(0, 255), random(0, 255), 0);
+
+			RegisterCorona(nID, entity, R, G, B, A, Position, Size, Range, pTex, flare, enableReflection, checkObstacles, notUsed, angle, longDistance, nearClip, fadeState, fadeSpeed, onlyFromBelow, reflectionDelay);
+		}
+	});
 }
 
 void CLODLightManager::SA::ApplyMemoryPatches()
@@ -453,6 +475,21 @@ void CLODLightManager::SA::ApplyMemoryPatches()
 
 			return AfterInit2();
 		});
+	}
+
+	if (bFestiveLights)
+	{
+		auto now = std::chrono::system_clock::now();
+		std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+		struct tm *date = std::localtime(&now_c);
+		if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 15) || (date->tm_mon == 11 && date->tm_mday >= 15))
+		{
+			CLODLights::RegisterCorona = &CLODLights::RegisterFestiveCorona;
+			CCoronasRegisterFestiveCoronaForEntity<(0x6FCA80)>();
+			CCoronasRegisterFestiveCoronaForEntity<(0x6FD02E)>();
+			CCoronasRegisterFestiveCoronaForEntity<(0x5363A8)>();
+			CCoronasRegisterFestiveCoronaForEntity<(0x536511)>();
+		}
 	}
 }
 

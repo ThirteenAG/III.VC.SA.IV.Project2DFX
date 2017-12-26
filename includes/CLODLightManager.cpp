@@ -32,7 +32,7 @@ float CLODLightManager::fMaxDrawDistanceForNormalObjects, CLODLightManager::fTim
 float CLODLightManager::fGenericObjectsDrawDistance, CLODLightManager::fAllNormalObjectsDrawDistance, CLODLightManager::fVegetationDrawDistance;
 bool  CLODLightManager::bLoadAllBinaryIPLs, CLODLightManager::bPreloadLODs;
 float CLODLightManager::fDrawDistance;
-bool CLODLightManager::bRandomExplosionEffects, CLODLightManager::bReplaceSmokeTrailWithBulletTrail;
+bool CLODLightManager::bRandomExplosionEffects, CLODLightManager::bReplaceSmokeTrailWithBulletTrail, CLODLightManager::bFestiveLights, CLODLightManager::bFestiveLightsAlways;
 
 bool CLODLightManager::IsModelALamppost(unsigned short nModel)
 {
