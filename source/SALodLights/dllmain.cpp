@@ -133,7 +133,6 @@ void CCoronasRegisterFestiveCoronaForEntity()
 		else
 		{
 			CLODLights::FestiveLights[nID] = CRGBA(random(0, 255), random(0, 255), random(0, 255), 0);
-
 			RegisterCorona(nID, entity, R, G, B, A, Position, Size, Range, pTex, flare, enableReflection, checkObstacles, notUsed, angle, longDistance, nearClip, fadeState, fadeSpeed, onlyFromBelow, reflectionDelay);
 		}
 	});

@@ -189,11 +189,7 @@ void CCoronasRegisterFestiveCoronaForEntity()
 		}
 		else
 		{
-			std::random_device rd;
-			std::default_random_engine dre(rd());
-			std::uniform_int_distribution<int> uid(0, 255);
-			CLODLights::FestiveLights[nID] = CRGBA(uid(rd), uid(rd), uid(rd), 0);
-
+			CLODLights::FestiveLights[nID] = CRGBA(random(0, 255), random(0, 255), random(0, 255), 0);
 			RegisterCorona(nID, R, G, B, A, Position, Size, Range, pTex, a10, a11, a12, a13, a14, a15, a16);
 		}
 	});
