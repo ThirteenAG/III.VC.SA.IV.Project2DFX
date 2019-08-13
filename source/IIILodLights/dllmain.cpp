@@ -45,11 +45,10 @@ void CLODLightManager::III::Init()
     numCoronas = iniReader.ReadInteger("LodLights", "MaxNumberOfLodLights", 25000);
     fCoronaRadiusMultiplier = iniReader.ReadFloat("LodLights", "CoronaRadiusMultiplier", 1.0f);
     bSlightlyIncreaseRadiusWithDistance = iniReader.ReadInteger("LodLights", "SlightlyIncreaseRadiusWithDistance", 1) != 0;
-    if (strncmp(iniReader.ReadString("LodLights", "CoronaFarClip", "auto"), "auto", 4) != 0)
+    if (iniReader.ReadString("LodLights", "CoronaFarClip", "auto") == "auto")
         fCoronaFarClip = iniReader.ReadFloat("LodLights", "CoronaFarClip", 0.0f);
     else
         autoFarClip = true;
-    szCustomCoronaTexturePath = iniReader.ReadString("LodLights", "CustomCoronaTexturePath", ".\\corona.png");
 
     bRenderStaticShadowsForLODs = iniReader.ReadInteger("StaticShadows", "RenderStaticShadowsForLODs", 0) != 0;
     bIncreasePedsCarsShadowsDrawDistance = iniReader.ReadInteger("StaticShadows", "IncreaseCarsShadowsDrawDistance", 0) != 0;
@@ -125,7 +124,9 @@ void CExplosionAddModifiedExplosion()
     using func_hook = injector::function_hooker<addr, bool(CEntity*, CEntity*, int, CVector*, uint32_t)>;
     injector::make_static_hook<func_hook>([](func_hook::func_type AddExplosion, CEntity* pTarget, CEntity* pSource, int nType, CVector* pVector, uint32_t uTimer)
     {
-        std::random_shuffle(ExplosionTypes.begin(), ExplosionTypes.end());
+        std::random_device rng;
+        std::mt19937 urng(rng());
+        std::shuffle(ExplosionTypes.begin(), ExplosionTypes.end(), urng);
         injector::MakeNOP(0x559FD3, 5, true);
         for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
         {

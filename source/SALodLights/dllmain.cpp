@@ -75,11 +75,12 @@ void CLODLightManager::SA::Init()
     numCoronas = iniReader.ReadInteger("LodLights", "MaxNumberOfLodLights", 25000);
     fCoronaRadiusMultiplier = iniReader.ReadFloat("LodLights", "CoronaRadiusMultiplier", 1.0f);
     bSlightlyIncreaseRadiusWithDistance = iniReader.ReadInteger("LodLights", "SlightlyIncreaseRadiusWithDistance", 1) != 0;
-    if (strncmp(iniReader.ReadString("LodLights", "CoronaFarClip", "auto"), "auto", 4) != 0)
+    if (iniReader.ReadString("LodLights", "CoronaFarClip", "auto") == "auto")
         fCoronaFarClip = iniReader.ReadFloat("LodLights", "CoronaFarClip", 0.0f);
     else
         autoFarClip = true;
-    szCustomCoronaTexturePath = iniReader.ReadString("LodLights", "CustomCoronaTexturePath", ".\\corona.png");
+    static auto tex = iniReader.ReadString("LodLights", "CustomCoronaTexturePath", ".\\corona.png");
+    szCustomCoronaTexturePath = const_cast<char*>(tex.c_str());
 
     bRenderStaticShadowsForLODs = iniReader.ReadInteger("StaticShadows", "RenderStaticShadowsForLODs", 0) != 0;
     bIncreasePedsCarsShadowsDrawDistance = iniReader.ReadInteger("StaticShadows", "IncreaseCarsShadowsDrawDistance", 0) != 0;

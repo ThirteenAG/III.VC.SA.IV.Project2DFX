@@ -1,13 +1,15 @@
 #pragma once
-#define WIN32_LEAN_AND_MEAN 
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdint.h>
 #include <vector>
 #include <map>
 #include <set>
 #include <algorithm>
+#include <random>
 #include <chrono>
 #include <ctime>
+
 
 #pragma warning(disable:4201)
 #pragma warning(disable:4458)
@@ -30,17 +32,17 @@
 template<typename T>
 inline T random(T a, T b)
 {
-	return a + static_cast<T>(rand() * (1.0f / RAND_MAX) * (b - a));
+    return a + static_cast<T>(rand() * (1.0f / RAND_MAX) * (b - a));
 }
 
 template<typename T>
 inline T Min(const T& a, const T& b)
 {
-	return a > b ? b : a;
+    return a > b ? b : a;
 }
 
 template<typename T>
 inline T Max(const T& a, const T& b)
 {
-	return a > b ? a : b;
+    return a > b ? a : b;
 }

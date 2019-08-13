@@ -5,13 +5,14 @@ workspace "III.VC.SA.IV.Project2DFX"
    location "build"
    objdir ("build/obj")
    buildlog ("build/log/%{prj.name}.log")
+   buildoptions {"-std:c++latest"}
    
    kind "SharedLib"
    language "C++"
    targetdir "data/%{prj.name}/"
    targetextension ".asi"
    characterset ("MBCS")
-   flags { "StaticRuntime" }
+   staticruntime "On"
    
    defines { "rsc_CompanyName=\"ThirteenAG\"" }
    defines { "rsc_LegalCopyright=\"MIT License\""} 
