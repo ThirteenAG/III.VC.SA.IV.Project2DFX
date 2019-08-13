@@ -117,18 +117,18 @@ void CWorldAddHook()
 {
     using func_hook = injector::function_hooker<addr, void(CEntityVC* EntityVC)>;
     injector::make_static_hook<func_hook>([](func_hook::func_type CWorldAdd, CEntityVC* EntityVC)
+    {
+        if (CLODLightManager::VC::bPreloadLODs)
         {
-            if (CLODLightManager::VC::bPreloadLODs)
+            if (EntityVC->m_nModelIndex == 2600 || EntityVC->m_nModelIndex == 2544 || EntityVC->m_nModelIndex == 2634 || EntityVC->m_nModelIndex == 2545)
             {
-                if (EntityVC->m_nModelIndex == 2600 || EntityVC->m_nModelIndex == 2544 || EntityVC->m_nModelIndex == 2634 || EntityVC->m_nModelIndex == 2545)
-                {
-                    EntityVC->m_bIsVisible = 0;
-                }
+                EntityVC->m_bIsVisible = 0;
             }
-            VecEntities.push_back(*EntityVC);
+        }
+        VecEntities.push_back(*EntityVC);
 
-            CWorldAdd(EntityVC);
-        });
+        CWorldAdd(EntityVC);
+    });
 }
 
 template<uintptr_t addr>
@@ -136,10 +136,10 @@ void RenderSirenParticles()
 {
     using func_hook = injector::function_hooker<addr, void(int id, char r, char g, char b, char alpha, RwV3D *pos, float radius, float farClp, char a9, char lensflare, char a11, char see_through_effect, char trace, float a14, char a15, float a16)>;
     injector::make_static_hook<func_hook>([](func_hook::func_type RegisterCorona, int id, char r, char g, char b, char alpha, RwV3D *pos, float radius, float farClp, char a9, char lensflare, char a11, char see_through_effect, char trace, float a14, char a15, float a16)
-        {
-            RegisterCorona(id, r, g, b, alpha, pos, radius, farClp, a9, lensflare, a11, see_through_effect, trace, a14, a15, a16);
-            CLODLightManager::VC::CShadowsStoreStaticShadow(id, 2, *(RwTexture **)0x978DB4, (CVector*)pos, 8.0f, 0.0f, 0.0f, -8.0f, 80, r != 0 ? 25 : 0, g != 0 ? 25 : 0, b != 0 ? 25 : 0, 15.0f, 1.0f, farClp, false, 8.0f);
-        });
+    {
+        RegisterCorona(id, r, g, b, alpha, pos, radius, farClp, a9, lensflare, a11, see_through_effect, trace, a14, a15, a16);
+        CLODLightManager::VC::CShadowsStoreStaticShadow(id, 2, *(RwTexture **)0x978DB4, (CVector*)pos, 8.0f, 0.0f, 0.0f, -8.0f, 80, r != 0 ? 25 : 0, g != 0 ? 25 : 0, b != 0 ? 25 : 0, 15.0f, 1.0f, farClp, false, 8.0f);
+    });
 }
 
 template<uintptr_t addr>
@@ -147,13 +147,13 @@ void CBulletTracesAddTrace()
 {
     using func_hook = injector::function_hooker<addr, void(CVector *, CVector *, float, unsigned int, unsigned char)>;
     injector::make_static_hook<func_hook>([](func_hook::func_type AddTrace, CVector* start, CVector* end, float, unsigned int, unsigned char)
-        {
-            CVector endPoint = CVector();
-            endPoint.x = (end->x - start->x) * 0.15f;
-            endPoint.y = (end->y - start->y) * 0.15f;
-            endPoint.z = (end->z - start->z) * 0.15f;
-            injector::cstd<void(short, CVector const&, CVector const&, CEntity *, float, int, int, int, int)>::call<0x5648F0>(56, *start, endPoint, 0, 0.0f, 0, 0, 0, 0);
-        });
+    {
+        CVector endPoint = CVector();
+        endPoint.x = (end->x - start->x) * 0.15f;
+        endPoint.y = (end->y - start->y) * 0.15f;
+        endPoint.z = (end->z - start->z) * 0.15f;
+        injector::cstd<void(short, CVector const&, CVector const&, CEntity *, float, int, int, int, int)>::call<0x5648F0>(56, *start, endPoint, 0, 0.0f, 0, 0, 0, 0);
+    });
 }
 
 template<uintptr_t addr>
@@ -161,19 +161,19 @@ void CExplosionAddModifiedExplosion()
 {
     using func_hook = injector::function_hooker<addr, bool(CEntity*, CEntity*, int, CVector*, uint32_t, bool)>;
     injector::make_static_hook<func_hook>([](func_hook::func_type AddExplosion, CEntity* pTarget, CEntity* pSource, int nType, CVector* pVector, uint32_t uTimer, bool bUnknown)
+    {
+        std::random_shuffle(ExplosionTypes.begin(), ExplosionTypes.end());
+        injector::MakeNOP(0x5C6661, 5, true);
+        for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
         {
-            std::random_shuffle(ExplosionTypes.begin(), ExplosionTypes.end());
-            injector::MakeNOP(0x5C6661, 5, true);
-            for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
-            {
-                if (*it == nType)
-                    break;
-                AddExplosion(pTarget, pSource, *it, pVector, uTimer, bUnknown);
-            }
-            injector::MakeCALL(0x5C6661, 0x4D82D0, true);
+            if (*it == nType)
+                break;
+            AddExplosion(pTarget, pSource, *it, pVector, uTimer, bUnknown);
+        }
+        injector::MakeCALL(0x5C6661, 0x4D82D0, true);
 
-            return AddExplosion(pTarget, pSource, nType, pVector, uTimer, bUnknown);
-        });
+        return AddExplosion(pTarget, pSource, nType, pVector, uTimer, bUnknown);
+    });
 }
 
 template<uintptr_t addr>
@@ -181,18 +181,18 @@ void CCoronasRegisterFestiveCoronaForEntity()
 {
     using func_hook = injector::function_hooker<addr, void(unsigned int nID, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, char a10, char a11, char a12, char a13, float a14, char a15, float a16)>;
     injector::make_static_hook<func_hook>([](func_hook::func_type RegisterCorona, unsigned int nID, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, char a10, char a11, char a12, char a13, float a14, char a15, float a16)
+    {
+        auto it = CLODLights::FestiveLights.find(nID);
+        if (it != CLODLights::FestiveLights.end())
         {
-            auto it = CLODLights::FestiveLights.find(nID);
-            if (it != CLODLights::FestiveLights.end())
-            {
-                RegisterCorona(nID, it->second.r, it->second.g, it->second.b, A, Position, Size, Range, pTex, a10, a11, a12, a13, a14, a15, a16);
-            }
-            else
-            {
-                CLODLights::FestiveLights[nID] = CRGBA(random(0, 255), random(0, 255), random(0, 255), 0);
-                RegisterCorona(nID, R, G, B, A, Position, Size, Range, pTex, a10, a11, a12, a13, a14, a15, a16);
-            }
-        });
+            RegisterCorona(nID, it->second.r, it->second.g, it->second.b, A, Position, Size, Range, pTex, a10, a11, a12, a13, a14, a15, a16);
+        }
+        else
+        {
+            CLODLights::FestiveLights[nID] = CRGBA(random(0, 255), random(0, 255), random(0, 255), 0);
+            RegisterCorona(nID, R, G, B, A, Position, Size, Range, pTex, a10, a11, a12, a13, a14, a15, a16);
+        }
+    });
 }
 
 void CLODLightManager::VC::ApplyMemoryPatches()
@@ -283,7 +283,8 @@ void CLODLightManager::VC::ApplyMemoryPatches()
             {
                 LoadDatFile();
 
-                for (auto i : VecEntities) {
+                for (auto i : VecEntities)
+                {
                     if (m_bCatchLamppostsNow && IsModelALamppost(i.m_nModelIndex))
                     {
                         RegisterLamppost(&i);
@@ -343,8 +344,8 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 
         //Car Shadows
         injector::WriteMemory<unsigned char>(0x0056DEC1, 0x85u, true); //headlight twitching fix
-        injector::WriteMemory<unsigned char>(0x0056DD36, 0x75u, true); //headlight on far distance 
-        injector::WriteMemory<unsigned char>(0x0056E004, 0x75u, true); //shadow on far distance 
+        injector::WriteMemory<unsigned char>(0x0056DD36, 0x75u, true); //headlight on far distance
+        injector::WriteMemory<unsigned char>(0x0056E004, 0x75u, true); //shadow on far distance
         injector::WriteMemory<unsigned char>(0x0058E2B7, 0x55u, true); //rgb
         injector::WriteMemory<unsigned char>(0x0058E2B9, 0x55u, true);
         injector::WriteMemory<unsigned char>(0x0058E2BB, 0x55u, true);
@@ -354,10 +355,10 @@ void CLODLightManager::VC::ApplyMemoryPatches()
     {
         injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (fDrawDistance / 1.8f), true);
         injector::MakeInline<0x498B65>([](injector::reg_pack& regs)
-            {
-                *(uintptr_t*)regs.esp = 0x498CC8;
-                injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (fDrawDistance / 1.8f), true);
-            });
+        {
+            *(uintptr_t*)regs.esp = 0x498CC8;
+            injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (fDrawDistance / 1.8f), true);
+        });
 
 
         struct DDHookNoLambda
@@ -425,7 +426,7 @@ void CLODLightManager::VC::ApplyMemoryPatches()
         CExplosionAddModifiedExplosion<(0x5C6DDC)>();
         CExplosionAddModifiedExplosion<(0x5C6E23)>();
         CExplosionAddModifiedExplosion<(0x5C6EDE)>();
-        //CExplosionAddModifiedExplosion<(0x5C6EFD)>(); //molotov 
+        //CExplosionAddModifiedExplosion<(0x5C6EFD)>(); //molotov
         CExplosionAddModifiedExplosion<(0x5C6F3D)>();
         CExplosionAddModifiedExplosion<(0x5C704E)>();
         //CExplosionAddModifiedExplosion<(0x5C706D)>(); //molotov
@@ -447,7 +448,7 @@ void CLODLightManager::VC::ApplyMemoryPatches()
         auto now = std::chrono::system_clock::now();
         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
         struct tm *date = std::localtime(&now_c);
-        if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 15) || (date->tm_mon == 11 && date->tm_mday >= 15))
+        if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
         {
             CLODLights::RegisterCorona = &CLODLights::RegisterFestiveCorona;
             CCoronasRegisterFestiveCoronaForEntity<(0x5419E0)>();
@@ -458,16 +459,16 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 
 void CLODLightManager::VC::RegisterCustomCoronas()
 {
-    unsigned short		nModelID = 65534;
+    unsigned short      nModelID = 65534;
 
-    auto	itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
+    auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
     for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
         m_pLampposts->push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
 }
 
 void CLODLightManager::VC::RegisterLamppost(CEntityVC* entity)
 {
-    auto	itEnd = pFileContent->upper_bound(PackKey(entity->m_nModelIndex, 0xFFFF));
+    auto    itEnd = pFileContent->upper_bound(PackKey(entity->m_nModelIndex, 0xFFFF));
     for (auto it = pFileContent->lower_bound(PackKey(entity->m_nModelIndex, 0)); it != itEnd; it++)
         m_pLampposts->push_back(CLamppostInfo(entity->matrix * it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, atan2(entity->matrix.GetUp()->y, -entity->matrix.GetUp()->x)));
 }
@@ -476,9 +477,9 @@ void CLODLightManager::VC::RegisterLODLights()
 {
     if (GetIsTimeInRange(19, 7))
     {
-        unsigned char	bAlpha = 0;
-        float	        fRadius = 0.0f;
-        unsigned int	nTime = *CurrentTimeHours * 60 + *CurrentTimeMinutes;
+        unsigned char   bAlpha = 0;
+        float           fRadius = 0.0f;
+        unsigned int    nTime = *CurrentTimeHours * 60 + *CurrentTimeMinutes;
         unsigned int    curMin = *CurrentTimeMinutes;
         fCoronaFarClip = autoFarClip ? **fCurrentFarClip : fCoronaFarClip;
 
@@ -494,8 +495,8 @@ void CLODLightManager::VC::RegisterLODLights()
             if ((it->vecPos.z >= -15.0f) && (it->vecPos.z <= 1030.0f))
             {
 
-                CVector*	pCamPos = (CVector*)GetCamPos();
-                float		fDistSqr = (pCamPos->x - it->vecPos.x)*(pCamPos->x - it->vecPos.x) + (pCamPos->y - it->vecPos.y)*(pCamPos->y - it->vecPos.y) + (pCamPos->z - it->vecPos.z)*(pCamPos->z - it->vecPos.z);
+                CVector*    pCamPos = (CVector*)GetCamPos();
+                float       fDistSqr = (pCamPos->x - it->vecPos.x)*(pCamPos->x - it->vecPos.x) + (pCamPos->y - it->vecPos.y)*(pCamPos->y - it->vecPos.y) + (pCamPos->z - it->vecPos.z)*(pCamPos->z - it->vecPos.z);
 
                 if ((fDistSqr > 250.0f*250.0f && fDistSqr < fCoronaFarClip*fCoronaFarClip) || it->nNoDistance)
                 {
@@ -590,9 +591,8 @@ void CLODLightManager::VC::DrawDistanceChanger()
         }
         if (fMinDrawDistanceOnTheGround < 800.0f)
             fMinDrawDistanceOnTheGround = 800.0f;
-        else
-            if (fMinDrawDistanceOnTheGround > fMaxPossibleDrawDistance)
-                fMinDrawDistanceOnTheGround = fMaxPossibleDrawDistance;
+        else if (fMinDrawDistanceOnTheGround > fMaxPossibleDrawDistance)
+            fMinDrawDistanceOnTheGround = fMaxPossibleDrawDistance;
     }
     fNewFarClip = (fFactor1 / fFactor2) * (GetCamPos()->z) + fMinDrawDistanceOnTheGround;
 }

@@ -16,7 +16,7 @@ void(__stdcall *CLODLightManager::IV::GetGameCam)(int *camera);
 bool(__cdecl *CLODLightManager::IV::CamIsSphereVisible)(int camera, float pX, float pY, float pZ, float radius);
 void(__cdecl *CLODLightManager::IV::GetCamPos)(int camera, float *pX, float *pY, float *pZ);
 int& CTimer::m_snTimeInMillisecondsPauseMode = *(int*)0xBADDEAD;
-extern bool	bIsIVEFLC;
+extern bool bIsIVEFLC;
 float fCamHeight;
 std::map<unsigned int, CRGBA> FestiveLights;
 
@@ -122,7 +122,7 @@ void CLODLightManager::IV::Init()
         auto now = std::chrono::system_clock::now();
         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
         struct tm *date = std::localtime(&now_c);
-        if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 15) || (date->tm_mon == 11 && date->tm_mday >= 15))
+        if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
         {
             DrawCorona3 = &CCoronasRegisterFestiveCoronaForEntity;
             pattern = hook::pattern("6A 00 51 E8 ? ? ? ? 83 C4 3C E9");
@@ -246,9 +246,9 @@ void CLODLightManager::IV::IncreaseCoronaLimit()
     WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true); //aslr_ptr(0x7E130E + 0x2)
 
     pattern = hook::pattern("81 FE ? ? ? ? 0F 8D ? ? ? ? 8B 4C 24 08 8A 54 24 0C");
-    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(2), nCoronasLimit, true);	   //aslr_ptr(0x7E1979 + 0x2)
+    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(2), nCoronasLimit, true);      //aslr_ptr(0x7E1979 + 0x2)
     pattern = hook::pattern("81 FF ? ? ? ? 0F 8D ? ? ? ? 8B 44 24 1C D9 46 20");
-    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(2), nCoronasLimit, true);	   //aslr_ptr(0x7E1072 + 0x2)
+    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(2), nCoronasLimit, true);      //aslr_ptr(0x7E1072 + 0x2)
     pattern = hook::pattern("3D ? ? ? ? 72 ? 89 0D ? ? ? ? C3");
     WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(1), nCoronasLimit * 64, true); //aslr_ptr(0x7E1189 + 0x1)
 }
@@ -256,9 +256,9 @@ void CLODLightManager::IV::IncreaseCoronaLimit()
 
 void CLODLightManager::IV::RegisterCustomCoronas()
 {
-    unsigned short		nModelID = 65534;
+    unsigned short      nModelID = 65534;
 
-    auto	itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
+    auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
     for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
         m_pLampposts->push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
 }
@@ -273,8 +273,8 @@ WplInstance* CLODLightManager::IV::PossiblyAddThisEntity(WplInstance* pInstance)
 
 void CLODLightManager::IV::RegisterLamppost(WplInstance* pObj)
 {
-    DWORD       		nModelID = pObj->ModelNameHash;
-    CMatrix				dummyMatrix;
+    DWORD               nModelID = pObj->ModelNameHash;
+    CMatrix             dummyMatrix;
 
     float qw = pObj->RotationW;
     float qx = pObj->RotationX;
@@ -306,7 +306,7 @@ void CLODLightManager::IV::RegisterLamppost(WplInstance* pObj)
     if (GetDistance((RwV3d*)&CVector(pObj->PositionX, pObj->PositionY, pObj->PositionZ), (RwV3d*)&CVector(-278.37f, -1377.48f, 90.98f)) <= 300.0f)
         return;
 
-    auto	itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
+    auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
     for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
         m_pLampposts->push_back(CLamppostInfo(dummyMatrix * it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, atan2(dummyMatrix.GetUp()->y, -dummyMatrix.GetUp()->x)));
 }
@@ -318,9 +318,9 @@ void CLODLightManager::IV::RegisterLODLights()
 
     if (*CurrentTimeHours > 19 || *CurrentTimeHours < 7)
     {
-        unsigned char	bAlpha = 0;
-        float	        fRadius = 0.0f;
-        unsigned int	nTime = *CurrentTimeHours * 60 + *CurrentTimeMinutes;
+        unsigned char   bAlpha = 0;
+        float           fRadius = 0.0f;
+        unsigned int    nTime = *CurrentTimeHours * 60 + *CurrentTimeMinutes;
         unsigned int    curMin = *CurrentTimeMinutes;
 
         if (nTime >= 19 * 60)
@@ -336,10 +336,10 @@ void CLODLightManager::IV::RegisterLODLights()
             GetRootCam(&currentCamera);
             if ((it->vecPos.z >= -15.0f) && (it->vecPos.z <= 1030.0f) /*&& CamIsSphereVisible(currentCamera, it->vecPos.x, it->vecPos.y, it->vecPos.z, 3.0f)*/)
             {
-                CVector	CamPos = CVector();
+                CVector CamPos = CVector();
                 GetCamPos(currentCamera, &CamPos.x, &CamPos.y, &CamPos.z);
-                CVector*	pCamPos = &CamPos;
-                float		fDistSqr = (pCamPos->x - it->vecPos.x)*(pCamPos->x - it->vecPos.x) + (pCamPos->y - it->vecPos.y)*(pCamPos->y - it->vecPos.y) + (pCamPos->z - it->vecPos.z)*(pCamPos->z - it->vecPos.z);
+                CVector*    pCamPos = &CamPos;
+                float       fDistSqr = (pCamPos->x - it->vecPos.x)*(pCamPos->x - it->vecPos.x) + (pCamPos->y - it->vecPos.y)*(pCamPos->y - it->vecPos.y) + (pCamPos->z - it->vecPos.z)*(pCamPos->z - it->vecPos.z);
                 fCamHeight = CamPos.z;
 
                 if ((fDistSqr > 250.0f*250.0f && fDistSqr < fCoronaFarClip*fCoronaFarClip) || it->nNoDistance)
@@ -361,15 +361,15 @@ void CLODLightManager::IV::RegisterLODLights()
                         }
                         //else
                         //{
-                        //	static float blinking = 1.0f;
-                        //	if (IsBlinkingNeeded(it->nCoronaShowMode))
-                        //		blinking -= CTimer::ms_fTimeStep / 1000.0f;
-                        //	else
-                        //		blinking += CTimer::ms_fTimeStep / 1000.0f;
+                        //  static float blinking = 1.0f;
+                        //  if (IsBlinkingNeeded(it->nCoronaShowMode))
+                        //      blinking -= CTimer::ms_fTimeStep / 1000.0f;
+                        //  else
+                        //      blinking += CTimer::ms_fTimeStep / 1000.0f;
                         //
-                        //	(blinking > 1.0f) ? blinking = 1.0f : (blinking < 0.0f) ? blinking = 0.0f : 0.0f;
+                        //  (blinking > 1.0f) ? blinking = 1.0f : (blinking < 0.0f) ? blinking = 0.0f : 0.0f;
                         //
-                        //	CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, blinking * (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0xFF, 255.0f, false, false);
+                        //  CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, blinking * (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0xFF, 255.0f, false, false);
                         //}
                     }
                     else
