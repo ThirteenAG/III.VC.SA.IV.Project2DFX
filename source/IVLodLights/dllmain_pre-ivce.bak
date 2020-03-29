@@ -16,9 +16,9 @@ void(__stdcall *CLODLightManager::IV::GetGameCam)(int *camera);
 bool(__cdecl *CLODLightManager::IV::CamIsSphereVisible)(int camera, float pX, float pY, float pZ, float radius);
 void(__cdecl *CLODLightManager::IV::GetCamPos)(int camera, float *pX, float *pY, float *pZ);
 int& CTimer::m_snTimeInMillisecondsPauseMode = *(int*)0xBADDEAD;
+extern bool bIsIVEFLC;
 float fCamHeight;
 std::map<unsigned int, CRGBA> FestiveLights;
-extern bool bIsIVEFLC;
 
 int CCoronasRegisterFestiveCoronaForEntity(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14)
 {
@@ -52,10 +52,10 @@ void CLODLightManager::IV::Init()
     {
         void operator()(injector::reg_pack& regs)
         {
-            regs.esi = *(uintptr_t*)(regs.ebp + 0x8);
-            regs.eax = (regs.esp + 0x1C);
+            regs.ebx = *(uintptr_t*)(regs.ebp + 0x8);
+            regs.ecx = *(uintptr_t*)(regs.ebx + 0x1C);
 
-            PossiblyAddThisEntity((WplInstance*)regs.esi);
+            PossiblyAddThisEntity((WplInstance*)regs.ebx);
         }
     };
 
@@ -79,25 +79,25 @@ void CLODLightManager::IV::Init()
         LoadDatFile();
         RegisterCustomCoronas();
 
-        auto pattern = hook::pattern("E8 ? ? ? ? 83 3D ? ? ? ? ? 74 05 E8 ? ? ? ? 6A 05"); //+
-        injector::MakeCALL(pattern.get(0).get<uintptr_t>(0), RegisterLODLights, true);
-        pattern = hook::pattern("8B 75 08 8D 44 24 1C 50 FF 76 1C C6 44 24"); //+
-        injector::MakeInline<LoadObjectInstanceHook>(pattern.get(0).get<uintptr_t>(0), pattern.get(0).get<uintptr_t>(7));
-        //pattern = hook::pattern(""); //causes crash
+        auto pattern = hook::pattern("E8 ? ? ? ? 83 3D ? ? ? ? 00 74 05 E8 ? ? ? ? 6A 05");
+        injector::MakeCALL(pattern.get(0).get<uintptr_t>(0), RegisterLODLights, true); //0x00402D6C
+        pattern = hook::pattern("8B 5D 08 8B 4B 1C 8D 44 24 14 50 51");
+        injector::MakeInline<LoadObjectInstanceHook>(pattern.get(0).get<uintptr_t>(0), pattern.get(0).get<uintptr_t>(6)); //0x008D63A1 - 0x008D63A7
+        //pattern = hook::pattern("F3 0F 10 44 24 1C 0D 00 0C"); //causes crash
         //injector::MakeInline<ParseIdeObjsHook>(pattern.get(0).get<uintptr_t>(0), pattern.get(0).get<uintptr_t>(6)); //0x008D2311 - 0x8D2317
     }
 
     if (DisableDefaultLodLights)
     {
-        auto pattern = hook::pattern("55 8B EC 83 E4 F0 81 EC ? ? ? ? A1 ? ? ? ? 33 C4 89 84 24 ? ? ? ? 56 57 C7 84 24 ? ? ? ? ? ? ? ? C7 84 24");
-        injector::MakeRET(pattern.get(0).get<uintptr_t>(0));
+        auto pattern = hook::pattern("55 8B EC 83 E4 F0 81 EC B4 00 00 00 F3 0F 10 45 08");
+        injector::WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(0), 0xC3, true); //0x00903300
     }
 
-    auto pattern = hook::pattern("E8 ? ? ? ? 83 C4 08 80 3D ? ? ? ? ? 74 32 6A 00 6A 0C");
+    auto pattern = hook::pattern("E8 ? ? ? ? 83 C4 04 80 3D ? ? ? ?  00 74 ? 6A 00 6A 0C");
     static auto jmp = pattern.get(0).get<uintptr_t>(8);
     if (DisableCoronasWaterReflection == 1)
     {
-        injector::MakeNOP(pattern.get(0).get<uintptr_t>(0), 5, true);
+        injector::MakeNOP(pattern.get(0).get<uintptr_t>(0), 5, true); //0xB54373
     }
     else
     {
@@ -113,45 +113,44 @@ void CLODLightManager::IV::Init()
                         *(uintptr_t*)(regs.esp - 4) = (uintptr_t)jmp;
                     }
                 }
-            }; injector::MakeInline<ReflectionsHook>(pattern.get(0).get<uintptr_t>(-6), pattern.get(0).get<uintptr_t>(0));
-            injector::WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(-1), 0x52, true); // push edx
+            }; injector::MakeInline<ReflectionsHook>(pattern.get(0).get<uintptr_t>(-7), pattern.get(0).get<uintptr_t>(-1));
         }
     }
 
-    //if (bFestiveLights)
-    //{
-    //    auto now = std::chrono::system_clock::now();
-    //    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    //    struct tm *date = std::localtime(&now_c);
-    //    if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
-    //    {
-    //        DrawCorona3 = &CCoronasRegisterFestiveCoronaForEntity;
-    //        pattern = hook::pattern("6A 00 51 E8 ? ? ? ? 83 C4 3C E9");
-    //        injector::MakeCALL(pattern.get_first(3), CCoronasRegisterFestiveCoronaForEntity, true);
-    //        pattern = hook::pattern("51 52 E8 ? ? ? ? 83 C4 3C EB 03");
-    //        injector::MakeCALL(pattern.get_first(2), CCoronasRegisterFestiveCoronaForEntity, true);
-    //    }
-    //}
+    if (bFestiveLights)
+    {
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        struct tm *date = std::localtime(&now_c);
+        if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
+        {
+            DrawCorona3 = &CCoronasRegisterFestiveCoronaForEntity;
+            pattern = hook::pattern("6A 00 51 E8 ? ? ? ? 83 C4 3C E9");
+            injector::MakeCALL(pattern.get_first(3), CCoronasRegisterFestiveCoronaForEntity, true);
+            pattern = hook::pattern("51 52 E8 ? ? ? ? 83 C4 3C EB 03");
+            injector::MakeCALL(pattern.get_first(2), CCoronasRegisterFestiveCoronaForEntity, true);
+        }
+    }
 }
 
 void CLODLightManager::IV::GetMemoryAddresses()
 {
-    auto pattern = hook::pattern("A3 ? ? ? ? 8B 44 24 0C A3 ? ? ? ? 8B 44 24 10 A3 ? ? ? ? A1 ? ? ? ? A3 ? ? ? ? C3"); //+
-    CLODLightManager::IV::CurrentTimeHours = *pattern.get(0).get<char*>(1);
-    CLODLightManager::IV::CurrentTimeMinutes = *pattern.get(0).get<char*>(10);
-    pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 F3 0F 10 4D ? F3 0F 10 45"); //+
-    CLODLightManager::IV::DrawCorona = (int(__cdecl *)(float, float, float, float, unsigned int, float, unsigned char, unsigned char, unsigned char))(pattern.get(0).get<uintptr_t>(0));
-    pattern = hook::pattern("8B 15 ? ? ? ? 56 8D 72 01"); //+
+    auto pattern = hook::pattern("01 15 ? ? ? ? 8D 0C 81 89 0D"); //820F75
+    CLODLightManager::IV::CurrentTimeHours = *pattern.get(0).get<char*>(2); //0x11D5300
+    CLODLightManager::IV::CurrentTimeMinutes = *pattern.get(0).get<char*>(11); //0x11D52FC
+    pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 20 D9 05 ? ? ? ? F3 0F 10 45 08 6A 00");
+    CLODLightManager::IV::DrawCorona = (int(__cdecl *)(float, float, float, float, unsigned int, float, unsigned char, unsigned char, unsigned char))(pattern.get(0).get<uintptr_t>(0)); //0xA6E240
+    pattern = hook::pattern("A1 ? ? ? ? 56 8D 70 01 81 FE");
     CLODLightManager::IV::DrawCorona2 = (int(__cdecl *)(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14))(pattern.get(0).get<uintptr_t>(0)); //0x7E1970
     CLODLightManager::IV::DrawCorona3 = CLODLightManager::IV::DrawCorona2;
-    pattern = hook::pattern("FF 35 ? ? ? ? 8B 0D ? ? ? ? E8 ? ? ? ? 8B 4C 24 04 89 01 C2 04 00"); //+
-    CLODLightManager::IV::GetRootCam = (void(__stdcall *)(int *camera))(pattern.get(0).get<uintptr_t>(0));
-    pattern = hook::pattern("B9 ? ? ? ? E8 ? ? ? ? 8B 0D ? ? ? ? 50 E8 ? ? ? ? 8B 4C 24 04 89 01 C2 04 00"); //+
-    CLODLightManager::IV::GetGameCam = (void(__stdcall *)(int *camera))(pattern.get(0).get<uintptr_t>(0));
-    pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 F3 0F 10 45 ? F3 0F 11 04 24 F3 0F 10 45 ? F3 0F 11 44 24 ? F3 0F 10 45 ? 51 F3 0F 11 44 24 ? F3 0F 10 45 ? F3 0F 11 04 24");
-    CLODLightManager::IV::CamIsSphereVisible = (bool(__cdecl *)(int camera, float pX, float pY, float pZ, float radius))(pattern.get(0).get<uintptr_t>(0));
-    pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 8D 04 24 50 FF 75 08"); //+
-    CLODLightManager::IV::GetCamPos = (void(__cdecl *)(int camera, float *pX, float *pY, float *pZ))(pattern.get(0).get<uintptr_t>(0));
+    pattern = hook::pattern("A1 ? ? ? ? 8B 0D ? ? ? ? 50 E8 ? ? ? ? 8B 4C 24 04 89 01 C2 04 00");
+    CLODLightManager::IV::GetRootCam = (void(__stdcall *)(int *camera))(pattern.get(0).get<uintptr_t>(0)); //0xB006C0
+    pattern = hook::pattern("B9 ? ? ? ? E8 ? ? ? ? 8B 0D ? ? ? ? 50 E8 ? ? ? ? 8B 4C 24 04 89 01 C2 04 00");
+    CLODLightManager::IV::GetGameCam = (void(__stdcall *)(int *camera))(pattern.get(0).get<uintptr_t>(0)); //0xB006E0
+    pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 F3 0F 10 45 0C D9 45 18 51");
+    CLODLightManager::IV::CamIsSphereVisible = (bool(__cdecl *)(int camera, float pX, float pY, float pZ, float radius))(pattern.get(0).get<uintptr_t>(0)); //0xBB9340
+    pattern = hook::pattern("55 8B EC 83 E4 F0 8B 4D 08 83 EC 10 8D 04 24 50 51 B9 ? ? ? ? E8 ? ? ? ? F3 ? ? ? ? 8B 55 0C");
+    CLODLightManager::IV::GetCamPos = (void(__cdecl *)(int camera, float *pX, float *pY, float *pZ))(pattern.get(0).get<uintptr_t>(0)); //0xBB8510
 }
 
 void CLODLightManager::IV::IncreaseCoronaLimit()
@@ -166,10 +165,10 @@ void CLODLightManager::IV::IncreaseCoronaLimit()
     int32_t counter1 = 0;
     int32_t counter2 = 0;
 
-    uintptr_t range_start = (uintptr_t)hook::get_pattern("33 C0 C7 80 ? ? ? ? ? ? ? ? 83 C0 40 3D ? ? ? ? 72 EC C7 05 ? ? ? ? ? ? ? ? C3"); //+
-    uintptr_t range_end = (uintptr_t)hook::get_pattern("5E C3 FF 05 ? ? ? ? 5E C3"); //+
+    uintptr_t range_start = (uintptr_t)hook::get_pattern("BE ? ? ? ? 83 7E 18 00"); //0x7E0F95
+    uintptr_t range_end = (uintptr_t)hook::get_pattern("5E C3 83 05 ? ? ? ? ? 5E C3"); //0x7E1AAB
 
-    uintptr_t dword_temp = (uintptr_t)*hook::pattern("89 82 ? ? ? ? F3 0F 11 82 ? ? ? ? F3 0F 10 44 24 ? F3 0F 11 8A ? ? ? ? 8B 41 0C 0F B6 4C 24 ? 89 82").get(0).get<uint32_t*>(2); //+
+    uintptr_t dword_temp = (uintptr_t)*hook::pattern("D9 98 ? ? ? ? F3 0F 10 44 24 20 F3 0F 11 88").get(0).get<uint32_t*>(2); //0x68C350
 
     for (size_t i = dword_temp; i <= (dword_temp + 0x3C); i++)
     {
@@ -186,24 +185,23 @@ void CLODLightManager::IV::IncreaseCoronaLimit()
             }
         };
 
-        GoThroughPatterns("83 8A", 2);
-        GoThroughPatterns("88 82", 2);
-        GoThroughPatterns("89 82", 2);
-        GoThroughPatterns("89 82", 2);
-        GoThroughPatterns("89 8A", 2);
-        GoThroughPatterns("8B 82", 2);
+        GoThroughPatterns("D9 98", 2);
+        GoThroughPatterns("F3 0F 11 80", 4);
+        GoThroughPatterns("F3 0F 11 88", 4);
+        GoThroughPatterns("83 88 ? ? ? ? 10", 2);
+        GoThroughPatterns("83 88 ? ? ? ? 06", 2);
         GoThroughPatterns("BE", 1);
-        GoThroughPatterns("C7 80", 2);
-        GoThroughPatterns("C7 82", 2);
-        GoThroughPatterns("F3 0F 11 82", 4);
-        GoThroughPatterns("F3 0F 11 8A", 4);
+        GoThroughPatterns("89 88", 2);
+        GoThroughPatterns("88 90", 2);
+        GoThroughPatterns("88 88", 2);
+        GoThroughPatterns("8B 90", 2);
     }
 
 
-    range_start = (uintptr_t)hook::get_pattern("8B 44 24 1C F3 0F 10 4C 24 ? F3 0F 10 46 ? F3 0F 59 05 ? ? ? ? 8D 0C 40"); //+
-    range_end = (uintptr_t)hook::get_pattern("0F 29 85 ? ? ? ? 0F 28 9D ? ? ? ? F3 0F 5C C2 F3 0F 11 5C 24 ? 0F 28 9D ? ? ? ? F3 0F 11 5C 24 ? 0F 28 D0"); //+
+    range_start = (uintptr_t)hook::get_pattern("D9 46 20 F3 0F 10 54 24 ? 0F B6 56 30"); //0x7E10AB
+    range_end = (uintptr_t)hook::get_pattern("F3 0F 59 C3 F3 0F 5C F0 F3 0F 59 CB"); //0x7E1671
 
-    dword_temp = (uintptr_t)*hook::pattern("F3 0F 11 89 ? ? ? ? F3 0F 10 4C 24 ? F3 0F 11 89").get(0).get<uint32_t*>(4);
+    dword_temp = (uintptr_t)*hook::pattern("F3 0F 11 90 ? ? ? ? F3 0F 10 54 24 24 F3 0F").get(0).get<uint32_t*>(4);
 
     for (size_t i = dword_temp; i <= (dword_temp + 0x1B); i++)
     {
@@ -220,43 +218,41 @@ void CLODLightManager::IV::IncreaseCoronaLimit()
             }
         };
 
-        GoThroughPatterns("0F 28 81", 3);
-        GoThroughPatterns("0F B6 81", 3);
-        GoThroughPatterns("0F B6 B1", 3);
-        GoThroughPatterns("80 B8", 2);
-        GoThroughPatterns("88 81", 2);
-        GoThroughPatterns("88 91", 2);
-        GoThroughPatterns("89 81", 2);
-        GoThroughPatterns("BE", 1);
+        GoThroughPatterns("0F 28 89", 3);
+        GoThroughPatterns("88 90", 2);
+        GoThroughPatterns("88 88", 2);
+        GoThroughPatterns("F3 0F 11 90", 4);
+        GoThroughPatterns("F3 0F 11 80", 4);
         GoThroughPatterns("F3 0F 10 81", 4);
-        GoThroughPatterns("F3 0F 10 89", 4);
-        GoThroughPatterns("F3 0F 11 81", 4);
-        GoThroughPatterns("F3 0F 11 89", 4);
-        GoThroughPatterns("F3 0F 11 91", 4);
+        GoThroughPatterns("F3 0F 11 88", 4);
+        GoThroughPatterns("F3 0F 10 A1", 4);
+        GoThroughPatterns("F3 0F 10 99", 4);
+        GoThroughPatterns("D9 98", 2);
+        GoThroughPatterns("80 B9 ? ? ? ? 00", 2);
+        GoThroughPatterns("0F B6 B1", 3);
+        GoThroughPatterns("0F B6 81", 3);
+        GoThroughPatterns("0F B6 91", 3);
     }
 
     if (counter1 != 24 || counter2 != 18)
         MessageBox(0, "IV.Project2DFX", "Project2DFX is not fully compatible with this version of the game", 0);
 
-    auto p = hook::pattern("BF FF 02 00 00"); //+
-    AdjustPointer(p.get_first(-4), &aCoronas[0], dword_temp, dword_temp + 0x3C);
-    p = hook::pattern("BF FF 05 00 00"); //+
-    AdjustPointer(p.get_first(-4), &aCoronas2[0], dword_temp, dword_temp + 0x1B);
 
-    auto pattern = hook::pattern("C1 E1 ? 03 4C 24 18 C1");
-    WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true);
+    auto pattern = hook::pattern("C1 E0 ? 03 C3 C1 E0");
+    WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true); //aslr_ptr(0x7E109F + 0x2)
     pattern = hook::pattern("C1 E1 ? 03 CF C1 E1");
-    WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true);
-    pattern = hook::pattern("C1 E0 ? 03 C2 C1 E0 05 80 B8");
-    WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true);
+    WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true); //aslr_ptr(0x7E149A + 0x2)
+    pattern = hook::pattern("C1 E1 ? 03 C8 C1 E1");
+    WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true); //aslr_ptr(0x7E130E + 0x2)
 
-    pattern = hook::pattern("81 FE ? ? ? ? 0F 8D ? ? ? ? 8B 44 24 08 8B 4C 24 1C F3 0F 10 44 24 ? C1 E2 06");
-    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(2), nCoronasLimit, true);
-    pattern = hook::pattern("3D ? ? ? ? 0F 8D ? ? ? ? 8B 44 24 1C F3 0F 10 4C 24");
-    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(1), nCoronasLimit, true);
-    pattern = hook::pattern("3D ? ? ? ? 72 EC C7 05 ? ? ? ? ? ? ? ? C3");
-    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(1), nCoronasLimit * 64, true);
+    pattern = hook::pattern("81 FE ? ? ? ? 0F 8D ? ? ? ? 8B 4C 24 08 8A 54 24 0C");
+    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(2), nCoronasLimit, true);      //aslr_ptr(0x7E1979 + 0x2)
+    pattern = hook::pattern("81 FF ? ? ? ? 0F 8D ? ? ? ? 8B 44 24 1C D9 46 20");
+    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(2), nCoronasLimit, true);      //aslr_ptr(0x7E1072 + 0x2)
+    pattern = hook::pattern("3D ? ? ? ? 72 ? 89 0D ? ? ? ? C3");
+    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(1), nCoronasLimit * 64, true); //aslr_ptr(0x7E1189 + 0x1)
 }
+
 
 void CLODLightManager::IV::RegisterCustomCoronas()
 {
