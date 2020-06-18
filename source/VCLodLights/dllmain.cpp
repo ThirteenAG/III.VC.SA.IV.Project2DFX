@@ -397,16 +397,16 @@ void CLODLightManager::VC::ApplyMemoryPatches()
         injector::MakeNOP(0x40E150, 5, true);
         injector::MakeNOP(0x40E157, 5, true);
 
-        struct SetupBigBuildingVisibilityHook //Lods in the interiors
-        {
-            void operator()(injector::reg_pack& regs)
-            {
-                if (*(uint32_t*)0x978810 == 0) //nCurrentInterior
-                    *(uintptr_t*)(regs.esp - 4) = 0x4C799A;
-                else
-                    *(uintptr_t*)(regs.esp - 4) = 0x4C7961;
-            }
-        }; injector::MakeInline<SetupBigBuildingVisibilityHook>(0x4C7957);
+        //struct SetupBigBuildingVisibilityHook //Lods in the interiors
+        //{
+        //    void operator()(injector::reg_pack& regs)
+        //    {
+        //        if (*(uint32_t*)0x978810 == 0) //nCurrentInterior
+        //            *(uintptr_t*)(regs.esp - 4) = 0x4C799A;
+        //        else
+        //            *(uintptr_t*)(regs.esp - 4) = 0x4C7961;
+        //    }
+        //}; injector::MakeInline<SetupBigBuildingVisibilityHook>(0x4C7957);
     }
 
     if (bRandomExplosionEffects)

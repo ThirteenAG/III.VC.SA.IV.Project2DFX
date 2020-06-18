@@ -636,6 +636,8 @@ void CLODLightManager::SA::DrawDistanceChanger()
     static Fps _fps;
     fNewFarClip = 500.0f;
     static DWORD* pPlayerPed = (DWORD*)0xB6F5F0;
+    float& CWeather__UnderWaterness = *(float*)(0xC8132C);
+    float& CTimeCycle__m_fCurrentFarClip = *(float*)(0xB7C4F0);
 
     if (*pPlayerPed)
     {
@@ -660,7 +662,10 @@ void CLODLightManager::SA::DrawDistanceChanger()
                     else if (fMinDrawDistanceOnTheGround > fMaxPossibleDrawDistance)
                         fMinDrawDistanceOnTheGround = fMaxPossibleDrawDistance;
                 }
-                fNewFarClip = (fFactor1 / fFactor2) * (GetCamPos()->z) + fMinDrawDistanceOnTheGround;
+                if (CWeather__UnderWaterness <= 0.339731634f)
+                    fNewFarClip = (fFactor1 / fFactor2) * (GetCamPos()->z) + fMinDrawDistanceOnTheGround;
+                else
+                    fNewFarClip = CTimeCycle__m_fCurrentFarClip;
             }
         }
     }
