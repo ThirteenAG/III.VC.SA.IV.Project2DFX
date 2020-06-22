@@ -45,7 +45,7 @@ void CLODLightManager::III::Init()
     numCoronas = iniReader.ReadInteger("LodLights", "MaxNumberOfLodLights", 25000);
     fCoronaRadiusMultiplier = iniReader.ReadFloat("LodLights", "CoronaRadiusMultiplier", 1.0f);
     bSlightlyIncreaseRadiusWithDistance = iniReader.ReadInteger("LodLights", "SlightlyIncreaseRadiusWithDistance", 1) != 0;
-    if (iniReader.ReadString("LodLights", "CoronaFarClip", "auto") == "auto")
+    if (iniReader.ReadString("LodLights", "CoronaFarClip", "auto") != "auto")
         fCoronaFarClip = iniReader.ReadFloat("LodLights", "CoronaFarClip", 0.0f);
     else
         autoFarClip = true;
