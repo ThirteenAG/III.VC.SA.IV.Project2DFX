@@ -1,11 +1,13 @@
 #ifndef __MATHS__H
 #define __MATHS__H
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include "rwsdk\rwcore.h"
 
 #define RAD_TO_DEG								(180.0/M_PI)
 #define DEG_TO_RAD								(M_PI/180.0)
+#define RADTODEG(x)                             ((x) * 180.0f / M_PI)
 
 class CVector
 {
@@ -500,6 +502,42 @@ inline CVector& CVector::FromMultiply(const CMatrix& mat, const CVector& vec)
 inline CVector& CVector::FromMultiply3X3(const CMatrix& mat, const CVector& vec)
 {
 	return *this = Multiply3x3(mat, vec);
+}
+
+static CMatrix identMat = {
+	{ 1.0f, 0.0f, 0.0f },
+	{ 0.0f, 1.0f, 0.0f },
+	{ 0.0f, 0.0f, 1.0f },
+	{ 0.0f, 0.0f, 0.0f },
+};
+
+inline RwV3d makeV3d(float x, float y, float z) { RwV3d v = { x, y, z }; return v; }
+inline float dot(const RwV3d& a, const RwV3d& b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+inline RwV3d scale(const RwV3d& a, float r) { return makeV3d(a.x * r, a.y * r, a.z * r); }
+inline void makeRotation(CMatrix* dst, const RwV3d* axis, float angle, const RwV3d* translation)
+{
+	float len = dot(*axis, *axis);
+	if (len != 0.0f) len = 1.0f / sqrtf(len);
+	RwV3d v = scale(*axis, len);
+	angle = angle * (float)M_PI / 180.0f;
+	float s = sinf(angle);
+	float c = cosf(angle);
+	float t = 1.0f - c;
+
+	*dst = identMat;
+	dst->matrix.pos = *translation;
+	dst->matrix.right.x = c + v.x * v.x * t;
+	dst->matrix.right.y = v.x * v.y * t + v.z * s;
+	dst->matrix.right.z = v.z * v.x * t - v.y * s;
+	dst->matrix.up.x = v.x * v.y * t - v.z * s;
+	dst->matrix.up.y = c + v.y * v.y * t;
+	dst->matrix.up.z = v.y * v.z * t + v.x * s;
+	dst->matrix.at.x = v.z * v.x * t + v.y * s;
+	dst->matrix.at.y = v.y * v.z * t - v.x * s;
+	dst->matrix.at.z = c + v.z * v.z * t;
+	//dst->matrix.pos.x = 0.0;
+	//dst->matrix.pos.y = 0.0;
+	//dst->matrix.pos.z = 0.0;
 }
 
 #endif

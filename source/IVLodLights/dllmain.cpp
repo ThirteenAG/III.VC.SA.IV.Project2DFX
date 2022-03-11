@@ -277,6 +277,14 @@ WplInstance* CLODLightManager::IV::PossiblyAddThisEntity(WplInstance* pInstance)
 
 void CLODLightManager::IV::RegisterLamppost(WplInstance* pObj)
 {
+    //DWORD nModelID = pObj->ModelNameHash;
+    //RwV3d trans = { pObj->PositionX, pObj->PositionY, pObj->PositionZ };
+    //RwV3d axis = { pObj->RotationW, pObj->RotationX, pObj->RotationY };
+    //
+    //CMatrix dummyMatrix;
+    //auto angle2 = -RADTODEG(2.0f * acos(pObj->RotationZ));
+    //makeRotation(&dummyMatrix, &axis, angle2, &trans);
+
     DWORD               nModelID = pObj->ModelNameHash;
     CMatrix             dummyMatrix;
 
@@ -285,23 +293,23 @@ void CLODLightManager::IV::RegisterLamppost(WplInstance* pObj)
     float qy = pObj->RotationY;
     float qz = pObj->RotationZ;
 
-    float n = 1.0f / sqrt(qx*qx + qy * qy + qz * qz + qw * qw);
+    float n = 1.0f / sqrt(qx * qx + qy * qy + qz * qz + qw * qw);
     qx *= n;
     qy *= n;
     qz *= n;
     qw *= n;
 
-    dummyMatrix.matrix.right.x = 1.0f - 2.0f*qy*qy - 2.0f*qz*qz;
-    dummyMatrix.matrix.right.y = 2.0f*qx*qy - 2.0f*qz*qw;
-    dummyMatrix.matrix.right.z = 2.0f*qx*qz + 2.0f*qy*qw;
+    dummyMatrix.matrix.right.x = 1.0f - 2.0f * qy * qy - 2.0f * qz * qz;
+    dummyMatrix.matrix.right.y = 2.0f * qx * qy - 2.0f * qz * qw;
+    dummyMatrix.matrix.right.z = 2.0f * qx * qz + 2.0f * qy * qw;
 
-    dummyMatrix.matrix.up.x = 2.0f*qx*qy + 2.0f*qz*qw;
-    dummyMatrix.matrix.up.y = 1.0f - 2.0f*qx*qx - 2.0f*qz*qz;
-    dummyMatrix.matrix.up.z = 2.0f*qy*qz - 2.0f*qx*qw;
+    dummyMatrix.matrix.up.x = 2.0f * qx * qy + 2.0f * qz * qw;
+    dummyMatrix.matrix.up.y = 1.0f - 2.0f * qx * qx - 2.0f * qz * qz;
+    dummyMatrix.matrix.up.z = 2.0f * qy * qz - 2.0f * qx * qw;
 
-    dummyMatrix.matrix.at.x = 2.0f*qx*qz - 2.0f*qy*qw;
-    dummyMatrix.matrix.at.y = 2.0f*qy*qz + 2.0f*qx*qw;
-    dummyMatrix.matrix.at.z = 1.0f - 2.0f*qx*qx - 2.0f*qy*qy;
+    dummyMatrix.matrix.at.x = 2.0f * qx * qz - 2.0f * qy * qw;
+    dummyMatrix.matrix.at.y = 2.0f * qy * qz + 2.0f * qx * qw;
+    dummyMatrix.matrix.at.z = 1.0f - 2.0f * qx * qx - 2.0f * qy * qy;
 
     dummyMatrix.matrix.pos.x = pObj->PositionX;
     dummyMatrix.matrix.pos.y = pObj->PositionY;
@@ -316,15 +324,23 @@ void CLODLightManager::IV::RegisterLamppost(WplInstance* pObj)
 
     auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
     for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
-        m_pLampposts->push_back(CLamppostInfo(dummyMatrix * it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, atan2(dummyMatrix.GetUp()->y, -dummyMatrix.GetUp()->x)));
+        m_pLampposts->push_back(CLamppostInfo(dummyMatrix * it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, atan2(dummyMatrix.GetUp()->y, -dummyMatrix.GetUp()->x), it->second.fObjectDrawDistance));
 }
 
 void CLODLightManager::IV::RegisterLODLights()
 {
+    static auto SolveEqSys = [](float a, float b, float c, float d, float value) -> float
+    {
+        float determinant = a - c;
+        float x = (b - d) / determinant;
+        float y = (a * d - b * c) / determinant;
+        return min((x)*value + y, d);
+    };
+
     if (m_bCatchLamppostsNow)
         m_bCatchLamppostsNow = false;
 
-    if (*CurrentTimeHours > 19 || *CurrentTimeHours < 7)
+    if (*CurrentTimeHours >= 19 || *CurrentTimeHours <= 7)
     {
         unsigned char   bAlpha = 0;
         float           fRadius = 0.0f;
@@ -332,11 +348,11 @@ void CLODLightManager::IV::RegisterLODLights()
         unsigned int    curMin = *CurrentTimeMinutes;
 
         if (nTime >= 19 * 60)
-            bAlpha = static_cast<unsigned char>((3.0f / 4.0f)*nTime - 825.0f); // http://goo.gl/O03RpE {(19*60)a + y = 30,  (24*60)a + y = 255}
+            bAlpha = static_cast<unsigned char>(SolveEqSys((float)(19 * 60), 30.0f, (float)(24 * 60), 255.0f, (float)nTime)); // http://goo.gl/O03RpE {(19*60)a + y = 30,  (24*60)a + y = 255}
         else if (nTime < 3 * 60)
             bAlpha = 255;
         else
-            bAlpha = static_cast<unsigned char>((-15.0f / 16.0f)*nTime + 424.0f); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 255}
+            bAlpha = static_cast<unsigned char>(SolveEqSys((float)(7 * 60), 30.0f, (float)(3 * 60), 255.0f, (float)nTime)); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 255}
 
         for (auto it = m_pLampposts->cbegin(); it != m_pLampposts->cend(); it++)
         {
@@ -349,23 +365,31 @@ void CLODLightManager::IV::RegisterLODLights()
                 CVector*    pCamPos = &CamPos;
                 float       fDistSqr = (pCamPos->x - it->vecPos.x)*(pCamPos->x - it->vecPos.x) + (pCamPos->y - it->vecPos.y)*(pCamPos->y - it->vecPos.y) + (pCamPos->z - it->vecPos.z)*(pCamPos->z - it->vecPos.z);
                 fCamHeight = CamPos.z;
+                float fCoronaDist = it->fObjectDrawDistance - 30.0f;
 
-                if ((fDistSqr > 250.0f*250.0f && fDistSqr < fCoronaFarClip*fCoronaFarClip) || it->nNoDistance)
+                if ((fDistSqr > fCoronaDist * fCoronaDist && fDistSqr < fCoronaFarClip * fCoronaFarClip) || it->nNoDistance)
                 {
+                    float min_radius_distance = fCoronaDist;
+                    float min_radius_value = 0.0f;
+                    float max_radius_distance = it->fObjectDrawDistance;
+                    float max_radius_value = 3.5f;
+
                     if (it->nNoDistance)
-                        fRadius = 3.5f;
+                        fRadius = max_radius_value;
                     else
-                        fRadius = (fDistSqr < 300.0f*300.0f) ? (0.07f)*sqrt(fDistSqr) - 17.5f : 3.5f; // http://goo.gl/vhAZSx
+                        fRadius = SolveEqSys(min_radius_distance, min_radius_value, max_radius_distance, max_radius_value, sqrt(fDistSqr)); // http://goo.gl/vhAZSx
 
                     if (bSlightlyIncreaseRadiusWithDistance)
-                        fRadius *= min((0.00136364f)*sqrt(fDistSqr) + 0.590909f, 3.0f); // http://goo.gl/3kDpnC {(300)a + y = 1.0,  (2500)a + y = 4}
+                        fRadius *= min(SolveEqSys(min_radius_distance, 1.0f, fCoronaFarClip, 4.0f, sqrt(fDistSqr)), 3.0f); // http://goo.gl/3kDpnC {(300)a + y = 1.0,  (2500)a + y = 4}
+
+                    float fAlphaDistMult = 110.0 - SolveEqSys(min_radius_distance / 4.0f, 10.0f, max_radius_distance * 4.0f, 100.0f, sqrt(fDistSqr));
 
                     if (it->fCustomSizeMult != 0.45f)
                     {
                         if (!it->nCoronaShowMode)
                         {
                             //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                            DrawCorona3(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / 10.0f, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                            DrawCorona3(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                         }
                         //else
                         //{
@@ -386,7 +410,7 @@ void CLODLightManager::IV::RegisterLODLights()
                         if ((it->colour.r >= 250 && it->colour.g >= 100 && it->colour.b <= 100) && ((curMin == 9 || curMin == 19 || curMin == 29 || curMin == 39 || curMin == 49 || curMin == 59))) //yellow
                         {
                             //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                            DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / 10.0f, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                            DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                         }
                         else
                         {
@@ -395,14 +419,14 @@ void CLODLightManager::IV::RegisterLODLights()
                                 if ((it->colour.r >= 250 && it->colour.g < 100 && it->colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
                                 {
                                     //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                                    DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / 10.0f, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                    DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                 }
                                 else
                                 {
                                     if ((it->colour.r == 0 && it->colour.g >= 100 && it->colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
                                     {
                                         //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                                        DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / 10.0f, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                        DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                     }
                                 }
                             }
@@ -411,14 +435,14 @@ void CLODLightManager::IV::RegisterLODLights()
                                 if ((it->colour.r == 0 && it->colour.g >= 250 && it->colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
                                 {
                                     //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                                    DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / 10.0f, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                    DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                 }
                                 else
                                 {
                                     if ((it->colour.r >= 250 && it->colour.g < 100 && it->colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
                                     {
                                         //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                                        DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / 10.0f, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                        DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                     }
                                 }
                             }

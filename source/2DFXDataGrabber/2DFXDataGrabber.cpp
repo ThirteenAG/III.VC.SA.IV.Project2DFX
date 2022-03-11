@@ -7,6 +7,7 @@
 #include <string>
 #include <algorithm>
 #include <iomanip>
+#include <Maths.h>
 using namespace std;
 
 enum BlinkTypes
@@ -431,11 +432,11 @@ void ConvertLightTo2DFX()
 				//LodLights << "%" << ext.c_str() << endl;
 				bool mdlname = false;
 
-				if (ext2.find("bm_nylamp110b") != std::string::npos || ext2.find("bm_nylamp1b") != std::string::npos || ext2.find("bm_nylamp2b") != std::string::npos ||
-					ext2.find("cj_nylamp2b") != std::string::npos)
-					continue;
+				//if (ext2.find("bm_nylamp110b") != std::string::npos || ext2.find("bm_nylamp1b") != std::string::npos || ext2.find("bm_nylamp2b") != std::string::npos ||
+				//	ext2.find("cj_nylamp2b") != std::string::npos)
+				//	continue;
 
-				string EntryName; float offsetX, offsetY, offsetZ, CoronaSize;	int R = 0, G = 0, B = 0, A = 255; int BlinkType = 0; int nNoDistance = 0; int nDrawSearchlight = 0;
+				string EntryName; float offsetX, offsetY, offsetZ, CoronaSize, DrawDistance;	int R = 0, G = 0, B = 0, A = 255; int BlinkType = 0; int nNoDistance = 0; int nDrawSearchlight = 0; int BoneID = 0; int type_matched = 0;
 				while (getline(TXTFileContent, buf))
 				{
 					if (buf[0] != '#')
@@ -464,81 +465,108 @@ void ConvertLightTo2DFX()
 								(offsetY == -0.0f) ? offsetY = 0.0f : offsetY;
 								(offsetZ == -0.0f) ? offsetZ = 0.0f : offsetZ;
 							}
+							else if (buf.find("_f28 ") != std::string::npos)
+							{
+								sscanf(buf.c_str(), "%*s %f", &DrawDistance);
+
+							}
 							else if (buf.find("Type Spot") != std::string::npos || buf.find("Type Omni") != std::string::npos)
 							{
-								ext = ext2 + ".skel";
-								ifstream TXTFileContent2(ext); string buf2;
-								bool br = false;
-								if (TXTFileContent2.is_open())
+								type_matched = ((buf.find("Type Omni") != std::string::npos) ? 1 : 2);
+							}
+							else if (buf.find("BoneID ") != std::string::npos)
+							{
+								if (type_matched)
 								{
-									while (getline(TXTFileContent2, buf2))
+									sscanf(buf.c_str(), "%*s %d", &BoneID);
+
+									ext = ext2 + ".skel";
+									ifstream TXTFileContent2(ext); string buf2;
+									bool br = false;
+									if (TXTFileContent2.is_open())
 									{
-										if (offsetZ >= 21.0f)
-											break;
-										if (buf2.find("LocalOffset") != std::string::npos)
+										if (/*BoneID != 0 ||*/ ext2 == "cj_e2_ind_light_1")
+											_asm nop
+										int SkelBoneID = 0;
+										while (getline(TXTFileContent2, buf2))
 										{
-											float offsetX2, offsetY2, offsetZ2;
-											sscanf(buf2.c_str(), "%*s %f %f %f", &offsetX2, &offsetY2, &offsetZ2);
-											offsetX += offsetX2;
-											offsetY += offsetY2;
-											offsetZ += offsetZ2;
+											//if (offsetZ >= 21.0f)
+											//	break;
+											if (buf2.find("Id ") != std::string::npos)
+											{
+												sscanf(buf2.c_str(), "%*s %d", &SkelBoneID);
+											}
+											else if (buf2.find("WorldOffset") != std::string::npos)
+											{
+												if (BoneID == SkelBoneID)
+												{
+													float offsetX2, offsetY2, offsetZ2;
+													sscanf(buf2.c_str(), "%*s %f %f %f", &offsetX2, &offsetY2, &offsetZ2);
+													offsetX += offsetX2;
+													offsetY += offsetY2;
+													offsetZ += offsetZ2;
+													BoneID = -1;
+												}
+											}
+
+											//if (buf2.find("NumBones 0") != std::string::npos || buf2.find("NumBones 1") != std::string::npos)
+											//{
+											//	br = true;
+											//	break;
+											//}
+										}
+										TXTFileContent2.close();
+									}
+									//else
+									//	continue;
+
+									//if (br)
+									//	continue;
+
+									if (CoronaSize > 0.0f)
+									{
+										auto GetPrecison = [](float value) -> int
+										{
+											int width = 10;
+											int digits = 0;
+
+											if (value < 0.0f)
+											{
+												value *= -1.0f;
+												digits++;
+											}
+											digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
+											int precision = (((width - digits - 1) >= 0) ? (width - digits - 1) : 0);
+											return precision;
+										};
+
+										if (!mdlname)
+										{
+											LodLights << "%" << ext2.c_str() << endl;
+											mdlname = true;
 										}
 
-										//if (buf2.find("NumBones 0") != std::string::npos || buf2.find("NumBones 1") != std::string::npos)
-										//{
-										//	br = true;
-										//	break;
-										//}
+										LodLights << std::right
+											<< std::setfill('0')
+											<< std::setw(3) << R << " "
+											<< std::setw(3) << G << " "
+											<< std::setw(3) << B << " "
+											<< std::setw(3) << ((type_matched == 1) ? 128 : A) << " "
+											<< std::setfill(' ')
+											<< std::left
+											<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetX)) << offsetX << " "
+											<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetY)) << offsetY << " "
+											<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " "
+											<< std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " "
+											<< std::setw(4) << std::fixed << std::setprecision(2) << DrawDistance << " "
+											<< std::right << std::setfill('0')
+											<< std::setw(2) << BlinkType << " "
+											<< std::left << std::setfill(' ')
+											<< std::setw(1) << nNoDistance << " "
+											<< std::setw(1) << nDrawSearchlight
+											<< std::endl;
 									}
-									TXTFileContent2.close();
-								}
-								//else
-								//	continue;
-
-								//if (br)
-								//	continue;
-
-								if (CoronaSize > 0.0f)
-								{
-									auto GetPrecison = [](float value) -> int
-									{
-										int width = 10;
-										int digits = 0;
-
-										if (value < 0.0f)
-										{
-											value *= -1.0f;
-											digits++;
-										}
-										digits += ((value<1) ? 1 : int(1 + log10(float(abs(value)))));
-										int precision = (((width - digits - 1) >= 0) ? (width - digits - 1) : 0);
-										return precision;
-									};
-
-									if (!mdlname)
-									{
-										LodLights << "%" << ext2.c_str() << endl;
-										mdlname = true;
-									}
-
-									LodLights << std::right
-										<< std::setfill('0')
-										<< std::setw(3) << R << " "
-										<< std::setw(3) << G << " "
-										<< std::setw(3) << B << " "
-										<< std::setw(3) << ((buf.find("Type Omni") != std::string::npos) ? 128 : A) << " "
-										<< std::setfill(' ')
-										<< std::left
-										<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetX)) << offsetX << " "
-										<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetY)) << offsetY << " "
-										<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " "
-										<< std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " "
-										<< std::right << std::setfill('0')
-										<< std::setw(2) << BlinkType << " "
-										<< std::left << std::setfill(' ')
-										<< std::setw(1) << nNoDistance << " "
-										<< std::setw(1) << nDrawSearchlight
-										<< std::endl;
+									type_matched = 0;
 								}
 							}
 
@@ -552,18 +580,18 @@ void ConvertLightTo2DFX()
 		FindClose(TXTFile);
 	}
 
-	LodLights << "%bm_nylamp110b" << endl;
-	LodLights << "255 219 155 255 -1.1508710 -0.0219250 6.95975000 0.80 00 0 0" << endl;
-	LodLights << "255 219 155 255 1.10668200 -0.0219260 6.95970100 0.80 00 0 0" << endl;
-	LodLights << "%bm_nylamp1b" << endl;
-	LodLights << "255 221 163 255 -1.6176590 -0.0347459 7.78166600 0.80 00 0 0" << endl;
-	LodLights << "255 221 163 255 1.58855900 -0.0347870 7.78166800 0.80 00 0 0" << endl;
-	LodLights << "%bm_nylamp2b" << endl;
-	LodLights << "255 221 163 255 -2.5801490 -0.0306550 7.68636900 0.80 00 0 0" << endl;
-	LodLights << "255 221 163 255 2.56053300 -0.0384880 7.68502200 0.80 00 0 0" << endl;
-	LodLights << "%cj_nylamp2b" << endl;
-	LodLights << "255 221 163 255 -2.1766780 0.12343800 8.0072020 0.80 00 0 0" << endl;
-	LodLights << "255 221 163 255 2.21655300 0.12538500 8.0055760 0.80 00 0 0" << endl;
+	//LodLights << "%bm_nylamp110b" << endl;
+	//LodLights << "255 219 155 255 -1.1508710 -0.0219250 6.95975000 0.80 00 0 0" << endl;
+	//LodLights << "255 219 155 255 1.10668200 -0.0219260 6.95970100 0.80 00 0 0" << endl;
+	//LodLights << "%bm_nylamp1b" << endl;
+	//LodLights << "255 221 163 255 -1.6176590 -0.0347459 7.78166600 0.80 00 0 0" << endl;
+	//LodLights << "255 221 163 255 1.58855900 -0.0347870 7.78166800 0.80 00 0 0" << endl;
+	//LodLights << "%bm_nylamp2b" << endl;
+	//LodLights << "255 221 163 255 -2.5801490 -0.0306550 7.68636900 0.80 00 0 0" << endl;
+	//LodLights << "255 221 163 255 2.56053300 -0.0384880 7.68502200 0.80 00 0 0" << endl;
+	//LodLights << "%cj_nylamp2b" << endl;
+	//LodLights << "255 221 163 255 -2.1766780 0.12343800 8.0072020 0.80 00 0 0" << endl;
+	//LodLights << "255 221 163 255 2.21655300 0.12538500 8.0055760 0.80 00 0 0" << endl;
 
 	LodLights.close();
 	SetCurrentDirectory("..\\");
@@ -587,21 +615,32 @@ int _tmain(int argc, _TCHAR* argv[])
 	Filename = "IIILodLights.dat";
 	if (!GTAData.is_open())
 	{
-		GTAData.open(".\\gta_vc.dat", std::ifstream::in);
-		Filename = "VCLodLights.dat";
+		GTAData.open(".\\gta_lcs.dat", std::ifstream::in);
+		Filename = "LCSLodLights.dat";
 		if (!GTAData.is_open())
 		{
-			Filename = "SALodLights.dat";
-			ConvertDFFTo2DFX();
-			return 0;
+			GTAData.open(".\\gta_vcs.dat", std::ifstream::in);
+			Filename = "VCSLodLights.dat";
+			if (!GTAData.is_open())
+			{
+				GTAData.open(".\\gta_vc.dat", std::ifstream::in);
+				Filename = "VCLodLights.dat";
+				if (!GTAData.is_open())
+				{
+					Filename = "SALodLights.dat";
+					ConvertDFFTo2DFX();
+					return 0;
+				}
+			}
 		}
 	}
 
-	
 	fstream IDEData;
+	fstream IPLData;
 	fstream FX2DData;
 
 	IDEData.open(".\\IDEData.txt", ofstream::trunc | fstream::out);
+	IPLData.open(".\\IPLData.txt", ofstream::trunc | fstream::out);
 	FX2DData.open(".\\2DFXData.txt", ofstream::trunc | fstream::out);
 
 	while (getline(GTAData, line))
@@ -636,16 +675,42 @@ int _tmain(int argc, _TCHAR* argv[])
 					}
 				}
 			}
+			else if (line[0] == 'I' && line[1] == 'P' && line[2] == 'L')
+			{
+				cout << line.c_str() + 9 << endl;
+				string IPLline;
+				ifstream IDEFile(line.c_str() + 9);
+				if (IDEFile.is_open())
+				{
+					while (getline(IDEFile, IPLline))
+					{
+						if (IPLline[0] != '#')
+						{
+							int ID; string ModelName;
+							IPLline.erase(std::remove(IPLline.begin(), IPLline.end(), ','), IPLline.end());
+							if (sscanf(IPLline.c_str(), "%d %s %*s %*d %*s", &ID, &ModelName[0]))
+							{
+								if (IPLline.find("coronastar") == std::string::npos)
+								{
+									IPLData << IPLline << endl;
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
-	GTAData.close();
+	//GTAData.close();
 	IDEData.close();
+	IPLData.close();
 	FX2DData.close();
 
 
 	ofstream LodLights;
 	LodLights.open(Filename, fstream::trunc);
 	IDEData.open("IDEData.txt", std::ifstream::in);
+	IPLData.open("IPLData.txt", std::ifstream::in);
 	FX2DData.open("2DFXData.txt", std::ifstream::in);
 	if (FX2DData.is_open())
 	{
@@ -661,8 +726,8 @@ int _tmain(int argc, _TCHAR* argv[])
 			int ID; float offsetX, offsetY, offsetZ; int R = 0, G = 0, B = 0, A = 255; int BlinkType = 0; int nNoDistance = 0; int nDrawSearchlight = 0; int unk1, type; string Corona, Shadow; float Distance, OuterRange, CoronaSize, InnerRange; int ShadowIntensity, Wet, Flare, Dust;
 			line.erase(std::remove(line.begin(), line.end(), ','), line.end());
 			if (sscanf(line.c_str(), "%d %f %f %f %d %d %d %d %d %s %s %f %f %f %f %d %d %d %d %d",
-			&ID, &offsetX, &offsetY, &offsetZ, &R, &G, &B, &unk1, &type, &Corona[0], &Shadow[0], &Distance, &OuterRange, &CoronaSize, &InnerRange, &ShadowIntensity, &BlinkType, &Wet, &Flare, &Dust))
-			{	
+				&ID, &offsetX, &offsetY, &offsetZ, &R, &G, &B, &unk1, &type, &Corona[0], &Shadow[0], &Distance, &OuterRange, &CoronaSize, &InnerRange, &ShadowIntensity, &BlinkType, &Wet, &Flare, &Dust))
+			{
 				if (BlinkType == 0 || BlinkType == 1 || BlinkType == 12)
 				{
 					BlinkType = BlinkTypes::DEFAULT;
@@ -700,7 +765,7 @@ int _tmain(int argc, _TCHAR* argv[])
 						value *= -1.0f;
 						digits++;
 					}
-					digits += ((value<1) ? 1 : int(1 + log10(float(abs(value)))));
+					digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
 					int precision = (((width - digits - 1) >= 0) ? (width - digits - 1) : 0);
 					return precision;
 				};
@@ -742,7 +807,7 @@ int _tmain(int argc, _TCHAR* argv[])
 						B = 0;
 						TrafficLCount = 0;
 					}
-					
+
 					(offsetX == -0.0f) ? offsetX = 0.0f : offsetX;
 					(offsetY == -0.0f) ? offsetY = 0.0f : offsetY;
 					(offsetZ == -0.0f) ? offsetZ = 0.0f : offsetZ;
@@ -758,8 +823,12 @@ int _tmain(int argc, _TCHAR* argv[])
 						<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetX)) << offsetX << " "
 						<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetY)) << offsetY << " "
 						<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " "
-						<< std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " "
-						<< std::right << std::setfill('0')
+						<< std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " ";
+
+					if (Filename == "VCSLodLights.dat" || Filename == "LCSLodLights.dat")
+						LodLights << std::setw(4) << std::fixed << std::setprecision(2) << Distance << " ";
+
+					LodLights << std::right << std::setfill('0')
 						<< std::setw(2) << BlinkType << " "
 						<< std::left << std::setfill(' ')
 						<< std::setw(1) << nNoDistance << " "
@@ -834,8 +903,12 @@ int _tmain(int argc, _TCHAR* argv[])
 						<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetX)) << offsetX << " "
 						<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetY)) << offsetY << " "
 						<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " "
-						<< std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " "
-						<< std::right << std::setfill('0')
+						<< std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " ";
+
+					if (Filename == "VCSLodLights.dat" || Filename == "LCSLodLights.dat")
+						LodLights << std::setw(4) << std::fixed << std::setprecision(2) << Distance << " ";
+
+					LodLights << std::right << std::setfill('0')
 						<< std::setw(2) << BlinkType << " "
 						<< std::left << std::setfill(' ')
 						<< std::setw(1) << nNoDistance << " "
@@ -896,7 +969,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		LodLights << "255 255 255 255 631.966000 -909.06900 139.155000 1.20 00 1 0" << endl;
 		LodLights << "#place you coronas here" << endl;
 	}
-	else
+	else if (Filename == "VCLodLights.dat")
 	{
 		LodLights << "255 000 255 255 -682.82100 -919.10200 12.5548000 0.70 00 1 0" << endl;
 		LodLights << "255 000 255 255 -662.82100 -920.20200 13.7548000 0.70 00 1 0" << endl;
@@ -942,6 +1015,130 @@ int _tmain(int argc, _TCHAR* argv[])
 		LodLights << "255 000 255 255 -282.82100 -927.90200 15.2548000 0.70 00 1 0" << endl;
 		LodLights << "#place you coronas here" << endl;
 	}
+	else if (Filename == "VCSLodLights.dat" || Filename == "LCSLodLights.dat")
+	{
+		LodLights.close();
+		ifstream LodLights2;
+		LodLights2.open(Filename, std::ifstream::in);
+
+		ofstream AbsLights;
+		AbsLights.open("ADD" + Filename, fstream::trunc);
+
+		while (getline(IPLData, line))
+		{
+			int ModelId; char ModelName[100]; int Interior; float PosX, PosY, PosZ;
+			float RotX, RotY, RotZ, RotW;
+
+			struct RwV3d2
+			{
+				double x;
+				double y;
+				double z;
+			};
+
+			RwV3d2 trans2, scale2, axis2;
+			RwV3d trans, scale, axis;
+			double angle;
+			line.erase(std::remove(line.begin(), line.end(), ','), line.end());
+			if (sscanf(line.c_str(), "%d %s %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf",
+				&ModelId, ModelName, &Interior,
+				&trans2.x, &trans2.y, &trans2.z,
+				&scale2.x, &scale2.y, &scale2.z,
+				&axis2.x, &axis2.y, &axis2.z, &angle) != 13) {
+				sscanf(line.c_str(), "%d %s %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf",
+					&ModelId, ModelName,
+					&trans2.x, &trans2.y, &trans2.z,
+					&scale2.x, &scale2.y, &scale2.z,
+					&axis2.x, &axis2.y, &axis2.z, &angle);
+			}
+
+			trans.x = trans2.x;
+			trans.y = trans2.y;
+			trans.z = trans2.z;
+
+			scale.x = scale2.x;
+			scale.y = scale2.y;
+			scale.z = scale2.z;
+
+			axis.x = axis2.x;
+			axis.y = axis2.y;
+			axis.z = axis2.z;
+
+			{
+				LodLights2.clear();
+				LodLights2.seekg(0, std::ios::beg);
+				string nModel;
+				while (getline(LodLights2, line))
+				{
+					if (line[0] && line[0] != '#')
+					{
+						auto x = 1;
+						if (line[0] == '%')
+						{
+							nModel = line.substr(1);
+						}
+						else
+						{
+							if (nModel != ModelName)
+								continue;
+							float			fOffsetX, fOffsetY, fOffsetZ;
+							unsigned int	nRed, nGreen, nBlue, nAlpha;
+							float			fCustomSize = 1.0f;
+							float			fDistance = 0.0f;
+							int				nNoDistance = 0;
+							int				nDrawSearchlight = 0;
+							int				nCoronaShowMode = 0;
+							sscanf(line.c_str(), "%3d %3d %3d %3d %f %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &fDistance, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight);
+
+							CMatrix dummyMatrix;
+							auto angle2 = -RADTODEG(2.0f * acos(angle));
+							makeRotation(&dummyMatrix, &axis, angle2, &trans);
+
+							auto pos = dummyMatrix * CVector(fOffsetX, fOffsetY, fOffsetZ);
+							auto heading = angle;//atan2(dummyMatrix.GetUp()->y, -dummyMatrix.GetUp()->x);
+
+							auto GetPrecison = [](float value) -> int
+							{
+								int width = 10;
+								int digits = 0;
+
+								if (value < 0.0f)
+								{
+									value *= -1.0f;
+									digits++;
+								}
+								digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
+								int precision = (((width - digits - 1) >= 0) ? (width - digits - 1) : 0);
+								return precision;
+							};
+
+							AbsLights << std::left
+								<< "{ "
+								<< std::setfill(' ')
+								<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(pos.x)) << pos.x << "f, "
+								<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(pos.y)) << pos.y << "f, "
+								<< std::setw(10) << std::fixed << std::setprecision(GetPrecison(pos.z)) << pos.z << "f, "
+								<< std::setfill('0')
+								<< std::setw(4) << std::fixed << std::setprecision(2) << fCustomSize << "f, "
+								<< std::setw(6) << std::fixed << std::setprecision(1) << fDistance << "f, "
+								<< std::setw(4) << std::fixed << (heading < 0.0f ? std::setprecision(2) : std::setprecision(3)) << heading << "f, "
+								<< std::setfill(' ')
+								<< std::right
+								<< std::setw(3) << nRed << ", "
+								<< std::setw(3) << nGreen << ", "
+								<< std::setw(3) << nBlue << ", "
+								<< std::setw(3) << nAlpha << ", "
+								<< std::setw(1) << nCoronaShowMode << ", "
+								<< std::setw(1) << nNoDistance << " /*, "
+								<< "\"" << ModelName << "\"*/"
+								<< std::setw(1) << " },"
+								<< std::endl;
+						}
+					}
+				}
+			}
+		}
+	}
 
 	LodLights.close();
 
@@ -949,4 +1146,3 @@ int _tmain(int argc, _TCHAR* argv[])
 	//cin.ignore();
 	return 0;
 }
-
