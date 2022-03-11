@@ -97,7 +97,7 @@ void CSearchlights::RenderSearchLightsVC()
 				}
 			}
 
-			CLODLightManager::VC::bRenderHeliSearchlights ? RenderHeliSearchLightsVC() : nullptr;
+			if (CLODLightManager::VC::bRenderHeliSearchlights) RenderHeliSearchLightsVC();
 			CLODLightManager::VC::RwRenderStateSetVC(rwRENDERSTATEZWRITEENABLE, (void*)1);
 			CLODLightManager::VC::RwRenderStateSetVC(rwRENDERSTATEZTESTENABLE, (void*)1);
 			CLODLightManager::VC::RwRenderStateSetVC(rwRENDERSTATESRCBLEND, (void*)5);

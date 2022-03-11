@@ -97,7 +97,7 @@ void CSearchlights::RenderSearchLightsIII()
 				}
 			}
 
-			CLODLightManager::III::bRenderHeliSearchlights ? RenderHeliSearchLightsIII() : nullptr;
+			if (CLODLightManager::III::bRenderHeliSearchlights) RenderHeliSearchLightsIII();
 			CLODLightManager::III::RwRenderStateSetIII(rwRENDERSTATEZWRITEENABLE, (void*)1);
 			CLODLightManager::III::RwRenderStateSetIII(rwRENDERSTATEZTESTENABLE, (void*)1);
 			CLODLightManager::III::RwRenderStateSetIII(rwRENDERSTATESRCBLEND, (void*)5);

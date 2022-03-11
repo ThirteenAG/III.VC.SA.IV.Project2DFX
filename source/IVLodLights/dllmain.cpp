@@ -307,8 +307,12 @@ void CLODLightManager::IV::RegisterLamppost(WplInstance* pObj)
     dummyMatrix.matrix.pos.y = pObj->PositionY;
     dummyMatrix.matrix.pos.z = pObj->PositionZ;
 
-    if (GetDistance((RwV3d*)&CVector(pObj->PositionX, pObj->PositionY, pObj->PositionZ), (RwV3d*)&CVector(-278.37f, -1377.48f, 90.98f)) <= 300.0f)
-        return;
+    {
+        auto v1 = CVector(pObj->PositionX, pObj->PositionY, pObj->PositionZ);
+        auto v2 = CVector(-278.37f, -1377.48f, 90.98f);
+        if (GetDistance((RwV3d*)&v1, (RwV3d*)&v2) <= 300.0f)
+            return;
+    }
 
     auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
     for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
