@@ -5,7 +5,7 @@ workspace "III.VC.SA.IV.Project2DFX"
    location "build"
    objdir ("build/obj")
    buildlog ("build/log/%{prj.name}.log")
-   buildoptions {"-std:c++latest"}
+   cppdialect "C++latest"
    
    kind "SharedLib"
    language "C++"

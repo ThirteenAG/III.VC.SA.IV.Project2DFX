@@ -352,7 +352,7 @@ void CLODLightManager::IV::RegisterLODLights()
         else if (nTime < 3 * 60)
             bAlpha = 255;
         else
-            bAlpha = static_cast<unsigned char>(SolveEqSys((float)(7 * 60), 30.0f, (float)(3 * 60), 255.0f, (float)nTime)); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 255}
+            bAlpha = static_cast<unsigned char>(SolveEqSys((float)(8 * 60), 30.0f, (float)(3 * 60), 255.0f, (float)nTime)); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 255}
 
         for (auto it = m_pLampposts->cbegin(); it != m_pLampposts->cend(); it++)
         {
@@ -454,11 +454,20 @@ void CLODLightManager::IV::RegisterLODLights()
     }
 }
 
+extern "C" __declspec(dllexport) void InitializeASI()
+{
+    static std::once_flag flag;
+    std::call_once(flag, []()
+    {
+        CLODLightManager::IV::Init();
+    });
+}
+
 BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 {
     if (reason == DLL_PROCESS_ATTACH)
     {
-        CLODLightManager::IV::Init();
+        if (!IsUALPresent()) { InitializeASI(); }
     }
     return TRUE;
 }

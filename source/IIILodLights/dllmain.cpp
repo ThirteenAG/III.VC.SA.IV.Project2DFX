@@ -566,10 +566,10 @@ void CLODLightManager::III::DrawDistanceChanger()
     fNewFarClip = (fFactor1 / fFactor2) * (GetCamPos()->z) + fMinDrawDistanceOnTheGround;
 }
 
-
-BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
+extern "C" __declspec(dllexport) void InitializeASI()
 {
-    if (reason == DLL_PROCESS_ATTACH)
+    static std::once_flag flag;
+    std::call_once(flag, []()
     {
         if (injector::address_manager::singleton().IsIII())
         {
@@ -578,6 +578,14 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
                 CLODLightManager::III::Init();
             }
         }
+    });
+}
+
+BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
+{
+    if (reason == DLL_PROCESS_ATTACH)
+    {
+        if (!IsUALPresent()) { InitializeASI(); }
     }
     return TRUE;
 }

@@ -9,7 +9,7 @@
 #include <random>
 #include <chrono>
 #include <ctime>
-
+#include <stacktrace>
 
 #pragma warning(disable:4201)
 #pragma warning(disable:4458)
@@ -45,4 +45,22 @@ template<typename T>
 inline T Max(const T& a, const T& b)
 {
     return a > b ? a : b;
+}
+
+inline bool IsModuleUAL(HMODULE mod)
+{
+    if (GetProcAddress(mod, "IsUltimateASILoader") != NULL || (GetProcAddress(mod, "DirectInput8Create") != NULL && GetProcAddress(mod, "DirectSoundCreate8") != NULL && GetProcAddress(mod, "InternetOpenA") != NULL))
+        return true;
+    return false;
+}
+
+inline bool IsUALPresent() {
+    for (const auto& entry : std::stacktrace::current()) {
+        HMODULE hModule = NULL;
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)entry.native_handle(), &hModule)) {
+            if (IsModuleUAL(hModule))
+                return true;
+        }
+    }
+    return false;
 }

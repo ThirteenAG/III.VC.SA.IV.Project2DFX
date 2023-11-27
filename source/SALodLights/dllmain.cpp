@@ -671,10 +671,10 @@ void CLODLightManager::SA::DrawDistanceChanger()
     }
 }
 
-
-BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
+extern "C" __declspec(dllexport) void InitializeASI()
 {
-    if (reason == DLL_PROCESS_ATTACH)
+    static std::once_flag flag;
+    std::call_once(flag, []()
     {
         if (injector::address_manager::singleton().IsSA() && injector::address_manager::singleton().IsUS())
         {
@@ -683,6 +683,14 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
                 CLODLightManager::SA::Init();
             }
         }
+    });
+}
+
+BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
+{
+    if (reason == DLL_PROCESS_ATTACH)
+    {
+        if (!IsUALPresent()) { InitializeASI(); }
     }
     return TRUE;
 }
