@@ -25,6 +25,14 @@ jobs:
       shell: cmd
       run: msbuild -m build/III.VC.SA.IV.Project2DFX.sln /property:Configuration=Release /property:Platform=Win32
 
+    - name: Download Open Limit Adjuster
+      uses: robinraju/release-downloader@main
+      with:
+        repository: "GTAmodding/III.VC.SA.LimitAdjuster"
+        latest: true
+        extract: true
+        out-file-path: "data"
+
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
@@ -34,6 +42,7 @@ jobs:
           data\*
           !data\*.exe
           !data\*.bat
+          !data\*.zip
           !data\2DFXDataGrabber\
           !data\IIILodLights\*.exp
           !data\IIILodLights\*.lib
