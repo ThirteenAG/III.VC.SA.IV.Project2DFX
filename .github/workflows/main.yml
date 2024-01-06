@@ -1,0 +1,26 @@
+name: MSBuild
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v1
+      
+    - name: Configure build
+      shell: cmd
+      run: ./premake5.bat
+      
+    - name: Build
+      shell: cmd
+      run: msbuild -m build/III.VC.SA.IV.Project2DFX.sln /property:Configuration=Release /property:Platform=Win32
