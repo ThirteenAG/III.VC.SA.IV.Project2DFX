@@ -24,3 +24,10 @@ jobs:
     - name: Build
       shell: cmd
       run: msbuild -m build/III.VC.SA.IV.Project2DFX.sln /property:Configuration=Release /property:Platform=Win32
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: III.VC.SA.IV.Project2DFX
+        path: |
+          data/*
