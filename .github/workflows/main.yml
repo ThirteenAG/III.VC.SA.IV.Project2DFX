@@ -28,6 +28,21 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
+        compression-level: 9
         name: III.VC.SA.IV.Project2DFX
         path: |
-          data/*
+          data\*
+          !data\*.exe
+          !data\*.bat
+          !data\IIILodLights\*.exp
+          !data\IIILodLights\*.lib
+          !data\IIILodLights\*.pdb
+          !data\IVLodLights\*.exp
+          !data\IVLodLights\*.lib
+          !data\IVLodLights\*.pdb
+          !data\SALodLights\*.exp
+          !data\SALodLights\*.lib
+          !data\SALodLights\*.pdb
+          !data\VCLodLights\*.exp
+          !data\VCLodLights\*.lib
+          !data\VCLodLights\*.pdb
