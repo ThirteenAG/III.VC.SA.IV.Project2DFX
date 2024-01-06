@@ -44,15 +44,6 @@ jobs:
           !data\*.bat
           !data\*.zip
           !data\2DFXDataGrabber\
-          !data\IIILodLights\*.exp
-          !data\IIILodLights\*.lib
-          !data\IIILodLights\*.pdb
-          !data\IVLodLights\*.exp
-          !data\IVLodLights\*.lib
-          !data\IVLodLights\*.pdb
-          !data\SALodLights\*.exp
-          !data\SALodLights\*.lib
-          !data\SALodLights\*.pdb
-          !data\VCLodLights\*.exp
-          !data\VCLodLights\*.lib
-          !data\VCLodLights\*.pdb
+          !data\*\*.exp
+          !data\*\*.lib
+          !data\*\*.pdb
