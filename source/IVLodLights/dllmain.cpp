@@ -236,7 +236,7 @@ void CLODLightManager::IV::IncreaseCoronaLimit()
     }
 
     if (counter1 != 24 || counter2 != 18)
-        MessageBox(0, "IV.Project2DFX", "Project2DFX is not fully compatible with this version of the game", 0);
+        MessageBox(0, L"IV.Project2DFX", L"Project2DFX is not fully compatible with this version of the game", 0);
 
     auto p = hook::pattern("BF FF 02 00 00"); //+
     AdjustPointer(p.get_first(-4), &aCoronas[0], dword_temp, dword_temp + 0x3C);

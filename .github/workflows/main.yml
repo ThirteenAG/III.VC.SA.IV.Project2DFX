@@ -1,49 +1,198 @@
-name: Build
+name: GitHub Actions Build
 
 on:
   push:
+    paths-ignore:
+      - "**/*.md"
+      - '**/*.txt'
+    branches:
+      - '**'
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - '**/*.txt'
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Create a release"
+        type: choice
+        required: false
+        default: 'none'
+        options:
+          - 'none'
+          - 'gta3'
+          - 'gtavc'
+          - 'gtasa'
+          - 'gtaiv'
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
-    - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v1
-      
-    - name: Configure build
-      shell: cmd
-      run: ./premake5.bat
-      
-    - name: Build
-      shell: cmd
-      run: msbuild -m build/III.VC.SA.IV.Project2DFX.sln /property:Configuration=Release /property:Platform=Win32
+    - name: Add msbuild to PATH
+      uses: microsoft/setup-msbuild@main
 
-    - name: Download Open Limit Adjuster
+    - name: Configure build
+      run: ./premake5 vs2022 --with-version=5.0
+
+    - name: Build
+      run: |
+        msbuild -m build/III.VC.SA.IV.Project2DFX.sln /property:Configuration=Release /property:Platform=Win32
+
+    - name: Download III.VC.SA.LimitAdjuster
       uses: robinraju/release-downloader@main
       with:
         repository: "GTAmodding/III.VC.SA.LimitAdjuster"
         latest: true
-        extract: true
-        out-file-path: "data"
 
-    - name: Upload artifact
+    - name: Unpack dependencies
+      run: |
+          7z x III.VC.SA.LimitAdjuster.zip -odata/IIILodLights/ -y
+          7z x III.VC.SA.LimitAdjuster.zip -odata/VCLodLights/ -y
+          7z x III.VC.SA.LimitAdjuster.zip -odata/SALodLights/ -y
+          del III.VC.SA.LimitAdjuster.zip
+
+    - name: Pack binaries
+      shell: cmd
+      run: |
+        cd data
+        ./release.bat
+        cd ..
+
+    - name: Upload IIILodLights artifact
       uses: actions/upload-artifact@v4
       with:
-        compression-level: 9
-        name: III.VC.SA.IV.Project2DFX
+        name: III.Project2DFX
         path: |
-          data\*
-          !data\*.exe
-          !data\*.bat
-          !data\*.zip
-          !data\2DFXDataGrabber\
-          !data\*\*.exp
-          !data\*\*.lib
-          !data\*\*.pdb
+          data/IIILodLights/*
+          !**/*.pdb
+          !**/*.db
+          !**/*.ipdb
+          !**/*.iobj
+          !**/*.lib
+          !**/*.exp
+          !**/.gitkeep
+
+    - name: Upload VCLodLights artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: VC.Project2DFX
+        path: |
+          data/VCLodLights/*
+          !**/*.pdb
+          !**/*.db
+          !**/*.ipdb
+          !**/*.iobj
+          !**/*.lib
+          !**/*.exp
+          !**/.gitkeep
+
+    - name: Upload SALodLights artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SA.Project2DFX
+        path: |
+          data/SALodLights/*
+          !**/*.pdb
+          !**/*.db
+          !**/*.ipdb
+          !**/*.iobj
+          !**/*.lib
+          !**/*.exp
+          !**/.gitkeep
+
+    - name: Upload IVLodLights artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: IV.Project2DFX
+        path: |
+          data/IVLodLights/*
+          !**/*.pdb
+          !**/*.db
+          !**/*.ipdb
+          !**/*.iobj
+          !**/*.lib
+          !**/*.exp
+          !**/.gitkeep
+
+    - name: Get release info
+      if: github.event.inputs.release != '' && github.event.inputs.release != 'none'
+      id: release_info
+      uses: cardinalby/git-get-release-action@1.2.4
+      env:
+       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag: ${{ github.event.inputs.release }}
+
+    - name: Upload Release III
+      if: |
+        github.event.inputs.release == 'gta3' &&
+        github.ref_name == 'master' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
+      uses: ncipollo/release-action@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        allowUpdates: true
+        name: ${{ steps.release_info.outputs.name }}
+        body: ${{ steps.release_info.outputs.body }}
+        tag: ${{ steps.release_info.outputs.tag_name }}
+        artifacts: data/III.Project2DFX.zip
+
+    - name: Upload Release VC
+      if: |
+        github.event.inputs.release == 'gtavc' &&
+        github.ref_name == 'master' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
+      uses: ncipollo/release-action@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        allowUpdates: true
+        name: ${{ steps.release_info.outputs.name }}
+        body: ${{ steps.release_info.outputs.body }}
+        tag: ${{ steps.release_info.outputs.tag_name }}
+        artifacts: data/VC.Project2DFX.zip
+
+    - name: Upload Release SA
+      if: |
+        github.event.inputs.release == 'gtasa' &&
+        github.ref_name == 'master' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
+      uses: ncipollo/release-action@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        allowUpdates: true
+        name: ${{ steps.release_info.outputs.name }}
+        body: ${{ steps.release_info.outputs.body }}
+        tag: ${{ steps.release_info.outputs.tag_name }}
+        artifacts: data/SA.Project2DFX.zip
+
+    - name: Upload Release IV
+      if: |
+        github.event.inputs.release == 'gtaiv' &&
+        github.ref_name == 'master' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
+      uses: ncipollo/release-action@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        allowUpdates: true
+        name: ${{ steps.release_info.outputs.name }}
+        body: ${{ steps.release_info.outputs.body }}
+        tag: ${{ steps.release_info.outputs.tag_name }}
+        artifacts: data/IV.Project2DFX.zip
