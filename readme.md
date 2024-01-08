@@ -21,7 +21,7 @@ Project2DFX is a set of plugins for GTA III, Vice City, San Andreas, GTA IV: The
 
 ## Grand Theft Auto Liberty City Stories [PPSSPP] - [Download Link](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/tag/gtalcs)
 
-![Grand Theft Auto Liberty City Stories Project2DFX](https://user-images.githubusercontent.com/4904157/157916939-3675934d-278d-410a-94be-ca256c7989f3.png)
+![Grand Theft Auto Liberty City Stories Project2DFX](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/assets/4904157/56214234-5a21-4274-bc56-77b4fb94e346)
 
 ## Grand Theft Auto San Andreas - [Download Link](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/tag/gtasa)
 
