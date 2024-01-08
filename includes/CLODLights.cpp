@@ -253,7 +253,7 @@ void CLODLights::RenderBuffered()
 
 							if (CSprite::CalcScreenCoors(vecCoronaCoordsAfterPull, &vecTransformedCoords, &fComputedWidth, &fComputedHeight, true, true))
 							{
-								CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect(vecTransformedCoords.x, vecTransformedCoords.y, vecTransformedCoords.z, aCoronas[i].Size * fComputedWidth, aCoronas[i].Size * fComputedHeight * fColourFogMult, aCoronas[i].Red / fColourFogMult, aCoronas[i].Green / fColourFogMult, aCoronas[i].Blue / fColourFogMult, nFadeIntensity, fInvFarClip * 20.0f, 0.0, 0xFF);
+								CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect(vecTransformedCoords.x, vecTransformedCoords.y, vecTransformedCoords.z, aCoronas[i].Size * fComputedHeight, aCoronas[i].Size * fComputedHeight * fColourFogMult, aCoronas[i].Red / fColourFogMult, aCoronas[i].Green / fColourFogMult, aCoronas[i].Blue / fColourFogMult, nFadeIntensity, fInvFarClip * 20.0f, 0.0, 0xFF);
 							}
 						}
 					}
