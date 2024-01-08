@@ -1,8 +1,8 @@
-7za a -tzip ".\2DFXDataGrabber.zip" ".\2DFXDataGrabber\*"   -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
-7za a -tzip ".\III.Project2DFX.zip" ".\IIILodLights\*"      -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
-7za a -tzip ".\VC.Project2DFX.zip"  ".\VCLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
-7za a -tzip ".\SA.Project2DFX.zip"  ".\SALodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
-7za a -tzip ".\IV.Project2DFX.zip"  ".\IVLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj
+7za a -tzip ".\2DFXDataGrabber.zip" ".\2DFXDataGrabber\*"   -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
+7za a -tzip ".\III.Project2DFX.zip" ".\IIILodLights\*"      -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
+7za a -tzip ".\VC.Project2DFX.zip"  ".\VCLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
+7za a -tzip ".\SA.Project2DFX.zip"  ".\SALodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
+7za a -tzip ".\IV.Project2DFX.zip"  ".\IVLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
 EXIT
 
 7-Zip Extra
