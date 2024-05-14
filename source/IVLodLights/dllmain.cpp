@@ -89,8 +89,8 @@ void CLODLightManager::IV::Init()
 
     if (DisableDefaultLodLights)
     {
-        auto pattern = hook::pattern("56 68 ? ? ? ? E8 ? ? ? ? 68 ? ? ? ? 68 ? ? ? ? E8 ? ? ? ? 8B F0 83 C4 0C 85 F6 0F 84");
-        injector::MakeRET(pattern.get(0).get<uintptr_t>(0));
+        auto pattern = hook::pattern("83 F8 08 0F 8C ? ? ? ? 83 3D");
+        injector::WriteMemory<uint8_t>(pattern.get_first(2), 0, true);
     }
 
     auto pattern = hook::pattern("E8 ? ? ? ? 83 C4 08 80 3D ? ? ? ? ? 74 32 6A 00 6A 0C");
