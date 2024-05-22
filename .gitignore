@@ -8,6 +8,7 @@ data/**/*.zip
 data/**/*.exe
 data/**/*.exp
 data/**/*.lib
+data/2DFXDataGrabber/iv_data
 !data/**/SA2dfx.exe
 !data/7za.exe
 

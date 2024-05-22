@@ -2,6 +2,16 @@
 7za a -tzip ".\III.Project2DFX.zip" ".\IIILodLights\*"      -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
 7za a -tzip ".\VC.Project2DFX.zip"  ".\VCLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
 7za a -tzip ".\SA.Project2DFX.zip"  ".\SALodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
+
+7za x -p1 2DFXDataGrabber\iv_data.7z -o2DFXDataGrabber -y
+copy /b/v/y "2DFXDataGrabber\2DFXDataGrabber.exe" "2DFXDataGrabber\iv_data\2DFXDataGrabber.exe"
+cd 2DFXDataGrabber
+cd iv_data
+2DFXDataGrabber.exe
+cd ..
+cd ..
+copy /b/v/y "2DFXDataGrabber\iv_data\IVLodLights.dat" "IVLodLights\IVLodLights.dat"
+
 7za a -tzip ".\IV.Project2DFX.zip"  ".\IVLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
 EXIT
 
