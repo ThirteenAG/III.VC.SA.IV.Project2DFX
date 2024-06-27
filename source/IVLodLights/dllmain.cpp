@@ -15,7 +15,8 @@ void(__stdcall *CLODLightManager::IV::GetRootCam)(int *camera);
 void(__stdcall *CLODLightManager::IV::GetGameCam)(int *camera);
 bool(__cdecl *CLODLightManager::IV::CamIsSphereVisible)(int camera, float pX, float pY, float pZ, float radius);
 void(__cdecl *CLODLightManager::IV::GetCamPos)(int camera, float *pX, float *pY, float *pZ);
-int& CTimer::m_snTimeInMillisecondsPauseMode = *(int*)0xBADDEAD;
+int* CTimer::m_snTimeInMillisecondsPauseMode = nullptr;
+float* CTimer::ms_fTimeStep = nullptr;
 float fCamHeight;
 std::map<unsigned int, CRGBA> FestiveLights;
 extern bool bIsIVEFLC;
@@ -152,6 +153,9 @@ void CLODLightManager::IV::GetMemoryAddresses()
     CLODLightManager::IV::CamIsSphereVisible = (bool(__cdecl *)(int camera, float pX, float pY, float pZ, float radius))(pattern.get(0).get<uintptr_t>(0));
     pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 8D 04 24 50 FF 75 08"); //+
     CLODLightManager::IV::GetCamPos = (void(__cdecl *)(int camera, float *pX, float *pY, float *pZ))(pattern.get(0).get<uintptr_t>(0));
+
+    //CTimer::m_snTimeInMillisecondsPauseMode
+    //CTimer::ms_fTimeStep
 }
 
 void CLODLightManager::IV::IncreaseCoronaLimit()

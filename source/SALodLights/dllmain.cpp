@@ -6,8 +6,8 @@
 int numCoronas;
 CCamera& TheCamera = *(CCamera*)0xB6F028;
 RwCamera*& Camera = *(RwCamera**)0xC1703C;
-int& CTimer::m_snTimeInMillisecondsPauseMode = *(int*)0xB7CB7C;
-float& CTimer::ms_fTimeStep = *(float*)0xB7CB5C;
+int* CTimer::m_snTimeInMillisecondsPauseMode = (int*)0xB7CB7C;
+float* CTimer::ms_fTimeStep = (float*)0xB7CB5C;
 
 char* CLODLightManager::SA::CurrentTimeHours = (char*)0xB70153;
 char* CLODLightManager::SA::CurrentTimeMinutes = (char*)0xB70152;
@@ -577,9 +577,9 @@ void CLODLightManager::SA::RegisterLODLights()
                         {
                             static float blinking;
                             if (IsBlinkingNeeded(it->nCoronaShowMode))
-                                blinking -= CTimer::ms_fTimeStep / 1000.0f;
+                                blinking -= *CTimer::ms_fTimeStep / 1000.0f;
                             else
-                                blinking += CTimer::ms_fTimeStep / 1000.0f;
+                                blinking += *CTimer::ms_fTimeStep / 1000.0f;
 
                             (blinking > 1.0f) ? blinking = 1.0f : (blinking < 0.0f) ? blinking = 0.0f : 0.0f;
 

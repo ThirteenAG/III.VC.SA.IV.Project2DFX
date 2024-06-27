@@ -7,8 +7,8 @@ int numCoronas;
 std::vector<CEntityIII> VecEntities;
 std::vector<int> ExplosionTypes = { 0,2,6,7,8,9 }; //1,3,4,5 - barrel crash
 RwCamera*& Camera = *(RwCamera**)0x72676C;
-int& CTimer::m_snTimeInMillisecondsPauseMode = *(int*)0x885B48;
-float& CTimer::ms_fTimeStep = *(float*)0x8E2CB4;
+int* CTimer::m_snTimeInMillisecondsPauseMode = (int*)0x885B48;
+float* CTimer::ms_fTimeStep = (float*)0x8E2CB4;
 
 char* CLODLightManager::III::CurrentTimeHours = (char*)0x95CDA6;
 char* CLODLightManager::III::CurrentTimeMinutes = (char*)0x95CDC8;
@@ -489,9 +489,9 @@ void CLODLightManager::III::RegisterLODLights()
                         {
                             static float blinking;
                             if (IsBlinkingNeeded(it->nCoronaShowMode))
-                                blinking -= CTimer::ms_fTimeStep / 1000.0f;
+                                blinking -= *CTimer::ms_fTimeStep / 1000.0f;
                             else
-                                blinking += CTimer::ms_fTimeStep / 1000.0f;
+                                blinking += *CTimer::ms_fTimeStep / 1000.0f;
 
                             (blinking > 1.0f) ? blinking = 1.0f : (blinking < 0.0f) ? blinking = 0.0f : 0.0f;
 

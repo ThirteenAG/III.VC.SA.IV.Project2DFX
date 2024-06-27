@@ -134,6 +134,6 @@ bool CLODLightManager::IsBlinkingNeeded(int BlinkType)
 		return false;
 	}
 
-	return CTimer::m_snTimeInMillisecondsPauseMode % (nOnDuration + nOffDuration) < nOnDuration;
+	return *CTimer::m_snTimeInMillisecondsPauseMode % (nOnDuration + nOffDuration) < nOnDuration;
 }
 
