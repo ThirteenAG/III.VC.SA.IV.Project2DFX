@@ -62,7 +62,7 @@ void CSearchlights::RenderSearchLightsVC()
 			CLODLightManager::VC::RwRenderStateSetVC(rwRENDERSTATEALPHATESTFUNCTION, (void*)7);
 			CLODLightManager::VC::RwRenderStateSetVC(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)0);
 
-			for (auto it = CLODLightManager::VC::m_pLampposts->cbegin(); it != CLODLightManager::VC::m_pLampposts->cend(); ++it)
+			for (auto it = CLODLightManager::VC::m_Lampposts.cbegin(); it != CLODLightManager::VC::m_Lampposts.cend(); ++it)
 			{
 				if (it->nDrawSearchlight)
 				{

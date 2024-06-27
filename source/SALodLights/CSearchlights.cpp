@@ -11,7 +11,7 @@ void CSearchlights::RenderSearchLightsSA()
 			static auto SetRenderStatesForSpotLights = (void(__cdecl *)()) 0x6C4650;
 			SetRenderStatesForSpotLights();
 
-			for (auto it = CLODLightManager::SA::m_pLampposts->cbegin(); it != CLODLightManager::SA::m_pLampposts->cend(); ++it)
+			for (auto it = CLODLightManager::SA::m_Lampposts.cbegin(); it != CLODLightManager::SA::m_Lampposts.cend(); ++it)
 			{
 				if (it->nDrawSearchlight)
 				{

@@ -1,10 +1,11 @@
 #include "..\includes\stdafx.h"
 #include "CLODLightManager.h"
 
-std::vector<CLamppostInfo>					Lampposts;
 std::map<unsigned int, CLamppostInfo>		FileContent;
-std::vector<CLamppostInfo>*					CLODLightManager::m_pLampposts = &Lampposts;
+std::multimap<unsigned int, CLamppostInfo>  FileContentMMap;
+std::vector<CLamppostInfo>                  CLODLightManager::m_Lampposts;
 std::map<unsigned int, CLamppostInfo>*		CLODLightManager::pFileContent = &FileContent;
+std::multimap<unsigned int, CLamppostInfo>* CLODLightManager::pFileContentMMap = &FileContentMMap;
 bool							            CLODLightManager::m_bCatchLamppostsNow;
 bool										bIsIVEFLC = false;
 
@@ -49,6 +50,7 @@ void CLODLightManager::LoadDatFile()
 	if (FILE* hFile = CFileMgr::OpenFile(DataFilePath.string().c_str(), "r"))
 	{
 		unsigned short	nModel = 0xFFFF, nCurIndexForModel = 0;
+		unsigned int	nModelIV = 0xFFFFFFFF;
 
 		while (const char* pLine = CFileMgr::LoadLine(hFile))
 		{
@@ -60,12 +62,15 @@ void CLODLightManager::LoadDatFile()
 					if (strcmp(pLine, "%additional_coronas") != 0)
 					{
 						if (bIsIVEFLC)
-							nModel = CLODLightManager::IV::GetHashKey((char *)(pLine + 1), 0);
+							nModelIV = CLODLightManager::IV::GetHashKey((char *)(pLine + 1), 0);
 						else
 							nModel = GetModelInfoUInt16(pLine + 1);
 					}
 					else
+					{
 						nModel = 65534;
+						nModelIV = 0xFFFFFFFF;
+					}
 				}
 				else
 				{
@@ -78,7 +83,10 @@ void CLODLightManager::LoadDatFile()
 					int				nCoronaShowMode = 0;
 					if (sscanf(pLine, "%3d %3d %3d %3d %f %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &fDrawDistance, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight) != 12)
 						sscanf(pLine, "%3d %3d %3d %3d %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight);
-					pFileContent->insert(std::make_pair(PackKey(nModel, nCurIndexForModel++), CLamppostInfo(CVector(fOffsetX, fOffsetY, fOffsetZ), CRGBA(static_cast<unsigned char>(nRed), static_cast<unsigned char>(nGreen), static_cast<unsigned char>(nBlue), static_cast<unsigned char>(nAlpha)), fCustomSize, nCoronaShowMode, nNoDistance, nDrawSearchlight, 0.0f, fDrawDistance)));
+					if (bIsIVEFLC)
+						pFileContentMMap->insert(std::make_pair(nModelIV, CLamppostInfo(CVector(fOffsetX, fOffsetY, fOffsetZ), CRGBA(static_cast<unsigned char>(nRed), static_cast<unsigned char>(nGreen), static_cast<unsigned char>(nBlue), static_cast<unsigned char>(nAlpha)), fCustomSize, nCoronaShowMode, nNoDistance, nDrawSearchlight, 0.0f, fDrawDistance)));
+					else
+						pFileContent->insert(std::make_pair(PackKey(nModel, nCurIndexForModel++), CLamppostInfo(CVector(fOffsetX, fOffsetY, fOffsetZ), CRGBA(static_cast<unsigned char>(nRed), static_cast<unsigned char>(nGreen), static_cast<unsigned char>(nBlue), static_cast<unsigned char>(nAlpha)), fCustomSize, nCoronaShowMode, nNoDistance, nDrawSearchlight, 0.0f, fDrawDistance)));
 				}
 			}
 		}

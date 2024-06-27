@@ -62,7 +62,7 @@ void CSearchlights::RenderSearchLightsIII()
 			CLODLightManager::III::RwRenderStateSetIII(rwRENDERSTATEALPHATESTFUNCTION, (void*)7);
 			CLODLightManager::III::RwRenderStateSetIII(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)0);
 	
-			for (auto it = CLODLightManager::III::m_pLampposts->cbegin(); it != CLODLightManager::III::m_pLampposts->cend(); ++it)
+			for (auto it = CLODLightManager::III::m_Lampposts.cbegin(); it != CLODLightManager::III::m_Lampposts.cend(); ++it)
 			{
 				if (it->nDrawSearchlight)
 				{

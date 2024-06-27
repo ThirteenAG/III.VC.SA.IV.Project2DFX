@@ -294,7 +294,7 @@ void CLODLightManager::VC::ApplyMemoryPatches()
 
                 RegisterCustomCoronas();
                 m_bCatchLamppostsNow = false;
-                m_pLampposts->shrink_to_fit();
+                m_Lampposts.shrink_to_fit();
                 VecEntities.clear();
                 pFileContent->clear();
 
@@ -464,14 +464,14 @@ void CLODLightManager::VC::RegisterCustomCoronas()
 
     auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
     for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
-        m_pLampposts->push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
+        m_Lampposts.push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
 }
 
 void CLODLightManager::VC::RegisterLamppost(CEntityVC* entity)
 {
     auto    itEnd = pFileContent->upper_bound(PackKey(entity->m_nModelIndex, 0xFFFF));
     for (auto it = pFileContent->lower_bound(PackKey(entity->m_nModelIndex, 0)); it != itEnd; it++)
-        m_pLampposts->push_back(CLamppostInfo(entity->matrix * it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, atan2(entity->matrix.GetUp()->y, -entity->matrix.GetUp()->x)));
+        m_Lampposts.push_back(CLamppostInfo(entity->matrix * it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, atan2(entity->matrix.GetUp()->y, -entity->matrix.GetUp()->x)));
 }
 
 void CLODLightManager::VC::RegisterLODLights()
@@ -491,7 +491,7 @@ void CLODLightManager::VC::RegisterLODLights()
         else
             bAlpha = static_cast<unsigned char>((-15.0f / 16.0f)*nTime + 424.0f); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 255}
 
-        for (auto it = m_pLampposts->cbegin(); it != m_pLampposts->cend(); it++)
+        for (auto it = m_Lampposts.cbegin(); it != m_Lampposts.cend(); it++)
         {
             if ((it->vecPos.z >= -15.0f) && (it->vecPos.z <= 1030.0f))
             {

@@ -49,8 +49,9 @@ struct WplInstance
 class CLODLightManager
 {
 public:
-	static std::vector<CLamppostInfo>*					m_pLampposts;
+	static std::vector<CLamppostInfo>					m_Lampposts;
 	static std::map<unsigned int, CLamppostInfo>*		pFileContent;
+	static std::multimap<unsigned int, CLamppostInfo>*	pFileContentMMap;
 	static bool							                m_bCatchLamppostsNow;
 
 public:

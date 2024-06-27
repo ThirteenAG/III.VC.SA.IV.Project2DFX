@@ -9,10 +9,10 @@ RwCamera*& Camera = *(RwCamera**)0xC1703C;
 int* CTimer::m_snTimeInMillisecondsPauseMode = (int*)0xB7CB7C;
 float* CTimer::ms_fTimeStep = (float*)0xB7CB5C;
 
-char* CLODLightManager::SA::CurrentTimeHours = (char*)0xB70153;
-char* CLODLightManager::SA::CurrentTimeMinutes = (char*)0xB70152;
-float** CLODLightManager::SA::fCurrentFarClip = (float**)0x53EA95;
-int* CLODLightManager::SA::ActiveInterior = (int*)0xB72914;
+char* CLODLightManager::CurrentTimeHours = (char*)0xB70153;
+char* CLODLightManager::CurrentTimeMinutes = (char*)0xB70152;
+float** CLODLightManager::fCurrentFarClip = (float**)0x53EA95;
+int* CLODLightManager::ActiveInterior = (int*)0xB72914;
 char(__cdecl *CLODLightManager::SA::GetIsTimeInRange)(char hourA, char hourB) = (char(__cdecl *)(char, char)) 0x52CEE0;
 int* (__cdecl *CLODLightManager::SA::GetModelInfo)(const char*, int*) = (int*(__cdecl *)(const char*, int*)) 0x4C5940;
 void(__cdecl *const CLODLightManager::SA::CShadowsUpdateStaticShadows)() = (decltype(CShadowsUpdateStaticShadows))0x707F40;
@@ -30,7 +30,7 @@ C2dfx *(__fastcall *CLODLightManager::SA::Get2dfx)(CBaseModelInfo *model, int ed
 void(__cdecl *CLODLightManager::SA::drawSpotLight)(int coronaIndex, float StartX, float StartY, float StartZ, float EndX, float EndY, float EndZ, float TargetRadius, float intensity, char flag1, char drawShadow, RwV3D *pVec1, RwV3D *pVec2, RwV3D *pVec3, char unkTrue, float BaseRadius) = (void(cdecl *)(int, float, float, float, float, float, float, float, float, char, char, RwV3D *, RwV3D *, RwV3D *, char, float)) 0x6C58E0;
 bool(__thiscall *CLODLightManager::SA::CObjectIsDamaged)(CObject *pclObject) = (bool(__thiscall *)(CObject *))0x0046A2F0;
 
-RwTexture* CLODLightManager::SA::gpCustomCoronaTexture = nullptr;
+RwTexture* CLODLightManager::gpCustomCoronaTexture = nullptr;
 RwImage*(__cdecl *const RtPNGImageReadSA)(const char* imageName) = (decltype(RtPNGImageReadSA))0x7CF9B0;
 RwImage*(__cdecl *const RwImageFindRasterFormatSA)(RwImage* ipImage, int nRasterType, int* npWidth, int* npHeight, int* npDepth, int* npFormat) = (decltype(RwImageFindRasterFormatSA))0x8042C0;
 RwRaster*(__cdecl *const RwRasterCreateSA)(int width, int height, int depth, int flags) = (decltype(RwRasterCreateSA))0x7FB230;
@@ -178,7 +178,7 @@ void CLODLightManager::SA::ApplyMemoryPatches()
                 injector::cstd<void(const char *a1, const char *a2)>::call(0x53DED0, (char*)0x869B30, (char*)0x863A80);
                 CLODLightManager::SA::RegisterCustomCoronas();
                 m_bCatchLamppostsNow = false;
-                m_pLampposts->shrink_to_fit();
+                m_Lampposts.shrink_to_fit();
                 pFileContent->clear();
             }
         }; injector::MakeInline<asmEnd>(0x53BCBC);
@@ -503,7 +503,7 @@ void CLODLightManager::SA::RegisterCustomCoronas()
 
     auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
     for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
-        m_pLampposts->push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
+        m_Lampposts.push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
 }
 
 CEntity * CLODLightManager::SA::PossiblyAddThisEntity(CEntity * pEntity)
@@ -529,7 +529,7 @@ void CLODLightManager::SA::RegisterLamppost(CEntity * pObj)
 
     auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
     for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
-        m_pLampposts->push_back(CLamppostInfo(dummyMatrix * it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, pObj->GetTransform().m_heading));
+        m_Lampposts.push_back(CLamppostInfo(dummyMatrix * it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, pObj->GetTransform().m_heading));
 }
 
 void CLODLightManager::SA::RegisterLODLights()
@@ -549,7 +549,7 @@ void CLODLightManager::SA::RegisterLODLights()
         else
             bAlpha = static_cast<unsigned char>((-15.0f / 16.0f)*nTime + 424.0f); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 150}
 
-        for (auto it = m_pLampposts->cbegin(); it != m_pLampposts->cend(); it++)
+        for (auto it = m_Lampposts.cbegin(); it != m_Lampposts.cend(); it++)
         {
             if ((it->vecPos.z >= -15.0f) && (it->vecPos.z <= 1030.0f))
             {

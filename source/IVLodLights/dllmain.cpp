@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "CLODLightManager.h"
 #include "Hooking.Patterns.h"
+#include <ranges>
 
 using namespace injector;
 
@@ -47,7 +48,7 @@ void CLODLightManager::IV::Init()
     int32_t DisableCoronasWaterReflection = iniReader.ReadInteger("LodLights", "DisableCoronasWaterReflection", 0);
     fGenericObjectsDrawDistance = iniReader.ReadFloat("IDETweaker", "LamppostsDrawDistance", 0.0f);
     bFestiveLights = iniReader.ReadInteger("Misc", "FestiveLights", 1) != 0;
-    bFestiveLightsAlways = iniReader.ReadInteger("Misc", "bFestiveLightsAlways", 0) != 0;
+    bFestiveLightsAlways = iniReader.ReadInteger("Misc", "FestiveLightsAlways", 0) != 0;
 
     struct LoadObjectInstanceHook
     {
@@ -119,20 +120,20 @@ void CLODLightManager::IV::Init()
         }
     }
 
-    //if (bFestiveLights)
-    //{
-    //    auto now = std::chrono::system_clock::now();
-    //    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    //    struct tm *date = std::localtime(&now_c);
-    //    if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
-    //    {
-    //        DrawCorona3 = &CCoronasRegisterFestiveCoronaForEntity;
-    //        pattern = hook::pattern("6A 00 51 E8 ? ? ? ? 83 C4 3C E9");
-    //        injector::MakeCALL(pattern.get_first(3), CCoronasRegisterFestiveCoronaForEntity, true);
-    //        pattern = hook::pattern("51 52 E8 ? ? ? ? 83 C4 3C EB 03");
-    //        injector::MakeCALL(pattern.get_first(2), CCoronasRegisterFestiveCoronaForEntity, true);
-    //    }
-    //}
+    if (bFestiveLights)
+    {
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        struct tm *date = std::localtime(&now_c);
+        if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
+        {
+            DrawCorona3 = &CCoronasRegisterFestiveCoronaForEntity;
+            pattern = hook::pattern("6A 00 51 E8 ? ? ? ? 83 C4 3C E9");
+            injector::MakeCALL(pattern.get_first(3), CCoronasRegisterFestiveCoronaForEntity, true);
+            pattern = hook::pattern("51 52 E8 ? ? ? ? 83 C4 3C EB 03");
+            injector::MakeCALL(pattern.get_first(2), CCoronasRegisterFestiveCoronaForEntity, true);
+        }
+    }
 }
 
 void CLODLightManager::IV::GetMemoryAddresses()
@@ -153,9 +154,10 @@ void CLODLightManager::IV::GetMemoryAddresses()
     CLODLightManager::IV::CamIsSphereVisible = (bool(__cdecl *)(int camera, float pX, float pY, float pZ, float radius))(pattern.get(0).get<uintptr_t>(0));
     pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 8D 04 24 50 FF 75 08"); //+
     CLODLightManager::IV::GetCamPos = (void(__cdecl *)(int camera, float *pX, float *pY, float *pZ))(pattern.get(0).get<uintptr_t>(0));
-
-    //CTimer::m_snTimeInMillisecondsPauseMode
-    //CTimer::ms_fTimeStep
+    pattern = hook::pattern("F3 0F 10 05 ? ? ? ? F3 0F 59 05 ? ? ? ? 8B 43 20 53");
+    CTimer::ms_fTimeStep = *pattern.get_first<float*>(4);
+    pattern = hook::pattern("A1 ? ? ? ? A3 ? ? ? ? EB 3A");
+    CTimer::m_snTimeInMillisecondsPauseMode = *pattern.get_first<int32_t*>(1); //m_snTimeInMilliseconds
 }
 
 void CLODLightManager::IV::IncreaseCoronaLimit()
@@ -264,16 +266,21 @@ void CLODLightManager::IV::IncreaseCoronaLimit()
 
 void CLODLightManager::IV::RegisterCustomCoronas()
 {
-    unsigned short      nModelID = 65534;
+    constexpr unsigned int nModelID = 0xFFFFFFFF;
 
-    auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
-    for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
-        m_pLampposts->push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
+    auto foundElements = *pFileContentMMap | std::views::filter([&nModelID](auto& v) {
+        return v.first == nModelID;
+    });
+
+    for (auto& it : foundElements)
+    {
+        m_Lampposts.push_back(CLamppostInfo(it.second.vecPos, it.second.colour, it.second.fCustomSizeMult, it.second.nCoronaShowMode, it.second.nNoDistance, it.second.nDrawSearchlight, 0.0f));
+    }
 }
 
 WplInstance* CLODLightManager::IV::PossiblyAddThisEntity(WplInstance* pInstance)
 {
-    if (m_bCatchLamppostsNow && IsModelALamppost(pInstance->ModelNameHash))
+    if (m_bCatchLamppostsNow && pFileContentMMap->contains(pInstance->ModelNameHash))
         RegisterLamppost(pInstance);
 
     return pInstance;
@@ -326,9 +333,14 @@ void CLODLightManager::IV::RegisterLamppost(WplInstance* pObj)
             return;
     }
 
-    auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
-    for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
-        m_pLampposts->push_back(CLamppostInfo(dummyMatrix * it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, atan2(dummyMatrix.GetUp()->y, -dummyMatrix.GetUp()->x), it->second.fObjectDrawDistance));
+    auto foundElements = *pFileContentMMap | std::views::filter([&nModelID](auto& v) {
+        return v.first == nModelID;
+    });
+
+    for (auto& it : foundElements)
+    {
+        m_Lampposts.push_back(CLamppostInfo(dummyMatrix * it.second.vecPos, it.second.colour, it.second.fCustomSizeMult, it.second.nCoronaShowMode, it.second.nNoDistance, it.second.nDrawSearchlight, atan2(dummyMatrix.GetUp()->y, -dummyMatrix.GetUp()->x), it.second.fObjectDrawDistance));
+    }
 }
 
 void CLODLightManager::IV::RegisterLODLights()
@@ -358,27 +370,27 @@ void CLODLightManager::IV::RegisterLODLights()
         else
             bAlpha = static_cast<unsigned char>(SolveEqSys((float)(8 * 60), 30.0f, (float)(3 * 60), 255.0f, (float)nTime)); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 255}
 
-        for (auto it = m_pLampposts->cbegin(); it != m_pLampposts->cend(); it++)
+        for (auto& it : m_Lampposts)
         {
             static int currentCamera;
             GetRootCam(&currentCamera);
-            if ((it->vecPos.z >= -15.0f) && (it->vecPos.z <= 1030.0f) /*&& CamIsSphereVisible(currentCamera, it->vecPos.x, it->vecPos.y, it->vecPos.z, 3.0f)*/)
+            if ((it.vecPos.z >= -15.0f) && (it.vecPos.z <= 1030.0f) /*&& CamIsSphereVisible(currentCamera, it.vecPos.x, it.vecPos.y, it.vecPos.z, 3.0f)*/)
             {
                 CVector CamPos = CVector();
                 GetCamPos(currentCamera, &CamPos.x, &CamPos.y, &CamPos.z);
                 CVector*    pCamPos = &CamPos;
-                float       fDistSqr = (pCamPos->x - it->vecPos.x)*(pCamPos->x - it->vecPos.x) + (pCamPos->y - it->vecPos.y)*(pCamPos->y - it->vecPos.y) + (pCamPos->z - it->vecPos.z)*(pCamPos->z - it->vecPos.z);
+                float       fDistSqr = (pCamPos->x - it.vecPos.x)*(pCamPos->x - it.vecPos.x) + (pCamPos->y - it.vecPos.y)*(pCamPos->y - it.vecPos.y) + (pCamPos->z - it.vecPos.z)*(pCamPos->z - it.vecPos.z);
                 fCamHeight = CamPos.z;
-                float fCoronaDist = it->fObjectDrawDistance - 30.0f;
+                float fCoronaDist = it.fObjectDrawDistance - 30.0f;
 
-                if ((fDistSqr > fCoronaDist * fCoronaDist && fDistSqr < fCoronaFarClip * fCoronaFarClip) || it->nNoDistance)
+                if ((fDistSqr > fCoronaDist * fCoronaDist && fDistSqr < fCoronaFarClip * fCoronaFarClip) || it.nNoDistance)
                 {
                     float min_radius_distance = fCoronaDist;
                     float min_radius_value = 0.0f;
-                    float max_radius_distance = it->fObjectDrawDistance;
+                    float max_radius_distance = it.fObjectDrawDistance;
                     float max_radius_value = 3.5f;
 
-                    if (it->nNoDistance)
+                    if (it.nNoDistance)
                         fRadius = max_radius_value;
                     else
                         fRadius = SolveEqSys(min_radius_distance, min_radius_value, max_radius_distance, max_radius_value, sqrt(fDistSqr)); // http://goo.gl/vhAZSx
@@ -388,65 +400,65 @@ void CLODLightManager::IV::RegisterLODLights()
 
                     float fAlphaDistMult = 110.0 - SolveEqSys(min_radius_distance / 4.0f, 10.0f, max_radius_distance * 4.0f, 100.0f, sqrt(fDistSqr));
 
-                    if (it->fCustomSizeMult != 0.45f)
+                    if (it.fCustomSizeMult != 0.45f)
                     {
-                        if (!it->nCoronaShowMode)
+                        if (!it.nCoronaShowMode)
                         {
-                            //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                            DrawCorona3(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                            //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
+                            DrawCorona3(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                         }
-                        //else
-                        //{
-                        //  static float blinking = 1.0f;
-                        //  if (IsBlinkingNeeded(it->nCoronaShowMode))
-                        //      blinking -= CTimer::ms_fTimeStep / 1000.0f;
-                        //  else
-                        //      blinking += CTimer::ms_fTimeStep / 1000.0f;
-                        //
-                        //  (blinking > 1.0f) ? blinking = 1.0f : (blinking < 0.0f) ? blinking = 0.0f : 0.0f;
-                        //
-                        //  CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, blinking * (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0xFF, 255.0f, false, false);
-                        //}
+                        else
+                        {
+                          static float blinking = 1.0f;
+                          if (IsBlinkingNeeded(it.nCoronaShowMode))
+                              blinking -= *CTimer::ms_fTimeStep / 1000.0f;
+                          else
+                              blinking += *CTimer::ms_fTimeStep / 1000.0f;
+                        
+                          (blinking > 1.0f) ? blinking = 1.0f : (blinking < 0.0f) ? blinking = 0.0f : 0.0f;
+                        
+                          DrawCorona3(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, blinking * (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                        }
                     }
                     else
                     {
                         fRadius *= 1.3f;
-                        if ((it->colour.r >= 250 && it->colour.g >= 100 && it->colour.b <= 100) && ((curMin == 9 || curMin == 19 || curMin == 29 || curMin == 39 || curMin == 49 || curMin == 59))) //yellow
+                        if ((it.colour.r >= 250 && it.colour.g >= 100 && it.colour.b <= 100) && ((curMin == 9 || curMin == 19 || curMin == 29 || curMin == 39 || curMin == 49 || curMin == 59))) //yellow
                         {
-                            //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                            DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                            //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
+                            DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                         }
                         else
                         {
-                            if ((abs(it->fHeading) >= (3.1415f / 6.0f) && abs(it->fHeading) <= (5.0f * 3.1415f / 6.0f)))
+                            if ((abs(it.fHeading) >= (3.1415f / 6.0f) && abs(it.fHeading) <= (5.0f * 3.1415f / 6.0f)))
                             {
-                                if ((it->colour.r >= 250 && it->colour.g < 100 && it->colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
+                                if ((it.colour.r >= 250 && it.colour.g < 100 && it.colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
                                 {
-                                    //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                                    DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                    //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
+                                    DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                 }
                                 else
                                 {
-                                    if ((it->colour.r == 0 && it->colour.g >= 100 && it->colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
+                                    if ((it.colour.r == 0 && it.colour.g >= 100 && it.colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
                                     {
-                                        //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                                        DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                        //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
+                                        DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                     }
                                 }
                             }
                             else
                             {
-                                if ((it->colour.r == 0 && it->colour.g >= 250 && it->colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
+                                if ((it.colour.r == 0 && it.colour.g >= 250 && it.colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
                                 {
-                                    //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                                    DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                    //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
+                                    DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                 }
                                 else
                                 {
-                                    if ((it->colour.r >= 250 && it->colour.g < 100 && it->colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
+                                    if ((it.colour.r >= 250 && it.colour.g < 100 && it.colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
                                     {
-                                        //DrawCorona(it->vecPos.x, it->vecPos.y, it->vecPos.z, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.r, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.g, ((bAlpha * (it->colour.a / 255.0f)) / 500.0f) * it->colour.b);
-                                        DrawCorona2(reinterpret_cast<unsigned int>(&*it), it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                        //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
+                                        DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                     }
                                 }
                             }
