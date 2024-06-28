@@ -476,7 +476,7 @@ extern "C" __declspec(dllexport) void InitializeASI()
     static std::once_flag flag;
     std::call_once(flag, []()
     {
-        std::thread([]() { CLODLightManager::IV::Init(); }).detach();
+        CLODLightManager::IV::Init();
     });
 }
 
