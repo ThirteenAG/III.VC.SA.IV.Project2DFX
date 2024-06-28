@@ -533,7 +533,7 @@ void CLODLightManager::IV::RegisterLODLights()
                         if (!it.nCoronaShowMode)
                         {
                             //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                            DrawCorona3(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * (((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult) / fDistantCoronaBrightness), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier * fDistantCoronaSize) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                            DrawCorona3(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * (((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult) * fDistantCoronaBrightness), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier * fDistantCoronaSize) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                         }
                         else
                         {
