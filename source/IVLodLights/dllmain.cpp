@@ -6,6 +6,131 @@
 
 using namespace injector;
 
+const uint32_t NUM_HOURS = 11;
+const uint32_t NUM_WEATHERS = 9;
+
+struct TimeCycleParams
+{
+public:
+    uint32_t mAmbient0Color;
+    uint32_t mAmbient1Color;
+    uint32_t mDirLightColor;
+    float mDirLightMultiplier;
+    float mAmbient0Multiplier;
+    float mAmbient1Multiplier;
+    float mAOStrength;
+    float mPedAOStrength;
+    float mRimLightingMultiplier;
+    float mSkyLightMultiplier;
+    float mDirLightSpecMultiplier;
+    uint32_t mSkyBottomColorFogDensity;
+    uint32_t mSunCore;
+    float mCoronaBrightness;
+    float mCoronaSize;
+    float mDistantCoronaBrightness;
+    float mDistantCoronaSize;
+    float mFarClip;
+    float mFogStart;
+    float mDOFStart;
+    float mNearDOFBlur;
+    float mFarDOFBlur;
+    uint32_t mLowCloudsColor;
+    uint32_t mBottomCloudsColor;
+    uint32_t mWater;
+    float mUnused64[7];
+    float mWaterReflectionMultiplier;
+    float mParticleBrightness;
+    float mExposure;
+    float mBloomThreshold;
+    float mMidGrayValue;
+    float mBloomIntensity;
+    uint32_t mColorCorrection;
+    uint32_t mColorAdd;
+    float mDesaturation;
+    float mContrast;
+    float mGamma;
+    float mDesaturationFar;
+    float mContrastFar;
+    float mGammaFar;
+    float mDepthFxNear;
+    float mDepthFxFar;
+    float mLumMin;
+    float mLumMax;
+    float mLumDelay;
+    int32_t mCloudAlpha;
+    float mUnusedD0;
+    float mTemperature;
+    float mGlobalReflectionMultiplier;
+    float mUnusedDC;
+    float mSkyColor[3];
+    float mUnusedEC;
+    float mSkyHorizonColor[3];
+    float mUnusedFC;
+    float mSkyEastHorizonColor[3];
+    float mUnused10C;
+    float mCloud1Color[3];
+    float mUnknown11C;
+    float mSkyHorizonHeight;
+    float mSkyHorizonBrightness;
+    float mSunAxisX;
+    float mSunAxisY;
+    float mCloud2Color[3];
+    float mUnused13C;
+    float mCloud2ShadowStrength;
+    float mCloud2Threshold;
+    float mCloud2Bias1;
+    float mCloud2Scale;
+    float mCloudInScatteringRange;
+    float mCloud2Bias2;
+    float mDetailNoiseScale;
+    float mDetailNoiseMultiplier;
+    float mCloud2Offset;
+    float mCloudWarp;
+    float mCloudsFadeOut;
+    float mCloud1Bias;
+    float mCloud1Detail;
+    float mCloud1Threshold;
+    float mCloud1Height;
+    float mUnused17C;
+    float mCloud3Color[3];
+    float mUnused18C;
+    float mUnknown190;
+    float mUnused198[3];
+    float mSunColor[3];
+    float mUnused1AC;
+    float mCloudsBrightness;
+    float mDetailNoiseOffset;
+    float mStarsBrightness;
+    float mVisibleStars;
+    float mMoonBrightness;
+    float mUnused1C4[3];
+    float mMoonColor[3];
+    float mUnused1DC;
+    float mMoonGlow;
+    float mMoonParam3;
+    float SunCenterStart;
+    float SunCenterEnd;
+    float mSunSize;
+    float mUnused1F8[3];
+    float mUnknown200;
+    float mSkyBrightness;
+    float mUnused208;
+    int32_t mFilmGrain;
+};
+
+struct Timecycle
+{
+    TimeCycleParams mParams[NUM_HOURS][NUM_WEATHERS];
+
+    static int32_t GameTimeToTimecycTimeIndex(const int32_t gameTime)
+    {
+        const int32_t gameTimeToTimecycTimeIndex[24] = { 0, 0, 0, 0, 0, 1, 2, 3, 3, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 7, 8, 9, 10, 10 };
+        return gameTimeToTimecycTimeIndex[gameTime];
+    }
+};
+
+Timecycle* mTimeCycle = nullptr;
+
 #define NewLimitExponent 14
 
 char* CLODLightManager::IV::CurrentTimeHours;
@@ -22,6 +147,7 @@ float* CTimer::ms_fTimeStep = nullptr;
 float fCamHeight;
 std::map<unsigned int, CRGBA> FestiveLights;
 extern bool bIsIVEFLC;
+float fCoronaAlphaMultiplier = 1.0f;
 
 int CCoronasRegisterFestiveCoronaForEntity(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14)
 {
@@ -43,13 +169,13 @@ void CLODLightManager::IV::Init()
     CIniReader iniReader("");
     bRenderLodLights = iniReader.ReadInteger("LodLights", "RenderLodLights", 1) != 0;
     fCoronaRadiusMultiplier = iniReader.ReadFloat("LodLights", "CoronaRadiusMultiplier", 1.0f);
+    fCoronaAlphaMultiplier = iniReader.ReadFloat("LodLights", "CoronaAlphaMultiplier", 1.0f);
     bSlightlyIncreaseRadiusWithDistance = iniReader.ReadInteger("LodLights", "SlightlyIncreaseRadiusWithDistance", 1) != 0;
     fCoronaFarClip = iniReader.ReadFloat("LodLights", "CoronaFarClip", 0.0f);
-    bool DisableDefaultLodLights = iniReader.ReadInteger("LodLights", "DisableDefaultLodLights", 0) == 1;
+    bool DisableDefaultLodLights = iniReader.ReadInteger("LodLights", "DisableDefaultLodLights", 1) != 0;
     int32_t DisableCoronasWaterReflection = iniReader.ReadInteger("LodLights", "DisableCoronasWaterReflection", 0);
-    fGenericObjectsDrawDistance = iniReader.ReadFloat("IDETweaker", "LamppostsDrawDistance", 0.0f);
-    bFestiveLights = iniReader.ReadInteger("Misc", "FestiveLights", 1) != 0;
-    bFestiveLightsAlways = iniReader.ReadInteger("Misc", "FestiveLightsAlways", 0) != 0;
+    //bFestiveLights = iniReader.ReadInteger("Misc", "FestiveLights", 1) != 0;
+    //bFestiveLightsAlways = iniReader.ReadInteger("Misc", "FestiveLightsAlways", 0) != 0;
 
     struct LoadObjectInstanceHook
     {
@@ -59,19 +185,6 @@ void CLODLightManager::IV::Init()
             regs.eax = (regs.esp + 0x1C);
 
             PossiblyAddThisEntity((WplInstance*)regs.esi);
-        }
-    };
-
-    struct ParseIdeObjsHook
-    {
-        void operator()(injector::reg_pack& regs)
-        {
-            auto xmmZero = *(float*)(regs.esp + 0x1C);
-            if (xmmZero == 50.0f || xmmZero == 100.0f || xmmZero == 150.0f || xmmZero == 80.0f) //lampposts draw distances
-            {
-                xmmZero = fGenericObjectsDrawDistance;
-            }
-            _asm movss   xmm0, xmmZero
         }
     };
 
@@ -86,8 +199,6 @@ void CLODLightManager::IV::Init()
         injector::MakeCALL(pattern.get(0).get<uintptr_t>(0), RegisterLODLights, true);
         pattern = hook::pattern("8B 75 08 8D 44 24 1C 50 FF 76 1C C6 44 24"); //+
         injector::MakeInline<LoadObjectInstanceHook>(pattern.get(0).get<uintptr_t>(0), pattern.get(0).get<uintptr_t>(7));
-        //pattern = hook::pattern(""); //causes crash
-        //injector::MakeInline<ParseIdeObjsHook>(pattern.get(0).get<uintptr_t>(0), pattern.get(0).get<uintptr_t>(6)); //0x008D2311 - 0x8D2317
     }
 
     if (DisableDefaultLodLights)
@@ -121,20 +232,37 @@ void CLODLightManager::IV::Init()
         }
     }
 
-    if (bFestiveLights)
+    //if (bFestiveLights)
+    //{
+    //    auto now = std::chrono::system_clock::now();
+    //    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    //    struct tm *date = std::localtime(&now_c);
+    //    if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
+    //    {
+    //        DrawCorona3 = &CCoronasRegisterFestiveCoronaForEntity;
+    //        pattern = hook::pattern("E8 ? ? ? ? 83 C4 3C E9 ? ? ? ? A1");
+    //        injector::MakeCALL(pattern.get_first(0), CCoronasRegisterFestiveCoronaForEntity, true);
+    //        pattern = hook::pattern("E8 ? ? ? ? F3 0F 10 4C 24 ? 8A 44 24 4E");
+    //        injector::MakeCALL(pattern.get_first(0), CCoronasRegisterFestiveCoronaForEntity, true);
+    //    }
+    //}
+}
+
+namespace CWeather
+{
+    enum eWeatherType : uint32_t
     {
-        auto now = std::chrono::system_clock::now();
-        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-        struct tm *date = std::localtime(&now_c);
-        if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
-        {
-            DrawCorona3 = &CCoronasRegisterFestiveCoronaForEntity;
-            pattern = hook::pattern("6A 00 51 E8 ? ? ? ? 83 C4 3C E9");
-            injector::MakeCALL(pattern.get_first(3), CCoronasRegisterFestiveCoronaForEntity, true);
-            pattern = hook::pattern("51 52 E8 ? ? ? ? 83 C4 3C EB 03");
-            injector::MakeCALL(pattern.get_first(2), CCoronasRegisterFestiveCoronaForEntity, true);
-        }
-    }
+        EXTRASUNNY,
+        SUNNY,
+        SUNNY_WINDY,
+        CLOUDY,
+        RAIN,
+        DRIZZLE,
+        FOGGY,
+        LIGHTNING
+    };
+
+    eWeatherType* CurrentWeather = nullptr;
 }
 
 void CLODLightManager::IV::GetMemoryAddresses()
@@ -159,6 +287,10 @@ void CLODLightManager::IV::GetMemoryAddresses()
     CTimer::ms_fTimeStep = *pattern.get_first<float*>(4);
     pattern = hook::pattern("A1 ? ? ? ? A3 ? ? ? ? EB 3A");
     CTimer::m_snTimeInMillisecondsPauseMode = *pattern.get_first<int32_t*>(1); //m_snTimeInMilliseconds
+    pattern = hook::pattern("A1 ? ? ? ? 83 C4 08 8B CF");
+    CWeather::CurrentWeather = *pattern.get_first<CWeather::eWeatherType*>(1);
+    pattern = hook::pattern("05 ? ? ? ? 50 8D 4C 24 60");
+    mTimeCycle = *pattern.get_first<Timecycle*>(1);
 }
 
 void CLODLightManager::IV::IncreaseCoronaLimit()
@@ -289,14 +421,6 @@ WplInstance* CLODLightManager::IV::PossiblyAddThisEntity(WplInstance* pInstance)
 
 void CLODLightManager::IV::RegisterLamppost(WplInstance* pObj)
 {
-    //DWORD nModelID = pObj->ModelNameHash;
-    //RwV3d trans = { pObj->PositionX, pObj->PositionY, pObj->PositionZ };
-    //RwV3d axis = { pObj->RotationW, pObj->RotationX, pObj->RotationY };
-    //
-    //CMatrix dummyMatrix;
-    //auto angle2 = -RADTODEG(2.0f * acos(pObj->RotationZ));
-    //makeRotation(&dummyMatrix, &axis, angle2, &trans);
-
     DWORD               nModelID = pObj->ModelNameHash;
     CMatrix             dummyMatrix;
 
@@ -371,6 +495,9 @@ void CLODLightManager::IV::RegisterLODLights()
         else
             bAlpha = static_cast<unsigned char>(SolveEqSys((float)(8 * 60), 30.0f, (float)(3 * 60), 255.0f, (float)nTime)); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 255}
 
+        auto fDistantCoronaBrightness = mTimeCycle->mParams[Timecycle::GameTimeToTimecycTimeIndex(*CurrentTimeHours)][*CWeather::CurrentWeather].mDistantCoronaBrightness / 10.0f;
+        auto fDistantCoronaSize = mTimeCycle->mParams[Timecycle::GameTimeToTimecycTimeIndex(*CurrentTimeHours)][*CWeather::CurrentWeather].mDistantCoronaSize;
+
         for (auto& it : m_Lampposts)
         {
             static int currentCamera;
@@ -406,7 +533,7 @@ void CLODLightManager::IV::RegisterLODLights()
                         if (!it.nCoronaShowMode)
                         {
                             //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                            DrawCorona3(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                            DrawCorona3(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * (((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult) / fDistantCoronaBrightness), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier * fDistantCoronaSize) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                         }
                         else
                         {
@@ -418,7 +545,7 @@ void CLODLightManager::IV::RegisterLODLights()
                         
                           (blinking > 1.0f) ? blinking = 1.0f : (blinking < 0.0f) ? blinking = 0.0f : 0.0f;
                         
-                          DrawCorona3(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, blinking * (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                          DrawCorona3(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * (blinking * (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                         }
                     }
                     else
@@ -427,7 +554,7 @@ void CLODLightManager::IV::RegisterLODLights()
                         if ((it.colour.r >= 250 && it.colour.g >= 100 && it.colour.b <= 100) && ((curMin == 9 || curMin == 19 || curMin == 29 || curMin == 39 || curMin == 49 || curMin == 59))) //yellow
                         {
                             //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                            DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                            DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * ((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                         }
                         else
                         {
@@ -436,14 +563,14 @@ void CLODLightManager::IV::RegisterLODLights()
                                 if ((it.colour.r >= 250 && it.colour.g < 100 && it.colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
                                 {
                                     //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                                    DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                    DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * ((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                 }
                                 else
                                 {
                                     if ((it.colour.r == 0 && it.colour.g >= 100 && it.colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
                                     {
                                         //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                                        DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                        DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * ((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                     }
                                 }
                             }
@@ -452,14 +579,14 @@ void CLODLightManager::IV::RegisterLODLights()
                                 if ((it.colour.r == 0 && it.colour.g >= 250 && it.colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
                                 {
                                     //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                                    DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                    DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * ((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                 }
                                 else
                                 {
                                     if ((it.colour.r >= 250 && it.colour.g < 100 && it.colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
                                     {
                                         //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                                        DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult, (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
+                                        DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * ((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
                                     }
                                 }
                             }
