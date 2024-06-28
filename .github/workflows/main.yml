@@ -53,7 +53,7 @@ jobs:
         msbuild -m build/III.VC.SA.IV.Project2DFX.sln /property:Configuration=Release /property:Platform=Win32
 
     - name: Download III.VC.SA.LimitAdjuster
-      uses: robinraju/release-downloader@v1.10
+      uses: robinraju/release-downloader@v1.11
       with:
         repository: "GTAmodding/III.VC.SA.LimitAdjuster"
         latest: true
