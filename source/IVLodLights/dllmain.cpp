@@ -2,6 +2,7 @@
 #include "CLODLightManager.h"
 #include "Hooking.Patterns.h"
 #include <ranges>
+#include <thread>
 
 using namespace injector;
 
@@ -475,7 +476,7 @@ extern "C" __declspec(dllexport) void InitializeASI()
     static std::once_flag flag;
     std::call_once(flag, []()
     {
-        CLODLightManager::IV::Init();
+        std::thread([]() { CLODLightManager::IV::Init(); }).detach();
     });
 }
 

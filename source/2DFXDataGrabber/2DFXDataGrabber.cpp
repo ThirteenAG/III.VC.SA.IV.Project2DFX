@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <iomanip>
 #include <Maths.h>
+#include <bitset>
+
 using namespace std;
 
 enum BlinkTypes
@@ -442,7 +444,63 @@ void ConvertLightTo2DFX()
 					{
 						if (sscanf(buf.c_str(), "%s", &EntryName[0]))
 						{
-							if (buf.find("Position") != std::string::npos)
+							if (buf.find("Flags") != std::string::npos && buf.find("TypeFlags") == std::string::npos)
+							{
+								enum LightFlags
+								{
+									None,
+									RandomFlashing1,
+									RandomFlashing2,
+									HazardFlashing1,
+									SlowHazardFlashing,
+									VerySlowHazardFlashing,
+									LightAllDay,
+									OnAtNightOnly,
+									WeakLight,
+									VeryFastHazardFlashing,
+									FastHazardFlashing,
+									VerySlowFadeInOut1,
+									VerySlowFadeInOut2,
+									SlowFadeInOut,
+									HazardFlashing2,
+									StaticShadows,
+									DynamicShadows,
+									WeatherModifiedColor,
+									unk17,
+									unk18,
+									ShowRays,
+									NoCoronaReflections,
+								};
+
+								uint32_t dwFlags = 0;
+								sscanf(buf.c_str(), "%*s %d", &dwFlags);
+								auto bitFlags = std::bitset<32>(dwFlags);
+
+								if (bitFlags.test(RandomFlashing1))
+									BlinkType = BlinkTypes::RANDOM_FLASHING;
+								else if (bitFlags.test(RandomFlashing2))
+									BlinkType = BlinkTypes::RANDOM_FLASHING;
+								else if (bitFlags.test(HazardFlashing1))
+									BlinkType = BlinkTypes::T_2S_ON_2S_OFF;
+								else if (bitFlags.test(SlowHazardFlashing))
+									BlinkType = BlinkTypes::T_3S_ON_3S_OFF;
+								else if (bitFlags.test(VerySlowHazardFlashing))
+									BlinkType = BlinkTypes::T_3S_ON_3S_OFF;
+								else if (bitFlags.test(VeryFastHazardFlashing))
+									BlinkType = BlinkTypes::T_1S_ON_1S_OFF;
+								else if (bitFlags.test(FastHazardFlashing))
+									BlinkType = BlinkTypes::T_2S_ON_2S_OFF;
+								else if (bitFlags.test(HazardFlashing2))
+									BlinkType = BlinkTypes::T_3S_ON_3S_OFF;
+								else
+									BlinkType = BlinkTypes::DEFAULT;
+							}
+							else if (buf.find("TypeFlags") != std::string::npos)
+							{
+								if (!buf.contains(" f"))
+									BlinkType = BlinkTypes::DEFAULT;
+							}
+							else if (buf.find("Position") != std::string::npos)
 							{
 								sscanf(buf.c_str(), "%*s %f %f %f", &offsetX, &offsetY, &offsetZ);
 							}
