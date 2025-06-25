@@ -475,124 +475,153 @@ void CLODLightManager::IV::RegisterLODLights()
         float determinant = a - c;
         float x = (b - d) / determinant;
         float y = (a * d - b * c) / determinant;
-        return min((x)*value + y, d);
+        return min(x * value + y, d);
     };
 
     if (m_bCatchLamppostsNow)
         m_bCatchLamppostsNow = false;
 
-    if (*CurrentTimeHours >= 19 || *CurrentTimeHours <= 7)
+    static auto ff = GetModuleHandleW(L"GTAIV.EFLC.FusionFix.asi");
+    if (ff)
     {
-        unsigned char   bAlpha = 0;
-        float           fRadius = 0.0f;
-        unsigned int    nTime = *CurrentTimeHours * 60 + *CurrentTimeMinutes;
-        unsigned int    curMin = *CurrentTimeMinutes;
-
-        if (nTime >= 19 * 60)
-            bAlpha = static_cast<unsigned char>(SolveEqSys((float)(19 * 60), 30.0f, (float)(24 * 60), 255.0f, (float)nTime)); // http://goo.gl/O03RpE {(19*60)a + y = 30,  (24*60)a + y = 255}
-        else if (nTime < 3 * 60)
-            bAlpha = 255;
-        else
-            bAlpha = static_cast<unsigned char>(SolveEqSys((float)(8 * 60), 30.0f, (float)(3 * 60), 255.0f, (float)nTime)); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 255}
-
-        auto fDistantCoronaBrightness = mTimeCycle->mParams[Timecycle::GameTimeToTimecycTimeIndex(*CurrentTimeHours)][*CWeather::CurrentWeather].mDistantCoronaBrightness / 10.0f;
-        auto fDistantCoronaSize = mTimeCycle->mParams[Timecycle::GameTimeToTimecycTimeIndex(*CurrentTimeHours)][*CWeather::CurrentWeather].mDistantCoronaSize;
-
-        for (auto& it : m_Lampposts)
+        static auto GetDistantLightsPrefValue = (int32_t(*)())GetProcAddress(ff, "GetDistantLightsPrefValue");
+        if (GetDistantLightsPrefValue)
         {
-            static int currentCamera;
-            GetRootCam(&currentCamera);
-            if ((it.vecPos.z >= -15.0f) && (it.vecPos.z <= 1030.0f) /*&& CamIsSphereVisible(currentCamera, it.vecPos.x, it.vecPos.y, it.vecPos.z, 3.0f)*/)
+            if (!GetDistantLightsPrefValue())
+                return;
+        }
+    }
+
+    int currentHour = *CurrentTimeHours;
+    if (currentHour < 19 && currentHour > 7)
+        return;
+
+    // Calculate alpha based on time
+    unsigned int nTime = currentHour * 60 + *CurrentTimeMinutes;
+    unsigned int curMin = *CurrentTimeMinutes;
+    unsigned char bAlpha = 0;
+
+    if (nTime >= 19 * 60)
+        bAlpha = static_cast<unsigned char>(SolveEqSys(19 * 60.0f, 30.0f, 24 * 60.0f, 255.0f, static_cast<float>(nTime)));
+    else if (nTime < 3 * 60)
+        bAlpha = 255;
+    else
+        bAlpha = static_cast<unsigned char>(SolveEqSys(8 * 60.0f, 30.0f, 3 * 60.0f, 255.0f, static_cast<float>(nTime)));
+
+    // Get time cycle parameters
+    auto timeIndex = Timecycle::GameTimeToTimecycTimeIndex(currentHour);
+    auto& timeCycleParams = mTimeCycle->mParams[timeIndex][*CWeather::CurrentWeather];
+    float fDistantCoronaBrightness = timeCycleParams.mDistantCoronaBrightness / 10.0f;
+    float fDistantCoronaSize = timeCycleParams.mDistantCoronaSize;
+
+    // Get camera info once
+    int currentCamera;
+    GetRootCam(&currentCamera);
+    CVector camPos;
+    GetCamPos(currentCamera, &camPos.x, &camPos.y, &camPos.z);
+
+    for (const auto& lamppost : m_Lampposts)
+    {
+        // Check height bounds
+        if (lamppost.vecPos.z < -15.0f || lamppost.vecPos.z > 1030.0f)
+            continue;
+
+        // Calculate distance
+        float dx = camPos.x - lamppost.vecPos.x;
+        float dy = camPos.y - lamppost.vecPos.y;
+        float dz = camPos.z - lamppost.vecPos.z;
+        float fDistSqr = dx * dx + dy * dy + dz * dz;
+        float distance = std::sqrt(fDistSqr);
+
+        float fCoronaDist = lamppost.fObjectDrawDistance - 30.0f;
+
+        // Check if within corona range
+        if (!lamppost.nNoDistance &&
+            (fDistSqr <= fCoronaDist * fCoronaDist || fDistSqr >= fCoronaFarClip * fCoronaFarClip))
+            continue;
+
+        // Calculate radius
+        float fRadius = lamppost.nNoDistance ? 3.5f :
+            SolveEqSys(fCoronaDist, 0.0f, lamppost.fObjectDrawDistance, 3.5f, distance);
+
+        if (bSlightlyIncreaseRadiusWithDistance)
+            fRadius *= min(SolveEqSys(fCoronaDist, 1.0f, fCoronaFarClip, 4.0f, distance), 3.0f);
+
+        float fAlphaDistMult = 110.0f - SolveEqSys(fCoronaDist / 4.0f, 10.0f, lamppost.fObjectDrawDistance * 4.0f, 100.0f, distance);
+
+        // Calculate base alpha
+        float baseAlpha = fCoronaAlphaMultiplier * ((bAlpha * (lamppost.colour.a / 255.0f)) / fAlphaDistMult);
+
+        if (lamppost.fCustomSizeMult != 0.45f)
+        {
+            // Regular lamppost
+            float finalAlpha = baseAlpha * fDistantCoronaBrightness;
+            float finalSize = fRadius * lamppost.fCustomSizeMult * fCoronaRadiusMultiplier * fDistantCoronaSize * 1270.5f;
+
+            if (lamppost.nCoronaShowMode)
             {
-                CVector CamPos = CVector();
-                GetCamPos(currentCamera, &CamPos.x, &CamPos.y, &CamPos.z);
-                CVector*    pCamPos = &CamPos;
-                float       fDistSqr = (pCamPos->x - it.vecPos.x)*(pCamPos->x - it.vecPos.x) + (pCamPos->y - it.vecPos.y)*(pCamPos->y - it.vecPos.y) + (pCamPos->z - it.vecPos.z)*(pCamPos->z - it.vecPos.z);
-                fCamHeight = CamPos.z;
-                float fCoronaDist = it.fObjectDrawDistance - 30.0f;
+                // Blinking light
+                static float blinking = 1.0f;
+                if (IsBlinkingNeeded(lamppost.nCoronaShowMode))
+                    blinking -= *CTimer::ms_fTimeStep / 1000.0f;
+                else
+                    blinking += *CTimer::ms_fTimeStep / 1000.0f;
 
-                if ((fDistSqr > fCoronaDist * fCoronaDist && fDistSqr < fCoronaFarClip * fCoronaFarClip) || it.nNoDistance)
-                {
-                    float min_radius_distance = fCoronaDist;
-                    float min_radius_value = 0.0f;
-                    float max_radius_distance = it.fObjectDrawDistance;
-                    float max_radius_value = 3.5f;
+                blinking = std::clamp(blinking, 0.0f, 1.0f);
+                finalAlpha *= blinking;
+                finalSize = fRadius * lamppost.fCustomSizeMult * fCoronaRadiusMultiplier * 1270.5f;
+            }
 
-                    if (it.nNoDistance)
-                        fRadius = max_radius_value;
-                    else
-                        fRadius = SolveEqSys(min_radius_distance, min_radius_value, max_radius_distance, max_radius_value, sqrt(fDistSqr)); // http://goo.gl/vhAZSx
+            DrawCorona2(reinterpret_cast<unsigned int>(&lamppost),
+                lamppost.colour.r, lamppost.colour.g, lamppost.colour.b,
+                finalAlpha,
+                const_cast<CVector*>(&lamppost.vecPos),
+                finalSize,
+                0.0, 0.0, 0, 0.0, 0, 0, 0);
+        }
+        else
+        {
+            fRadius *= 1.3f;
+            float finalSize = fRadius * lamppost.fCustomSizeMult * fCoronaRadiusMultiplier * 1270.5f;
 
-                    if (bSlightlyIncreaseRadiusWithDistance)
-                        fRadius *= min(SolveEqSys(min_radius_distance, 1.0f, fCoronaFarClip, 4.0f, sqrt(fDistSqr)), 3.0f); // http://goo.gl/3kDpnC {(300)a + y = 1.0,  (2500)a + y = 4}
+            // Color detection
+            bool isYellow = (lamppost.colour.r >= 250 && lamppost.colour.g >= 100 && lamppost.colour.b <= 100);
+            bool isRed = (lamppost.colour.r >= 250 && lamppost.colour.g < 100 && lamppost.colour.b == 0);
+            bool isGreen = (lamppost.colour.r == 0 && lamppost.colour.g >= 100 && lamppost.colour.b == 0);
+            bool isGreenAlt = (lamppost.colour.r == 0 && lamppost.colour.g >= 250 && lamppost.colour.b == 0);
 
-                    float fAlphaDistMult = 110.0 - SolveEqSys(min_radius_distance / 4.0f, 10.0f, max_radius_distance * 4.0f, 100.0f, sqrt(fDistSqr));
+            // Time periods
+            bool isYellowTime = (curMin == 9 || curMin == 19 || curMin == 29 || curMin == 39 || curMin == 49 || curMin == 59);
+            bool isRedTime = ((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49));
+            bool isGreenTime = ((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59));
 
-                    if (it.fCustomSizeMult != 0.45f)
-                    {
-                        if (!it.nCoronaShowMode)
-                        {
-                            //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                            DrawCorona3(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * (((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult) * fDistantCoronaBrightness), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier * fDistantCoronaSize) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
-                        }
-                        else
-                        {
-                          static float blinking = 1.0f;
-                          if (IsBlinkingNeeded(it.nCoronaShowMode))
-                              blinking -= *CTimer::ms_fTimeStep / 1000.0f;
-                          else
-                              blinking += *CTimer::ms_fTimeStep / 1000.0f;
-                        
-                          (blinking > 1.0f) ? blinking = 1.0f : (blinking < 0.0f) ? blinking = 0.0f : 0.0f;
-                        
-                          DrawCorona3(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * (blinking * (bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
-                        }
-                    }
-                    else
-                    {
-                        fRadius *= 1.3f;
-                        if ((it.colour.r >= 250 && it.colour.g >= 100 && it.colour.b <= 100) && ((curMin == 9 || curMin == 19 || curMin == 29 || curMin == 39 || curMin == 49 || curMin == 59))) //yellow
-                        {
-                            //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                            DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * ((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
-                        }
-                        else
-                        {
-                            if ((abs(it.fHeading) >= (3.1415f / 6.0f) && abs(it.fHeading) <= (5.0f * 3.1415f / 6.0f)))
-                            {
-                                if ((it.colour.r >= 250 && it.colour.g < 100 && it.colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
-                                {
-                                    //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                                    DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * ((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
-                                }
-                                else
-                                {
-                                    if ((it.colour.r == 0 && it.colour.g >= 100 && it.colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
-                                    {
-                                        //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                                        DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * ((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                if ((it.colour.r == 0 && it.colour.g >= 250 && it.colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
-                                {
-                                    //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                                    DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * ((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
-                                }
-                                else
-                                {
-                                    if ((it.colour.r >= 250 && it.colour.g < 100 && it.colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
-                                    {
-                                        //DrawCorona(it.vecPos.x, it.vecPos.y, it.vecPos.z, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 127.5f, 0, 0.0f, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.r, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.g, ((bAlpha * (it.colour.a / 255.0f)) / 500.0f) * it.colour.b);
-                                        DrawCorona2(reinterpret_cast<unsigned int>(&it), it.colour.r, it.colour.g, it.colour.b, fCoronaAlphaMultiplier * ((bAlpha * (it.colour.a / 255.0f)) / fAlphaDistMult), (CVector*)&it.vecPos, (fRadius * it.fCustomSizeMult * fCoronaRadiusMultiplier) * 1270.5f, 0.0, 0.0, 0, 0.0, 0, 0, 0);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+            // Heading check
+            float absHeading = std::abs(lamppost.fHeading);
+            bool isInHeadingRange = (absHeading >= (M_PI / 6.0f) && absHeading <= (5.0f * M_PI / 6.0f));
+
+            bool shouldDraw = false;
+
+            if (isYellow && isYellowTime)
+            {
+                shouldDraw = true;
+            }
+            else if (isInHeadingRange)
+            {
+                shouldDraw = (isRed && isRedTime) || (isGreen && isGreenTime);
+            }
+            else
+            {
+                shouldDraw = (isGreenAlt && isRedTime) || (isRed && isGreenTime);
+            }
+
+            if (shouldDraw)
+            {
+                DrawCorona2(reinterpret_cast<unsigned int>(&lamppost),
+                    lamppost.colour.r, lamppost.colour.g, lamppost.colour.b,
+                    baseAlpha,
+                    const_cast<CVector*>(&lamppost.vecPos),
+                    finalSize,
+                    0.0, 0.0, 0, 0.0, 0, 0, 0);
             }
         }
     }
