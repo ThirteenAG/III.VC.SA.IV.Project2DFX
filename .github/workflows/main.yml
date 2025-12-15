@@ -74,7 +74,7 @@ jobs:
         cd ..
 
     - name: Upload IIILodLights artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: III.Project2DFX
         path: |
@@ -88,7 +88,7 @@ jobs:
           !**/.gitkeep
 
     - name: Upload VCLodLights artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: VC.Project2DFX
         path: |
@@ -102,7 +102,7 @@ jobs:
           !**/.gitkeep
 
     - name: Upload SALodLights artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: SA.Project2DFX
         path: |
@@ -116,7 +116,7 @@ jobs:
           !**/.gitkeep
 
     - name: Upload IVLodLights artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: IV.Project2DFX
         path: |
