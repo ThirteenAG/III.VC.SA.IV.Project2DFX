@@ -4,3 +4,6 @@
 [submodule "external/IniReader"]
 	path = external/IniReader
 	url = https://github.com/ThirteenAG/IniReader
+[submodule "external/injector"]
+	path = external/injector
+	url = https://github.com/ThirteenAG/injector
