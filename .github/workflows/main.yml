@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
 
     steps:
     - name: Checkout Repository
@@ -46,25 +46,25 @@ jobs:
       uses: microsoft/setup-msbuild@main
 
     - name: Configure build
-      run: ./premake5 vs2022 --with-version=5.0
+      run: ./premake5.bat
 
     - name: Build
       run: |
-        msbuild -m build/III.VC.SA.IV.Project2DFX.sln /property:Configuration=Release /property:Platform=Win32
+        msbuild -m build/III.VC.SA.IV.Project2DFX.slnx /property:Configuration=Release /property:Platform=Win32
 
-    - name: Download III.VC.SA.LimitAdjuster
-      uses: robinraju/release-downloader@v1.13
-      with:
-        repository: "GTAmodding/III.VC.SA.LimitAdjuster"
-        latest: true
-        fileName: "III.VC.SA.LimitAdjuster.zip"
-
-    - name: Unpack dependencies
-      run: |
-          7z x III.VC.SA.LimitAdjuster.zip -odata/IIILodLights/ -y
-          7z x III.VC.SA.LimitAdjuster.zip -odata/VCLodLights/ -y
-          7z x III.VC.SA.LimitAdjuster.zip -odata/SALodLights/ -y
-          del III.VC.SA.LimitAdjuster.zip
+#    - name: Download III.VC.SA.LimitAdjuster
+#      uses: robinraju/release-downloader@v1.13
+#      with:
+#        repository: "GTAmodding/III.VC.SA.LimitAdjuster"
+#        latest: true
+#        fileName: "III.VC.SA.LimitAdjuster.zip"
+# 
+#    - name: Unpack dependencies
+#      run: |
+#          7z x III.VC.SA.LimitAdjuster.zip -odata/IIILodLights/ -y
+#          7z x III.VC.SA.LimitAdjuster.zip -odata/VCLodLights/ -y
+#          7z x III.VC.SA.LimitAdjuster.zip -odata/SALodLights/ -y
+#          del III.VC.SA.LimitAdjuster.zip
 
     - name: Pack binaries
       shell: cmd
@@ -76,58 +76,26 @@ jobs:
     - name: Upload IIILodLights artifact
       uses: actions/upload-artifact@v7
       with:
-        name: III.Project2DFX
-        path: |
-          data/IIILodLights/*
-          !**/*.pdb
-          !**/*.db
-          !**/*.ipdb
-          !**/*.iobj
-          !**/*.lib
-          !**/*.exp
-          !**/.gitkeep
+        archive: false
+        path: data/III.Project2DFX.zip
 
     - name: Upload VCLodLights artifact
       uses: actions/upload-artifact@v7
       with:
-        name: VC.Project2DFX
-        path: |
-          data/VCLodLights/*
-          !**/*.pdb
-          !**/*.db
-          !**/*.ipdb
-          !**/*.iobj
-          !**/*.lib
-          !**/*.exp
-          !**/.gitkeep
+        archive: false
+        path: data/VC.Project2DFX.zip
 
     - name: Upload SALodLights artifact
       uses: actions/upload-artifact@v7
       with:
-        name: SA.Project2DFX
-        path: |
-          data/SALodLights/*
-          !**/*.pdb
-          !**/*.db
-          !**/*.ipdb
-          !**/*.iobj
-          !**/*.lib
-          !**/*.exp
-          !**/.gitkeep
+        archive: false
+        path: data/SA.Project2DFX.zip
 
     - name: Upload IVLodLights artifact
       uses: actions/upload-artifact@v7
       with:
-        name: IV.Project2DFX
-        path: |
-          data/IVLodLights/*
-          !**/*.pdb
-          !**/*.db
-          !**/*.ipdb
-          !**/*.iobj
-          !**/*.lib
-          !**/*.exp
-          !**/.gitkeep
+        archive: false
+        path: data/IV.Project2DFX.zip
 
     - name: Get release info
       if: github.event.inputs.release != '' && github.event.inputs.release != 'none'
