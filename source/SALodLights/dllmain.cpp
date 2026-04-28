@@ -13,33 +13,33 @@ char* CLODLightManager::CurrentTimeHours = (char*)0xB70153;
 char* CLODLightManager::CurrentTimeMinutes = (char*)0xB70152;
 float** CLODLightManager::fCurrentFarClip = (float**)0x53EA95;
 int* CLODLightManager::ActiveInterior = (int*)0xB72914;
-char(__cdecl *CLODLightManager::SA::GetIsTimeInRange)(char hourA, char hourB) = (char(__cdecl *)(char, char)) 0x52CEE0;
-int* (__cdecl *CLODLightManager::SA::GetModelInfo)(const char*, int*) = (int*(__cdecl *)(const char*, int*)) 0x4C5940;
-void(__cdecl *const CLODLightManager::SA::CShadowsUpdateStaticShadows)() = (decltype(CShadowsUpdateStaticShadows))0x707F40;
-bool(__cdecl *const CLODLightManager::SA::CShadowsStoreStaticShadow)(unsigned int id, unsigned char type, RwTexture *particle, CVector *pos, float x1, float y1, float x2, float y2, short alpha, unsigned char red, unsigned char green, unsigned char blue, float, float, float drawdist, bool lifetime, float updist) = (decltype(CShadowsStoreStaticShadow))0x70BA00;
-float(__cdecl *CLODLightManager::SA::FindGroundZFor3DCoord)(float x, float y, float z, BOOL *pCollisionResult, CEntity **pGroundObject) = (float(__cdecl *)(float, float, float, BOOL *, CEntity **)) 0x5696C0;
-RwV3D *(__cdecl *CLODLightManager::SA::TransformPoint)(RwV3D *outPoint, CMatrix *m, RwV3D *point) = (RwV3D *(__cdecl *)(RwV3D *, CMatrix *, RwV3D *)) 0x59C890;
-bool(__thiscall *CLODLightManager::SA::CCameraIsSphereVisible)(int *camera, RwV3d *origin, float radius) = (bool(__thiscall *)(int *, RwV3d *, float)) 0x00420D40;
-void(__cdecl *CLODLightManager::SA::RegisterCorona)(int id, int *vehicle, char r, char g, char b, char alpha, RwV3d *pos, float radius, float farClip, char type, char flareType, char enableReflection, char checkObstacles, int notUsed, float normalAngle, char longDistance, float nearClip, char someFadeFlag, float flashInertia, char onlyFromBelow, char flag) = (void(__cdecl *)(int, int *, char, char, char, char, RwV3d *, float, float, char, char, char, char, int, float, char, float, char, float, char, char)) 0x6FC580;
-void(__fastcall *CLODLightManager::SA::CVectorNormalize)(RwV3D *in) = (void(__fastcall *)(RwV3D *in)) 0x59C910;
-RwV3D *(__cdecl *CLODLightManager::SA::CrossProduct)(RwV3D *out, RwV3D *a, RwV3D *b) = (RwV3D *(__cdecl *)(RwV3D *out, RwV3D *a, RwV3D *b)) 0x59C730;
-int(__cdecl *CLODLightManager::SA::RwIm3DTransform)(RxObjSpace3dVertex *pVerts, unsigned int numVerts, RwMatrix *ltm, unsigned int flags) = (int(__cdecl *)(RxObjSpace3dVertex *pVerts, unsigned int numVerts, RwMatrix *ltm, unsigned int flags)) 0x7EF450;
-int(__cdecl *CLODLightManager::SA::RwIm3DRenderIndexedPrimitive)(int primType, short *indices, int numIndices) = (int(__cdecl *)(int primType, short *indices, int numIndices)) 0x7EF550;
-int(__cdecl *CLODLightManager::SA::RwIm3DEnd)() = (int(__cdecl *)()) 0x7EF520;
-C2dfx *(__fastcall *CLODLightManager::SA::Get2dfx)(CBaseModelInfo *model, int edx0, int number) = (C2dfx *(__fastcall *)(CBaseModelInfo *, int, int)) 0x4C4C70;
-void(__cdecl *CLODLightManager::SA::drawSpotLight)(int coronaIndex, float StartX, float StartY, float StartZ, float EndX, float EndY, float EndZ, float TargetRadius, float intensity, char flag1, char drawShadow, RwV3D *pVec1, RwV3D *pVec2, RwV3D *pVec3, char unkTrue, float BaseRadius) = (void(cdecl *)(int, float, float, float, float, float, float, float, float, char, char, RwV3D *, RwV3D *, RwV3D *, char, float)) 0x6C58E0;
-bool(__thiscall *CLODLightManager::SA::CObjectIsDamaged)(CObject *pclObject) = (bool(__thiscall *)(CObject *))0x0046A2F0;
+char(__cdecl* CLODLightManager::SA::GetIsTimeInRange)(char hourA, char hourB) = (char(__cdecl*)(char, char)) 0x52CEE0;
+int* (__cdecl* CLODLightManager::SA::GetModelInfo)(const char*, int*) = (int* (__cdecl*)(const char*, int*)) 0x4C5940;
+void(__cdecl* const CLODLightManager::SA::CShadowsUpdateStaticShadows)() = (decltype(CShadowsUpdateStaticShadows))0x707F40;
+bool(__cdecl* const CLODLightManager::SA::CShadowsStoreStaticShadow)(unsigned int id, unsigned char type, RwTexture* particle, CVector* pos, float x1, float y1, float x2, float y2, short alpha, unsigned char red, unsigned char green, unsigned char blue, float, float, float drawdist, bool lifetime, float updist) = (decltype(CShadowsStoreStaticShadow))0x70BA00;
+float(__cdecl* CLODLightManager::SA::FindGroundZFor3DCoord)(float x, float y, float z, BOOL* pCollisionResult, CEntity** pGroundObject) = (float(__cdecl*)(float, float, float, BOOL*, CEntity**)) 0x5696C0;
+RwV3D* (__cdecl* CLODLightManager::SA::TransformPoint)(RwV3D* outPoint, CMatrix* m, RwV3D* point) = (RwV3D * (__cdecl*)(RwV3D*, CMatrix*, RwV3D*)) 0x59C890;
+bool(__thiscall* CLODLightManager::SA::CCameraIsSphereVisible)(int* camera, RwV3d* origin, float radius) = (bool(__thiscall*)(int*, RwV3d*, float)) 0x00420D40;
+void(__cdecl* CLODLightManager::SA::RegisterCorona)(int id, int* vehicle, char r, char g, char b, char alpha, RwV3d* pos, float radius, float farClip, char type, char flareType, char enableReflection, char checkObstacles, int notUsed, float normalAngle, char longDistance, float nearClip, char someFadeFlag, float flashInertia, char onlyFromBelow, char flag) = (void(__cdecl*)(int, int*, char, char, char, char, RwV3d*, float, float, char, char, char, char, int, float, char, float, char, float, char, char)) 0x6FC580;
+void(__fastcall* CLODLightManager::SA::CVectorNormalize)(RwV3D* in) = (void(__fastcall*)(RwV3D * in)) 0x59C910;
+RwV3D* (__cdecl* CLODLightManager::SA::CrossProduct)(RwV3D* out, RwV3D* a, RwV3D* b) = (RwV3D * (__cdecl*)(RwV3D * out, RwV3D * a, RwV3D * b)) 0x59C730;
+int(__cdecl* CLODLightManager::SA::RwIm3DTransform)(RxObjSpace3dVertex* pVerts, unsigned int numVerts, RwMatrix* ltm, unsigned int flags) = (int(__cdecl*)(RxObjSpace3dVertex * pVerts, unsigned int numVerts, RwMatrix * ltm, unsigned int flags)) 0x7EF450;
+int(__cdecl* CLODLightManager::SA::RwIm3DRenderIndexedPrimitive)(int primType, short* indices, int numIndices) = (int(__cdecl*)(int primType, short* indices, int numIndices)) 0x7EF550;
+int(__cdecl* CLODLightManager::SA::RwIm3DEnd)() = (int(__cdecl*)()) 0x7EF520;
+C2dfx* (__fastcall* CLODLightManager::SA::Get2dfx)(CBaseModelInfo* model, int edx0, int number) = (C2dfx * (__fastcall*)(CBaseModelInfo*, int, int)) 0x4C4C70;
+void(__cdecl* CLODLightManager::SA::drawSpotLight)(int coronaIndex, float StartX, float StartY, float StartZ, float EndX, float EndY, float EndZ, float TargetRadius, float intensity, char flag1, char drawShadow, RwV3D* pVec1, RwV3D* pVec2, RwV3D* pVec3, char unkTrue, float BaseRadius) = (void(cdecl*)(int, float, float, float, float, float, float, float, float, char, char, RwV3D*, RwV3D*, RwV3D*, char, float)) 0x6C58E0;
+bool(__thiscall* CLODLightManager::SA::CObjectIsDamaged)(CObject* pclObject) = (bool(__thiscall*)(CObject*))0x0046A2F0;
 
 RwTexture* CLODLightManager::gpCustomCoronaTexture = nullptr;
-RwImage*(__cdecl *const RtPNGImageReadSA)(const char* imageName) = (decltype(RtPNGImageReadSA))0x7CF9B0;
-RwImage*(__cdecl *const RwImageFindRasterFormatSA)(RwImage* ipImage, int nRasterType, int* npWidth, int* npHeight, int* npDepth, int* npFormat) = (decltype(RwImageFindRasterFormatSA))0x8042C0;
-RwRaster*(__cdecl *const RwRasterCreateSA)(int width, int height, int depth, int flags) = (decltype(RwRasterCreateSA))0x7FB230;
-RwRaster*(__cdecl *const RwRasterSetFromImageSA)(RwRaster* raster, RwImage* image) = (decltype(RwRasterSetFromImageSA))0x804290;
-RwTexture*(__cdecl *const RwTextureCreateSA)(RwRaster* raster) = (decltype(RwTextureCreateSA))0x7F37C0;
-bool*(__cdecl *const RwImageDestroySA)(RwImage* image) = (decltype(RwImageDestroySA))0x802740;
+RwImage* (__cdecl* const RtPNGImageReadSA)(const char* imageName) = (decltype(RtPNGImageReadSA))0x7CF9B0;
+RwImage* (__cdecl* const RwImageFindRasterFormatSA)(RwImage* ipImage, int nRasterType, int* npWidth, int* npHeight, int* npDepth, int* npFormat) = (decltype(RwImageFindRasterFormatSA))0x8042C0;
+RwRaster* (__cdecl* const RwRasterCreateSA)(int width, int height, int depth, int flags) = (decltype(RwRasterCreateSA))0x7FB230;
+RwRaster* (__cdecl* const RwRasterSetFromImageSA)(RwRaster* raster, RwImage* image) = (decltype(RwRasterSetFromImageSA))0x804290;
+RwTexture* (__cdecl* const RwTextureCreateSA)(RwRaster* raster) = (decltype(RwTextureCreateSA))0x7F37C0;
+bool* (__cdecl* const RwImageDestroySA)(RwImage* image) = (decltype(RwImageDestroySA))0x802740;
 RwTexture* CPNGFileReadFromFile(const char* pFileName)
 {
-    RwTexture*      pTexture = nullptr;
+    RwTexture* pTexture = nullptr;
 
     if (RwImage* pImage = RtPNGImageReadSA(pFileName))
     {
@@ -56,12 +56,12 @@ RwTexture* CPNGFileReadFromFile(const char* pFileName)
     return pTexture;
 }
 
-void RwRenderStateSetSA(RwRenderState nState, void *pParam)
+void RwRenderStateSetSA(RwRenderState nState, void* pParam)
 {
     RwEngineInstance = *(void**)0xC97B24;
     RwRenderStateSet(nState, pParam);
 }
-void(*_RwRenderStateSet)(RwRenderState nState, void *pParam) = &RwRenderStateSetSA;
+void(*_RwRenderStateSet)(RwRenderState nState, void* pParam) = &RwRenderStateSetSA;
 
 CVector* GetCamPos()
 {
@@ -145,7 +145,7 @@ void CLODLightManager::SA::ApplyMemoryPatches()
     {
         void operator()(injector::reg_pack& regs)
         {
-            injector::cstd<void(const char *a1)>::call(0x5B3680, (char*)0x869B30);
+            injector::cstd<void(const char* a1)>::call(0x5B3680, (char*)0x869B30);
             CLODLightManager::SA::LoadDatFile();
         }
     }; injector::MakeInline<asmInit>(0x5B9253, 0x5B9258);
@@ -175,7 +175,7 @@ void CLODLightManager::SA::ApplyMemoryPatches()
         {
             void operator()(injector::reg_pack& regs)
             {
-                injector::cstd<void(const char *a1, const char *a2)>::call(0x53DED0, (char*)0x869B30, (char*)0x863A80);
+                injector::cstd<void(const char* a1, const char* a2)>::call(0x53DED0, (char*)0x869B30, (char*)0x863A80);
                 CLODLightManager::SA::RegisterCustomCoronas();
                 m_bCatchLamppostsNow = false;
                 m_Lampposts.shrink_to_fit();
@@ -189,7 +189,7 @@ void CLODLightManager::SA::ApplyMemoryPatches()
             {
                 uint32_t _ecx = regs.ecx;
                 __asm mov ecx, _ecx
-                __asm mov fs : [00000000], ecx
+                __asm mov fs : [00000000] , ecx
 
                 CLODLightManager::SA::PossiblyAddThisEntity((CEntity*)regs.eax);
             }
@@ -389,51 +389,51 @@ void CLODLightManager::SA::ApplyMemoryPatches()
         }
     }
 
-    if (bLoadAllBinaryIPLs)
-    {
-        struct LoadAllBinaryIPLs
-        {
-            void operator()(injector::reg_pack&)
-            {
-                static auto CIplStoreLoad = (char *(__cdecl *)()) 0x5D54A0;
-                CIplStoreLoad();
-
-                static auto IplFilePoolLocate = (int(__cdecl *)(const char *name)) 0x404AC0;
-                static auto CIplStoreRequestIplAndIgnore = (char *(__cdecl *)(int a1)) 0x405850;
-
-                injector::address_manager::singleton().IsHoodlum() ?
-                injector::WriteMemory<char>(0x015651C1 + 3, 0, true) :
-                injector::WriteMemory<char>(0x405881 + 3, 0, true);
-
-                static std::vector<std::string> IPLStreamNames = { "LAE_STREAM0", "LAE_STREAM1", "LAE_STREAM2", "LAE_STREAM3", "LAE_STREAM4", "LAE_STREAM5",
-                                                                   "LAE2_STREAM0", "LAE2_STREAM1", "LAE2_STREAM2", "LAE2_STREAM3", "LAE2_STREAM4", "LAE2_STREAM5", "LAE2_STREAM6", "LAHILLS_STREAM0",
-                                                                   "LAHILLS_STREAM1", "LAHILLS_STREAM2", "LAHILLS_STREAM3", "LAHILLS_STREAM4", "LAN_STREAM0", "LAN_STREAM1", "LAN_STREAM2", "LAN2_STREAM0",
-                                                                   "LAN2_STREAM1", "LAN2_STREAM2", "LAN2_STREAM3", "LAS_STREAM0", "LAS_STREAM1", "LAS_STREAM2", "LAS_STREAM3", "LAS_STREAM4", "LAS_STREAM5",
-                                                                   "LAS2_STREAM0", "LAS2_STREAM1", "LAS2_STREAM2", "LAS2_STREAM3", "LAS2_STREAM4", "LAW_STREAM0", "LAW_STREAM1", "LAW_STREAM2", "LAW_STREAM3", "LAW_STREAM4",
-                                                                   "LAW_STREAM5", "LAW2_STREAM0", "LAW2_STREAM1", "LAW2_STREAM2", "LAW2_STREAM3", "LAW2_STREAM4", "LAWN_STREAM0", "LAWN_STREAM1", "LAWN_STREAM2", "LAWN_STREAM3",
-                                                                   "COUNTN2_STREAM0", "COUNTN2_STREAM1", "COUNTN2_STREAM2", "COUNTN2_STREAM3", "COUNTN2_STREAM4", "COUNTN2_STREAM5", "COUNTN2_STREAM6", "COUNTN2_STREAM7", "COUNTN2_STREAM8",
-                                                                   "COUNTRYE_STREAM0", "COUNTRYE_STREAM1", "COUNTRYE_STREAM2", "COUNTRYE_STREAM3", "COUNTRYE_STREAM4", "COUNTRYE_STREAM5", "COUNTRYE_STREAM6", "COUNTRYE_STREAM7", "COUNTRYE_STREAM8",
-                                                                   "COUNTRYE_STREAM9", "COUNTRYN_STREAM0", "COUNTRYN_STREAM1", "COUNTRYN_STREAM2", "COUNTRYN_STREAM3", "COUNTRYS_STREAM0", "COUNTRYS_STREAM1", "COUNTRYS_STREAM2", "COUNTRYS_STREAM3", "COUNTRYS_STREAM4",
-                                                                   "COUNTRYW_STREAM0", "COUNTRYW_STREAM1", "COUNTRYW_STREAM2", "COUNTRYW_STREAM3", "COUNTRYW_STREAM4", "COUNTRYW_STREAM5", "COUNTRYW_STREAM6", "COUNTRYW_STREAM7", "COUNTRYW_STREAM8", "SFE_STREAM0",
-                                                                   "SFE_STREAM1", "SFE_STREAM2", "SFE_STREAM3", "SFN_STREAM0", "SFN_STREAM1", "SFN_STREAM2", "SFS_STREAM0", "SFS_STREAM1", "SFS_STREAM2", "SFS_STREAM3", "SFS_STREAM4", "SFS_STREAM5", "SFS_STREAM6",
-                                                                   "SFS_STREAM7", "SFS_STREAM8", "SFSE_STREAM0", "SFSE_STREAM1", "SFSE_STREAM2", "SFSE_STREAM3", "SFSE_STREAM4", "SFSE_STREAM5", "SFSE_STREAM6", "SFW_STREAM0", "SFW_STREAM1", "SFW_STREAM2", "SFW_STREAM3",
-                                                                   "SFW_STREAM4", "SFW_STREAM5", "VEGASE_STREAM0", "VEGASE_STREAM1", "VEGASE_STREAM2", "VEGASE_STREAM3", "VEGASE_STREAM4", "VEGASE_STREAM5", "VEGASE_STREAM6", "VEGASE_STREAM7", "VEGASE_STREAM8",
-                                                                   "VEGASN_STREAM0", "VEGASN_STREAM1", "VEGASN_STREAM2", "VEGASN_STREAM3", "VEGASN_STREAM4", "VEGASN_STREAM5", "VEGASN_STREAM6", "VEGASN_STREAM7", "VEGASN_STREAM8", "VEGASS_STREAM0", "VEGASS_STREAM1",
-                                                                   "VEGASS_STREAM2", "VEGASS_STREAM3", "VEGASS_STREAM4", "VEGASS_STREAM5", "VEGASW_STREAM0", "VEGASW_STREAM1", "VEGASW_STREAM2", "VEGASW_STREAM3", "VEGASW_STREAM4", "VEGASW_STREAM5", "VEGASW_STREAM6",
-                                                                   "VEGASW_STREAM7", "VEGASW_STREAM8", "VEGASW_STREAM9"
-                                                                 };
-
-                for (auto it = IPLStreamNames.cbegin(); it != IPLStreamNames.cend(); it++)
-                {
-                    CIplStoreRequestIplAndIgnore(IplFilePoolLocate(it->c_str()));
-                }
-
-                injector::address_manager::singleton().IsHoodlum() ?
-                injector::WriteMemory<char>(0x015651C1 + 3, 1, true) :
-                injector::WriteMemory<char>(0x405881 + 3, 1, true);
-            }
-        }; injector::MakeInline<LoadAllBinaryIPLs>(0x5D19A4);
-    }
+    //if (bLoadAllBinaryIPLs)
+    //{
+    //    struct LoadAllBinaryIPLs
+    //    {
+    //        void operator()(injector::reg_pack&)
+    //        {
+    //            static auto CIplStoreLoad = (char *(__cdecl *)()) 0x5D54A0;
+    //            CIplStoreLoad();
+    //
+    //            static auto IplFilePoolLocate = (int(__cdecl *)(const char *name)) 0x404AC0;
+    //            static auto CIplStoreRequestIplAndIgnore = (char *(__cdecl *)(int a1)) 0x405850;
+    //
+    //            injector::address_manager::singleton().IsHoodlum() ?
+    //            injector::WriteMemory<char>(0x015651C1 + 3, 0, true) :
+    //            injector::WriteMemory<char>(0x405881 + 3, 0, true);
+    //
+    //            static std::vector<std::string> IPLStreamNames = { "LAE_STREAM0", "LAE_STREAM1", "LAE_STREAM2", "LAE_STREAM3", "LAE_STREAM4", "LAE_STREAM5",
+    //                                                               "LAE2_STREAM0", "LAE2_STREAM1", "LAE2_STREAM2", "LAE2_STREAM3", "LAE2_STREAM4", "LAE2_STREAM5", "LAE2_STREAM6", "LAHILLS_STREAM0",
+    //                                                               "LAHILLS_STREAM1", "LAHILLS_STREAM2", "LAHILLS_STREAM3", "LAHILLS_STREAM4", "LAN_STREAM0", "LAN_STREAM1", "LAN_STREAM2", "LAN2_STREAM0",
+    //                                                               "LAN2_STREAM1", "LAN2_STREAM2", "LAN2_STREAM3", "LAS_STREAM0", "LAS_STREAM1", "LAS_STREAM2", "LAS_STREAM3", "LAS_STREAM4", "LAS_STREAM5",
+    //                                                               "LAS2_STREAM0", "LAS2_STREAM1", "LAS2_STREAM2", "LAS2_STREAM3", "LAS2_STREAM4", "LAW_STREAM0", "LAW_STREAM1", "LAW_STREAM2", "LAW_STREAM3", "LAW_STREAM4",
+    //                                                               "LAW_STREAM5", "LAW2_STREAM0", "LAW2_STREAM1", "LAW2_STREAM2", "LAW2_STREAM3", "LAW2_STREAM4", "LAWN_STREAM0", "LAWN_STREAM1", "LAWN_STREAM2", "LAWN_STREAM3",
+    //                                                               "COUNTN2_STREAM0", "COUNTN2_STREAM1", "COUNTN2_STREAM2", "COUNTN2_STREAM3", "COUNTN2_STREAM4", "COUNTN2_STREAM5", "COUNTN2_STREAM6", "COUNTN2_STREAM7", "COUNTN2_STREAM8",
+    //                                                               "COUNTRYE_STREAM0", "COUNTRYE_STREAM1", "COUNTRYE_STREAM2", "COUNTRYE_STREAM3", "COUNTRYE_STREAM4", "COUNTRYE_STREAM5", "COUNTRYE_STREAM6", "COUNTRYE_STREAM7", "COUNTRYE_STREAM8",
+    //                                                               "COUNTRYE_STREAM9", "COUNTRYN_STREAM0", "COUNTRYN_STREAM1", "COUNTRYN_STREAM2", "COUNTRYN_STREAM3", "COUNTRYS_STREAM0", "COUNTRYS_STREAM1", "COUNTRYS_STREAM2", "COUNTRYS_STREAM3", "COUNTRYS_STREAM4",
+    //                                                               "COUNTRYW_STREAM0", "COUNTRYW_STREAM1", "COUNTRYW_STREAM2", "COUNTRYW_STREAM3", "COUNTRYW_STREAM4", "COUNTRYW_STREAM5", "COUNTRYW_STREAM6", "COUNTRYW_STREAM7", "COUNTRYW_STREAM8", "SFE_STREAM0",
+    //                                                               "SFE_STREAM1", "SFE_STREAM2", "SFE_STREAM3", "SFN_STREAM0", "SFN_STREAM1", "SFN_STREAM2", "SFS_STREAM0", "SFS_STREAM1", "SFS_STREAM2", "SFS_STREAM3", "SFS_STREAM4", "SFS_STREAM5", "SFS_STREAM6",
+    //                                                               "SFS_STREAM7", "SFS_STREAM8", "SFSE_STREAM0", "SFSE_STREAM1", "SFSE_STREAM2", "SFSE_STREAM3", "SFSE_STREAM4", "SFSE_STREAM5", "SFSE_STREAM6", "SFW_STREAM0", "SFW_STREAM1", "SFW_STREAM2", "SFW_STREAM3",
+    //                                                               "SFW_STREAM4", "SFW_STREAM5", "VEGASE_STREAM0", "VEGASE_STREAM1", "VEGASE_STREAM2", "VEGASE_STREAM3", "VEGASE_STREAM4", "VEGASE_STREAM5", "VEGASE_STREAM6", "VEGASE_STREAM7", "VEGASE_STREAM8",
+    //                                                               "VEGASN_STREAM0", "VEGASN_STREAM1", "VEGASN_STREAM2", "VEGASN_STREAM3", "VEGASN_STREAM4", "VEGASN_STREAM5", "VEGASN_STREAM6", "VEGASN_STREAM7", "VEGASN_STREAM8", "VEGASS_STREAM0", "VEGASS_STREAM1",
+    //                                                               "VEGASS_STREAM2", "VEGASS_STREAM3", "VEGASS_STREAM4", "VEGASS_STREAM5", "VEGASW_STREAM0", "VEGASW_STREAM1", "VEGASW_STREAM2", "VEGASW_STREAM3", "VEGASW_STREAM4", "VEGASW_STREAM5", "VEGASW_STREAM6",
+    //                                                               "VEGASW_STREAM7", "VEGASW_STREAM8", "VEGASW_STREAM9"
+    //                                                             };
+    //
+    //            for (auto it = IPLStreamNames.cbegin(); it != IPLStreamNames.cend(); it++)
+    //            {
+    //                CIplStoreRequestIplAndIgnore(IplFilePoolLocate(it->c_str()));
+    //            }
+    //
+    //            injector::address_manager::singleton().IsHoodlum() ?
+    //            injector::WriteMemory<char>(0x015651C1 + 3, 1, true) :
+    //            injector::WriteMemory<char>(0x405881 + 3, 1, true);
+    //        }
+    //    }; injector::MakeInline<LoadAllBinaryIPLs>(0x5D19A4);
+    //}
 
 
     if (bPreloadLODs)
@@ -481,7 +481,7 @@ void CLODLightManager::SA::ApplyMemoryPatches()
     {
         auto now = std::chrono::system_clock::now();
         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-        struct tm *date = std::localtime(&now_c);
+        struct tm* date = std::localtime(&now_c);
         if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
         {
             CLODLights::RegisterCorona = &CLODLights::RegisterFestiveCorona;
@@ -506,7 +506,7 @@ void CLODLightManager::SA::RegisterCustomCoronas()
         m_Lampposts.push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
 }
 
-CEntity * CLODLightManager::SA::PossiblyAddThisEntity(CEntity * pEntity)
+CEntity* CLODLightManager::SA::PossiblyAddThisEntity(CEntity* pEntity)
 {
     if (m_bCatchLamppostsNow && IsModelALamppost(pEntity->GetModelIndex()))
         RegisterLamppost(pEntity);
@@ -515,11 +515,11 @@ CEntity * CLODLightManager::SA::PossiblyAddThisEntity(CEntity * pEntity)
     return pEntity;
 }
 
-void CLODLightManager::SA::RegisterLamppost(CEntity * pObj)
+void CLODLightManager::SA::RegisterLamppost(CEntity* pObj)
 {
     unsigned short      nModelID = pObj->GetModelIndex();
     CMatrix             dummyMatrix;
-    CSimpleTransform&   objTransform = pObj->GetTransform();
+    CSimpleTransform& objTransform = pObj->GetTransform();
 
     if (objTransform.m_translate.x == 0.0f && objTransform.m_translate.y == 0.0f)
         return;
@@ -543,35 +543,35 @@ void CLODLightManager::SA::RegisterLODLights()
         fCoronaFarClip = autoFarClip ? **fCurrentFarClip : fCoronaFarClip;
 
         if (nTime >= 20 * 60)
-            bAlpha = static_cast<unsigned char>((15.0f / 16.0f)*nTime - 1095.0f); // http://goo.gl/O03RpE {(20*60)a + y = 30,  (24*60)a + y = 255}
+            bAlpha = static_cast<unsigned char>((15.0f / 16.0f) * nTime - 1095.0f); // http://goo.gl/O03RpE {(20*60)a + y = 30,  (24*60)a + y = 255}
         else if (nTime < 3 * 60)
             bAlpha = 255;
         else
-            bAlpha = static_cast<unsigned char>((-15.0f / 16.0f)*nTime + 424.0f); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 150}
+            bAlpha = static_cast<unsigned char>((-15.0f / 16.0f) * nTime + 424.0f); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 150}
 
         for (auto it = m_Lampposts.cbegin(); it != m_Lampposts.cend(); it++)
         {
             if ((it->vecPos.z >= -15.0f) && (it->vecPos.z <= 1030.0f))
             {
-                CVector*    pCamPos = &TheCamera.Cams[TheCamera.ActiveCam].Source;
-                float       fDistSqr = (pCamPos->x - it->vecPos.x)*(pCamPos->x - it->vecPos.x) + (pCamPos->y - it->vecPos.y)*(pCamPos->y - it->vecPos.y) + (pCamPos->z - it->vecPos.z)*(pCamPos->z - it->vecPos.z);
+                CVector* pCamPos = &TheCamera.Cams[TheCamera.ActiveCam].Source;
+                float       fDistSqr = (pCamPos->x - it->vecPos.x) * (pCamPos->x - it->vecPos.x) + (pCamPos->y - it->vecPos.y) * (pCamPos->y - it->vecPos.y) + (pCamPos->z - it->vecPos.z) * (pCamPos->z - it->vecPos.z);
 
-                if ((fDistSqr > 250.0f*250.0f && fDistSqr < fCoronaFarClip*fCoronaFarClip) || it->nNoDistance)
+                if ((fDistSqr > 250.0f * 250.0f && fDistSqr < fCoronaFarClip * fCoronaFarClip) || it->nNoDistance)
                 {
                     if (it->nNoDistance)
                         fRadius = 3.5f;
                     else
-                        fRadius = (fDistSqr < 300.0f*300.0f) ? (0.07f)*sqrt(fDistSqr) - 17.5f : 3.5f; // http://goo.gl/vhAZSx
+                        fRadius = (fDistSqr < 300.0f * 300.0f) ? (0.07f) * sqrt(fDistSqr) - 17.5f : 3.5f; // http://goo.gl/vhAZSx
 
                     if (bSlightlyIncreaseRadiusWithDistance)
-                        fRadius *= min((0.0025f)*sqrt(fDistSqr) + 0.25f, 4.0f); // http://goo.gl/3kDpnC
+                        fRadius *= min((0.0025f) * sqrt(fDistSqr) + 0.25f, 4.0f); // http://goo.gl/3kDpnC
 
                     if (it->fCustomSizeMult != 0.45f)
                     {
                         if (!it->nCoronaShowMode)
                         {
                             CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
-                            if (bRenderStaticShadowsForLODs) CShadowsStoreStaticShadow(reinterpret_cast<unsigned int>(&*it), SSHADT_INTENSIVE, *(RwTexture **)0xC403F4, (CVector*)&it->vecPos, 8.0f, 0.0f, 0.0f, -8.0f, bAlpha, (it->colour.r / 3), (it->colour.g / 3), (it->colour.b / 3), 15.0f, 1.0f, fCoronaFarClip, false, 0.0f);
+                            if (bRenderStaticShadowsForLODs) CShadowsStoreStaticShadow(reinterpret_cast<unsigned int>(&*it), SSHADT_INTENSIVE, *(RwTexture**)0xC403F4, (CVector*)&it->vecPos, 8.0f, 0.0f, 0.0f, -8.0f, bAlpha, (it->colour.r / 3), (it->colour.g / 3), (it->colour.b / 3), 15.0f, 1.0f, fCoronaFarClip, false, 0.0f);
                         }
                         else
                         {

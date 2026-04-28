@@ -51,8 +51,12 @@ workspace "III.VC.SA.IV.Project2DFX"
    files { "source/%{prj.name}/*.h", "source/%{prj.name}/*.cpp" }
    files { "resources/*.rc" }
    files { "external/hooking/Hooking.Patterns.h", "external/hooking/Hooking.Patterns.cpp" }
+   files { "external/injector/safetyhook/include/**.hpp", "external/injector/safetyhook/src/**.cpp" }
+   files { "external/injector/zydis/**.h", "external/injector/zydis/**.c" }
    includedirs { "includes" }
    includedirs { "external/hooking" }
+   includedirs { "external/injector/safetyhook/include" }
+   includedirs { "external/injector/zydis" }
    includedirs { "external/injector/include" }
    includedirs { "external/inireader" }
       
