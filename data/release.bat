@@ -1,3 +1,14 @@
+call EmbedPDB.bat
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "Sign.ps1" ^
+    -SearchPaths ".\*.asi" ^
+    -MaxParallel 8
+
+if %errorlevel% neq 0 (
+    echo ERROR: Signing failed!
+    exit /b 1
+)
+
 7za a -tzip ".\2DFXDataGrabber.zip" ".\2DFXDataGrabber\*"   -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
 7za a -tzip ".\III.Project2DFX.zip" ".\IIILodLights\*"      -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
 7za a -tzip ".\VC.Project2DFX.zip"  ".\VCLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
