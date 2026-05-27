@@ -1,5 +1,5 @@
 #%modelname
-#Red, Green, Blue, Alpha, OffsetX, OffsetY, OffsetZ, CustomSize, BlinkType, NoDistance, DrawSearchlight
+#Red, Green, Blue, Alpha, OffsetX, OffsetY, OffsetZ, CustomSize, DrawDistance, BlinkType, NoDistance, DrawSearchlight
 #0.45 - custom size reserved for traffic lights
 
 %08_ten01_mh2

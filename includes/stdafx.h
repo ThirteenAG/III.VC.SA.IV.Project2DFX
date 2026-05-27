@@ -22,30 +22,33 @@
 #include "injector\hooking.hpp"
 #include "injector\utility.hpp"
 
-#include "rwsdk\rwcore.h"
-#include "rwsdk\rpworld.h"
+#include "Hooking.Patterns.h"
 
-#include "Maths.h"
-#include "General.h"
-#include "Camera.h"
+#include "gameref.hpp"
 
-template<typename T>
-inline T random(T a, T b)
-{
-    return a + static_cast<T>(rand() * (1.0f / RAND_MAX) * (b - a));
-}
+#include "rw.h"
 
-template<typename T>
-inline T Min(const T& a, const T& b)
-{
-    return a > b ? b : a;
-}
-
-template<typename T>
-inline T Max(const T& a, const T& b)
-{
-    return a > b ? a : b;
-}
+//#include "Maths.h"
+//#include "General.h"
+//#include "Camera.h"
+//
+//template<typename T>
+//inline T random(T a, T b)
+//{
+//    return a + static_cast<T>(rand() * (1.0f / RAND_MAX) * (b - a));
+//}
+//
+//template<typename T>
+//inline T Min(const T& a, const T& b)
+//{
+//    return a > b ? b : a;
+//}
+//
+//template<typename T>
+//inline T Max(const T& a, const T& b)
+//{
+//    return a > b ? a : b;
+//}
 
 inline bool IsModuleUAL(HMODULE mod)
 {
@@ -54,10 +57,13 @@ inline bool IsModuleUAL(HMODULE mod)
     return false;
 }
 
-inline bool IsUALPresent() {
-    for (const auto& entry : std::stacktrace::current()) {
+inline bool IsUALPresent()
+{
+    for (const auto& entry : std::stacktrace::current())
+    {
         HMODULE hModule = NULL;
-        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)entry.native_handle(), &hModule)) {
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)entry.native_handle(), &hModule))
+        {
             if (IsModuleUAL(hModule))
                 return true;
         }

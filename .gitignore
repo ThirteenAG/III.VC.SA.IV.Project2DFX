@@ -9,6 +9,11 @@ data/**/*.exe
 data/**/*.exp
 data/**/*.lib
 data/2DFXDataGrabber/iv_data
+data/2DFXDataGrabber/sa_data
+data/2DFXDataGrabber/vc_data
+data/2DFXDataGrabber/iii_data
+data/2DFXDataGrabber/lcs_data
+data/2DFXDataGrabber/vcs_data
 !data/**/SA2dfx.exe
 !data/7za.exe
 !data/EmbedPDB.exe

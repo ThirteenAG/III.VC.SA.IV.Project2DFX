@@ -1,427 +1,110 @@
-#include "stdafx.h"
-#include "CLODLightManager.h"
-#include "Hooking.Patterns.h"
+﻿#include "stdafx.h"
+#define _USE_MATH_DEFINES
+#include <math.h>
 #include <ranges>
-#include <thread>
 
-using namespace injector;
+import CoronaLimit;
+import LamppostInfo;
+import WplInstance;
+import TimecycleIV;
+import Timer;
+import FileMgr;
 
-const uint32_t NUM_HOURS = 11;
-const uint32_t NUM_WEATHERS = 9;
+std::multimap<unsigned int, CLamppostInfo> FileContentMMap;
 
-struct TimeCycleParams
-{
-public:
-    uint32_t mAmbient0Color;
-    uint32_t mAmbient1Color;
-    uint32_t mDirLightColor;
-    float mDirLightMultiplier;
-    float mAmbient0Multiplier;
-    float mAmbient1Multiplier;
-    float mAOStrength;
-    float mPedAOStrength;
-    float mRimLightingMultiplier;
-    float mSkyLightMultiplier;
-    float mDirLightSpecMultiplier;
-    uint32_t mSkyBottomColorFogDensity;
-    uint32_t mSunCore;
-    float mCoronaBrightness;
-    float mCoronaSize;
-    float mDistantCoronaBrightness;
-    float mDistantCoronaSize;
-    float mFarClip;
-    float mFogStart;
-    float mDOFStart;
-    float mNearDOFBlur;
-    float mFarDOFBlur;
-    uint32_t mLowCloudsColor;
-    uint32_t mBottomCloudsColor;
-    uint32_t mWater;
-    float mUnused64[7];
-    float mWaterReflectionMultiplier;
-    float mParticleBrightness;
-    float mExposure;
-    float mBloomThreshold;
-    float mMidGrayValue;
-    float mBloomIntensity;
-    uint32_t mColorCorrection;
-    uint32_t mColorAdd;
-    float mDesaturation;
-    float mContrast;
-    float mGamma;
-    float mDesaturationFar;
-    float mContrastFar;
-    float mGammaFar;
-    float mDepthFxNear;
-    float mDepthFxFar;
-    float mLumMin;
-    float mLumMax;
-    float mLumDelay;
-    int32_t mCloudAlpha;
-    float mUnusedD0;
-    float mTemperature;
-    float mGlobalReflectionMultiplier;
-    float mUnusedDC;
-    float mSkyColor[3];
-    float mUnusedEC;
-    float mSkyHorizonColor[3];
-    float mUnusedFC;
-    float mSkyEastHorizonColor[3];
-    float mUnused10C;
-    float mCloud1Color[3];
-    float mUnknown11C;
-    float mSkyHorizonHeight;
-    float mSkyHorizonBrightness;
-    float mSunAxisX;
-    float mSunAxisY;
-    float mCloud2Color[3];
-    float mUnused13C;
-    float mCloud2ShadowStrength;
-    float mCloud2Threshold;
-    float mCloud2Bias1;
-    float mCloud2Scale;
-    float mCloudInScatteringRange;
-    float mCloud2Bias2;
-    float mDetailNoiseScale;
-    float mDetailNoiseMultiplier;
-    float mCloud2Offset;
-    float mCloudWarp;
-    float mCloudsFadeOut;
-    float mCloud1Bias;
-    float mCloud1Detail;
-    float mCloud1Threshold;
-    float mCloud1Height;
-    float mUnused17C;
-    float mCloud3Color[3];
-    float mUnused18C;
-    float mUnknown190;
-    float mUnused198[3];
-    float mSunColor[3];
-    float mUnused1AC;
-    float mCloudsBrightness;
-    float mDetailNoiseOffset;
-    float mStarsBrightness;
-    float mVisibleStars;
-    float mMoonBrightness;
-    float mUnused1C4[3];
-    float mMoonColor[3];
-    float mUnused1DC;
-    float mMoonGlow;
-    float mMoonParam3;
-    float SunCenterStart;
-    float SunCenterEnd;
-    float mSunSize;
-    float mUnused1F8[3];
-    float mUnknown200;
-    float mSkyBrightness;
-    float mUnused208;
-    int32_t mFilmGrain;
-};
+bool bRenderLodLights;
+float fCoronaRadiusMultiplier;
+bool bSlightlyIncreaseRadiusWithDistance;
+float fCoronaFarClip;
 
-struct Timecycle
-{
-    TimeCycleParams mParams[NUM_HOURS][NUM_WEATHERS];
-
-    static int32_t GameTimeToTimecycTimeIndex(const int32_t gameTime)
-    {
-        const int32_t gameTimeToTimecycTimeIndex[24] = { 0, 0, 0, 0, 0, 1, 2, 3, 3, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 7, 8, 9, 10, 10 };
-        return gameTimeToTimecycTimeIndex[gameTime];
-    }
-};
-
-Timecycle* mTimeCycle = nullptr;
-
-#define NewLimitExponent 14
-
-char* CLODLightManager::IV::CurrentTimeHours;
-char* CLODLightManager::IV::CurrentTimeMinutes;
-int(__cdecl *CLODLightManager::IV::DrawCorona)(float x, float y, float z, float radius, unsigned int unk, float unk2, unsigned char r, unsigned char g, unsigned char b);
-int(__cdecl *CLODLightManager::IV::DrawCorona2)(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14);
-int(__cdecl *CLODLightManager::IV::DrawCorona3)(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14);
-void(__stdcall *CLODLightManager::IV::GetRootCam)(int *camera);
-void(__stdcall *CLODLightManager::IV::GetGameCam)(int *camera);
-bool(__cdecl *CLODLightManager::IV::CamIsSphereVisible)(int camera, float pX, float pY, float pZ, float radius);
-void(__cdecl *CLODLightManager::IV::GetCamPos)(int camera, float *pX, float *pY, float *pZ);
-int* CTimer::m_snTimeInMillisecondsPauseMode = nullptr;
-float* CTimer::ms_fTimeStep = nullptr;
-float fCamHeight;
-std::map<unsigned int, CRGBA> FestiveLights;
-extern bool bIsIVEFLC;
+char* CurrentTimeHours;
+char* CurrentTimeMinutes;
+int(__cdecl* DrawCorona)(float x, float y, float z, float radius, unsigned int unk, float unk2, unsigned char r, unsigned char g, unsigned char b);
+int(__cdecl* DrawCorona2)(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14);
+void(__stdcall* GetRootCam)(int* camera);
+void(__stdcall* GetGameCam)(int* camera);
+bool(__cdecl* CamIsSphereVisible)(int camera, float pX, float pY, float pZ, float radius);
+void(__cdecl* GetCamPos)(int camera, float* pX, float* pY, float* pZ);
 float fCoronaAlphaMultiplier = 1.0f;
+float fCamHeight;
 
-int CCoronasRegisterFestiveCoronaForEntity(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14)
+unsigned int hashStringLowercaseFromSeed(const char* str, unsigned int seed)
 {
-    auto it = FestiveLights.find(id);
-    if (it != FestiveLights.end())
-    {
-        return CLODLightManager::IV::DrawCorona2(id, it->second.r, it->second.g, it->second.b, a5, pos, radius, a8, a9, a10, a11, a12, a13, a14);
-    }
-    else
-    {
-        FestiveLights[id] = CRGBA(random(0, 255), random(0, 255), random(0, 255), 0);
-        return CLODLightManager::IV::DrawCorona2(id, r, g, b, a5, pos, radius, a8, a9, a10, a11, a12, a13, a14);
-    }
-}
+    auto hash = seed;
+    auto currentChar = str;
 
-void CLODLightManager::IV::Init()
-{
-    bIsIVEFLC = true;
-    CIniReader iniReader("");
-    bRenderLodLights = iniReader.ReadInteger("LodLights", "RenderLodLights", 1) != 0;
-    fCoronaRadiusMultiplier = iniReader.ReadFloat("LodLights", "CoronaRadiusMultiplier", 1.0f);
-    fCoronaAlphaMultiplier = iniReader.ReadFloat("LodLights", "CoronaAlphaMultiplier", 1.0f);
-    bSlightlyIncreaseRadiusWithDistance = iniReader.ReadInteger("LodLights", "SlightlyIncreaseRadiusWithDistance", 1) != 0;
-    fCoronaFarClip = iniReader.ReadFloat("LodLights", "CoronaFarClip", 0.0f);
-    bool DisableDefaultLodLights = iniReader.ReadInteger("LodLights", "DisableDefaultLodLights", 1) != 0;
-    int32_t DisableCoronasWaterReflection = iniReader.ReadInteger("LodLights", "DisableCoronasWaterReflection", 0);
-    //bFestiveLights = iniReader.ReadInteger("Misc", "FestiveLights", 1) != 0;
-    //bFestiveLightsAlways = iniReader.ReadInteger("Misc", "FestiveLightsAlways", 0) != 0;
+    if (*str == '"')
+        currentChar = str + 1;
 
-    struct LoadObjectInstanceHook
+    while (*currentChar)
     {
-        void operator()(injector::reg_pack& regs)
+        char character = *currentChar;
+
+        if (*str == '"' && character == '"')
+            break;
+
+        ++currentChar;
+
+        if ((uint8_t)(character - 'A') <= 25)
         {
-            regs.esi = *(uintptr_t*)(regs.ebp + 0x8);
-            regs.eax = (regs.esp + 0x1C);
-
-            PossiblyAddThisEntity((WplInstance*)regs.esi);
+            character += 32; // Convert uppercase to lowercase
         }
-    };
-
-    if (bRenderLodLights)
-    {
-        GetMemoryAddresses();
-        IncreaseCoronaLimit();
-        LoadDatFile();
-        RegisterCustomCoronas();
-
-        auto pattern = hook::pattern("E8 ? ? ? ? 83 3D ? ? ? ? ? 74 05 E8 ? ? ? ? 6A 05"); //+
-        injector::MakeCALL(pattern.get(0).get<uintptr_t>(0), RegisterLODLights, true);
-        pattern = hook::pattern("8B 75 08 8D 44 24 1C 50 FF 76 1C C6 44 24"); //+
-        injector::MakeInline<LoadObjectInstanceHook>(pattern.get(0).get<uintptr_t>(0), pattern.get(0).get<uintptr_t>(7));
-    }
-
-    if (DisableDefaultLodLights)
-    {
-        auto pattern = hook::pattern("83 F8 08 0F 8C ? ? ? ? 83 3D");
-        injector::WriteMemory<uint8_t>(pattern.get_first(2), 0, true);
-    }
-
-    auto pattern = hook::pattern("E8 ? ? ? ? 83 C4 08 80 3D ? ? ? ? ? 74 32 6A 00 6A 0C");
-    static auto jmp = pattern.get(0).get<uintptr_t>(8);
-    if (DisableCoronasWaterReflection == 1)
-    {
-        injector::MakeNOP(pattern.get(0).get<uintptr_t>(0), 5, true);
-    }
-    else
-    {
-        if (DisableCoronasWaterReflection == 2)
+        else if (character == '\\')
         {
-            struct ReflectionsHook
-            {
-                void operator()(injector::reg_pack& regs)
-                {
-                    regs.edx = *(uintptr_t*)(regs.esi + 0x938);
-                    if (fCamHeight < 100.0f)
-                    {
-                        *(uintptr_t*)(regs.esp - 4) = (uintptr_t)jmp;
-                    }
-                }
-            }; injector::MakeInline<ReflectionsHook>(pattern.get(0).get<uintptr_t>(-6), pattern.get(0).get<uintptr_t>(0));
-            injector::WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(-1), 0x52, true); // push edx
+            character = '/';
         }
+
+        hash = (1025 * (hash + character) >> 6) ^ 1025 * (hash + character);
     }
 
-    //if (bFestiveLights)
-    //{
-    //    auto now = std::chrono::system_clock::now();
-    //    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    //    struct tm *date = std::localtime(&now_c);
-    //    if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
-    //    {
-    //        DrawCorona3 = &CCoronasRegisterFestiveCoronaForEntity;
-    //        pattern = hook::pattern("E8 ? ? ? ? 83 C4 3C E9 ? ? ? ? A1");
-    //        injector::MakeCALL(pattern.get_first(0), CCoronasRegisterFestiveCoronaForEntity, true);
-    //        pattern = hook::pattern("E8 ? ? ? ? F3 0F 10 4C 24 ? 8A 44 24 4E");
-    //        injector::MakeCALL(pattern.get_first(0), CCoronasRegisterFestiveCoronaForEntity, true);
-    //    }
-    //}
+    return 32769 * (9 * hash ^ (9 * hash >> 11));
 }
 
-namespace CWeather
+void GetMemoryAddresses()
 {
-    enum eWeatherType : uint32_t
-    {
-        EXTRASUNNY,
-        SUNNY,
-        SUNNY_WINDY,
-        CLOUDY,
-        RAIN,
-        DRIZZLE,
-        FOGGY,
-        LIGHTNING
-    };
-
-    eWeatherType* CurrentWeather = nullptr;
-}
-
-void CLODLightManager::IV::GetMemoryAddresses()
-{
-    auto pattern = hook::pattern("A3 ? ? ? ? 8B 44 24 0C A3 ? ? ? ? 8B 44 24 10 A3 ? ? ? ? A1 ? ? ? ? A3 ? ? ? ? C3"); //+
-    CLODLightManager::IV::CurrentTimeHours = *pattern.get(0).get<char*>(1);
-    CLODLightManager::IV::CurrentTimeMinutes = *pattern.get(0).get<char*>(10);
-    pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 F3 0F 10 4D ? F3 0F 10 45"); //+
-    CLODLightManager::IV::DrawCorona = (int(__cdecl *)(float, float, float, float, unsigned int, float, unsigned char, unsigned char, unsigned char))(pattern.get(0).get<uintptr_t>(0));
-    pattern = hook::pattern("8B 15 ? ? ? ? 56 8D 72 01"); //+
-    CLODLightManager::IV::DrawCorona2 = (int(__cdecl *)(int id, char r, char g, char b, float a5, CVector* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14))(pattern.get(0).get<uintptr_t>(0)); //0x7E1970
-    CLODLightManager::IV::DrawCorona3 = CLODLightManager::IV::DrawCorona2;
-    pattern = hook::pattern("FF 35 ? ? ? ? 8B 0D ? ? ? ? E8 ? ? ? ? 8B 4C 24 04 89 01 C2 04 00"); //+
-    CLODLightManager::IV::GetRootCam = (void(__stdcall *)(int *camera))(pattern.get(0).get<uintptr_t>(0));
-    pattern = hook::pattern("B9 ? ? ? ? E8 ? ? ? ? 8B 0D ? ? ? ? 50 E8 ? ? ? ? 8B 4C 24 04 89 01 C2 04 00"); //+
-    CLODLightManager::IV::GetGameCam = (void(__stdcall *)(int *camera))(pattern.get(0).get<uintptr_t>(0));
+    auto pattern = hook::pattern("A3 ? ? ? ? 8B 44 24 0C A3 ? ? ? ? 8B 44 24 10 A3 ? ? ? ? A1 ? ? ? ? A3 ? ? ? ? C3");
+    CurrentTimeHours = *pattern.get(0).get<char*>(1);
+    CurrentTimeMinutes = *pattern.get(0).get<char*>(10);
+    pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 F3 0F 10 4D ? F3 0F 10 45");
+    DrawCorona = (int(__cdecl*)(float, float, float, float, unsigned int, float, unsigned char, unsigned char, unsigned char))(pattern.get(0).get<uintptr_t>(0));
+    pattern = hook::pattern("8B 15 ? ? ? ? 56 8D 72 01");
+    DrawCorona2 = (int(__cdecl*)(int id, char r, char g, char b, float a5, CVector * pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14))(pattern.get(0).get<uintptr_t>(0)); //0x7E1970
+    pattern = hook::pattern("FF 35 ? ? ? ? 8B 0D ? ? ? ? E8 ? ? ? ? 8B 4C 24 04 89 01 C2 04 00");
+    GetRootCam = (void(__stdcall*)(int* camera))(pattern.get(0).get<uintptr_t>(0));
+    pattern = hook::pattern("B9 ? ? ? ? E8 ? ? ? ? 8B 0D ? ? ? ? 50 E8 ? ? ? ? 8B 4C 24 04 89 01 C2 04 00");
+    GetGameCam = (void(__stdcall*)(int* camera))(pattern.get(0).get<uintptr_t>(0));
     pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 F3 0F 10 45 ? F3 0F 11 04 24 F3 0F 10 45 ? F3 0F 11 44 24 ? F3 0F 10 45 ? 51 F3 0F 11 44 24 ? F3 0F 10 45 ? F3 0F 11 04 24");
-    CLODLightManager::IV::CamIsSphereVisible = (bool(__cdecl *)(int camera, float pX, float pY, float pZ, float radius))(pattern.get(0).get<uintptr_t>(0));
-    pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 8D 04 24 50 FF 75 08"); //+
-    CLODLightManager::IV::GetCamPos = (void(__cdecl *)(int camera, float *pX, float *pY, float *pZ))(pattern.get(0).get<uintptr_t>(0));
+    CamIsSphereVisible = (bool(__cdecl*)(int camera, float pX, float pY, float pZ, float radius))(pattern.get(0).get<uintptr_t>(0));
+    pattern = hook::pattern("55 8B EC 83 E4 F0 83 EC 10 8D 04 24 50 FF 75 08");
+    GetCamPos = (void(__cdecl*)(int camera, float* pX, float* pY, float* pZ))(pattern.get(0).get<uintptr_t>(0));
     pattern = hook::pattern("F3 0F 10 05 ? ? ? ? F3 0F 59 05 ? ? ? ? 8B 43 20 53");
-    CTimer::ms_fTimeStep = *pattern.get_first<float*>(4);
+    CTimer::ms_fTimeStep.SetAddress(*pattern.get_first<float*>(4));
     pattern = hook::pattern("A1 ? ? ? ? A3 ? ? ? ? EB 3A");
-    CTimer::m_snTimeInMillisecondsPauseMode = *pattern.get_first<int32_t*>(1); //m_snTimeInMilliseconds
+    CTimer::m_snTimeInMillisecondsPauseMode.SetAddress(*pattern.get_first<unsigned int*>(1)); //m_snTimeInMilliseconds
     pattern = hook::pattern("A1 ? ? ? ? 83 C4 08 8B CF");
     CWeather::CurrentWeather = *pattern.get_first<CWeather::eWeatherType*>(1);
     pattern = hook::pattern("05 ? ? ? ? 50 8D 4C 24 60");
     mTimeCycle = *pattern.get_first<Timecycle*>(1);
 }
 
-void CLODLightManager::IV::IncreaseCoronaLimit()
-{
-    auto nCoronasLimit = static_cast<uint32_t>(3 * pow(2.0, NewLimitExponent)); // 49152, default 3 * pow(2, 8) = 768
-
-    static std::vector<uint32_t> aCoronas;
-    static std::vector<uint32_t> aCoronas2;
-    aCoronas.resize(nCoronasLimit * 0x3C * 4);
-    aCoronas2.resize(nCoronasLimit * 0x3C * 4);
-
-    int32_t counter1 = 0;
-    int32_t counter2 = 0;
-
-    uintptr_t range_start = (uintptr_t)hook::get_pattern("33 C0 C7 80 ? ? ? ? ? ? ? ? 83 C0 40 3D ? ? ? ? 72 EC C7 05 ? ? ? ? ? ? ? ? C3"); //+
-    uintptr_t range_end = (uintptr_t)hook::get_pattern("5E C3 FF 05 ? ? ? ? 5E C3"); //+
-
-    uintptr_t dword_temp = (uintptr_t)*hook::pattern("89 82 ? ? ? ? F3 0F 11 82 ? ? ? ? F3 0F 10 44 24 ? F3 0F 11 8A ? ? ? ? 8B 41 0C 0F B6 4C 24 ? 89 82").get(0).get<uint32_t*>(2); //+
-
-    for (size_t i = dword_temp; i <= (dword_temp + 0x3C); i++)
-    {
-        auto GoThroughPatterns = [&](const char* pattern_str, int32_t pos) -> void
-        {
-            auto patternl = hook::range_pattern(range_start, range_end, pattern_str);
-            for (size_t j = 0; j < patternl.size(); j++)
-            {
-                if (*patternl.get(j).get<uintptr_t>(pos) == i)
-                {
-                    AdjustPointer(patternl.get(j).get<uint32_t>(pos), &aCoronas[0], dword_temp, dword_temp + 0x3C);
-                    counter1++;
-                }
-            }
-        };
-
-        GoThroughPatterns("83 8A", 2);
-        GoThroughPatterns("88 82", 2);
-        GoThroughPatterns("89 82", 2);
-        GoThroughPatterns("89 82", 2);
-        GoThroughPatterns("89 8A", 2);
-        GoThroughPatterns("8B 82", 2);
-        GoThroughPatterns("BE", 1);
-        GoThroughPatterns("C7 80", 2);
-        GoThroughPatterns("C7 82", 2);
-        GoThroughPatterns("F3 0F 11 82", 4);
-        GoThroughPatterns("F3 0F 11 8A", 4);
-    }
-
-
-    range_start = (uintptr_t)hook::get_pattern("8B 44 24 1C F3 0F 10 4C 24 ? F3 0F 10 46 ? F3 0F 59 05 ? ? ? ? 8D 0C 40"); //+
-    range_end = (uintptr_t)hook::get_pattern("0F 29 85 ? ? ? ? 0F 28 9D ? ? ? ? F3 0F 5C C2 F3 0F 11 5C 24 ? 0F 28 9D ? ? ? ? F3 0F 11 5C 24 ? 0F 28 D0"); //+
-
-    dword_temp = (uintptr_t)*hook::pattern("F3 0F 11 89 ? ? ? ? F3 0F 10 4C 24 ? F3 0F 11 89").get(0).get<uint32_t*>(4);
-
-    for (size_t i = dword_temp; i <= (dword_temp + 0x1B); i++)
-    {
-        auto GoThroughPatterns = [&](const char* pattern_str, int32_t pos) -> void
-        {
-            auto patternl = hook::range_pattern(range_start, range_end, pattern_str);
-            for (size_t j = 0; j < patternl.size(); j++)
-            {
-                if (*patternl.get(j).get<uintptr_t>(pos) == i)
-                {
-                    AdjustPointer(patternl.get(j).get<uint32_t>(pos), &aCoronas2[0], dword_temp, dword_temp + 0x1B);
-                    counter2++;
-                }
-            }
-        };
-
-        GoThroughPatterns("0F 28 81", 3);
-        GoThroughPatterns("0F B6 81", 3);
-        GoThroughPatterns("0F B6 B1", 3);
-        GoThroughPatterns("80 B8", 2);
-        GoThroughPatterns("88 81", 2);
-        GoThroughPatterns("88 91", 2);
-        GoThroughPatterns("89 81", 2);
-        GoThroughPatterns("BE", 1);
-        GoThroughPatterns("F3 0F 10 81", 4);
-        GoThroughPatterns("F3 0F 10 89", 4);
-        GoThroughPatterns("F3 0F 11 81", 4);
-        GoThroughPatterns("F3 0F 11 89", 4);
-        GoThroughPatterns("F3 0F 11 91", 4);
-    }
-
-    if (counter1 != 24 || counter2 != 18)
-        MessageBox(0, L"IV.Project2DFX", L"Project2DFX is not fully compatible with this version of the game", 0);
-
-    auto p = hook::pattern("BF FF 02 00 00"); //+
-    AdjustPointer(p.get_first(-4), &aCoronas[0], dword_temp, dword_temp + 0x3C);
-    p = hook::pattern("BF FF 05 00 00"); //+
-    AdjustPointer(p.get_first(-4), &aCoronas2[0], dword_temp, dword_temp + 0x1B);
-
-    auto pattern = hook::pattern("C1 E1 ? 03 4C 24 18 C1");
-    WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true);
-    pattern = hook::pattern("C1 E1 ? 03 CF C1 E1");
-    WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true);
-    pattern = hook::pattern("C1 E0 ? 03 C2 C1 E0 05 80 B8");
-    WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(2), NewLimitExponent, true);
-
-    pattern = hook::pattern("81 FE ? ? ? ? 0F 8D ? ? ? ? 8B 44 24 08 8B 4C 24 1C F3 0F 10 44 24 ? C1 E2 06");
-    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(2), nCoronasLimit, true);
-    pattern = hook::pattern("3D ? ? ? ? 0F 8D ? ? ? ? 8B 44 24 1C F3 0F 10 4C 24");
-    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(1), nCoronasLimit, true);
-    pattern = hook::pattern("3D ? ? ? ? 72 EC C7 05 ? ? ? ? ? ? ? ? C3");
-    WriteMemory<uint32_t>(pattern.get(0).get<uintptr_t>(1), nCoronasLimit * 64, true);
-}
-
-void CLODLightManager::IV::RegisterCustomCoronas()
+void RegisterCustomCoronas()
 {
     constexpr unsigned int nModelID = 0xFFFFFFFF;
 
-    auto foundElements = *pFileContentMMap | std::views::filter([&nModelID](auto& v) {
+    auto foundElements = FileContentMMap | std::views::filter([&nModelID](auto& v)
+    {
         return v.first == nModelID;
     });
 
     for (auto& it : foundElements)
     {
-        m_Lampposts.push_back(CLamppostInfo(it.second.vecPos, it.second.colour, it.second.fCustomSizeMult, it.second.nCoronaShowMode, it.second.nNoDistance, it.second.nDrawSearchlight, 0.0f));
+        m_Lampposts.push_back(CLamppostInfo(it.second.vecLocalPos, { 0.0f, 0.0f, 0.0f }, it.second.colour, it.second.fCustomSizeMult, it.second.nCoronaShowMode, it.second.nNoDistance, it.second.nDrawSearchlight, 0.0f));
     }
 }
 
-WplInstance* CLODLightManager::IV::PossiblyAddThisEntity(WplInstance* pInstance)
+void RegisterLamppost(WplInstance* pObj)
 {
-    if (m_bCatchLamppostsNow && pFileContentMMap->contains(pInstance->ModelNameHash))
-        RegisterLamppost(pInstance);
-
-    return pInstance;
-}
-
-void CLODLightManager::IV::RegisterLamppost(WplInstance* pObj)
-{
-    DWORD               nModelID = pObj->ModelNameHash;
+    DWORD nModelID = pObj->ModelNameHash;
     CMatrix             dummyMatrix;
 
     float qw = pObj->RotationW;
@@ -435,40 +118,97 @@ void CLODLightManager::IV::RegisterLamppost(WplInstance* pObj)
     qz *= n;
     qw *= n;
 
-    dummyMatrix.matrix.right.x = 1.0f - 2.0f * qy * qy - 2.0f * qz * qz;
-    dummyMatrix.matrix.right.y = 2.0f * qx * qy - 2.0f * qz * qw;
-    dummyMatrix.matrix.right.z = 2.0f * qx * qz + 2.0f * qy * qw;
+    dummyMatrix.rx = 1.0f - 2.0f * qy * qy - 2.0f * qz * qz;
+    dummyMatrix.ry = 2.0f * qx * qy - 2.0f * qz * qw;
+    dummyMatrix.rz = 2.0f * qx * qz + 2.0f * qy * qw;
 
-    dummyMatrix.matrix.up.x = 2.0f * qx * qy + 2.0f * qz * qw;
-    dummyMatrix.matrix.up.y = 1.0f - 2.0f * qx * qx - 2.0f * qz * qz;
-    dummyMatrix.matrix.up.z = 2.0f * qy * qz - 2.0f * qx * qw;
+    dummyMatrix.ux = 2.0f * qx * qy + 2.0f * qz * qw;
+    dummyMatrix.uy = 1.0f - 2.0f * qx * qx - 2.0f * qz * qz;
+    dummyMatrix.uz = 2.0f * qy * qz - 2.0f * qx * qw;
 
-    dummyMatrix.matrix.at.x = 2.0f * qx * qz - 2.0f * qy * qw;
-    dummyMatrix.matrix.at.y = 2.0f * qy * qz + 2.0f * qx * qw;
-    dummyMatrix.matrix.at.z = 1.0f - 2.0f * qx * qx - 2.0f * qy * qy;
+    dummyMatrix.fx = 2.0f * qx * qz - 2.0f * qy * qw;
+    dummyMatrix.fy = 2.0f * qy * qz + 2.0f * qx * qw;
+    dummyMatrix.fz = 1.0f - 2.0f * qx * qx - 2.0f * qy * qy;
 
-    dummyMatrix.matrix.pos.x = pObj->PositionX;
-    dummyMatrix.matrix.pos.y = pObj->PositionY;
-    dummyMatrix.matrix.pos.z = pObj->PositionZ;
+    dummyMatrix.px = pObj->PositionX;
+    dummyMatrix.py = pObj->PositionY;
+    dummyMatrix.pz = pObj->PositionZ;
 
     {
-        auto v1 = CVector(pObj->PositionX, pObj->PositionY, pObj->PositionZ);
-        auto v2 = CVector(-278.37f, -1377.48f, 90.98f);
-        if (GetDistance((RwV3d*)&v1, (RwV3d*)&v2) <= 300.0f)
+        float dx = pObj->PositionX - -278.37f;
+        float dy = pObj->PositionY - -1377.48f;
+        float dz = pObj->PositionZ - 90.98f;
+        if ((dx * dx + dy * dy + dz * dz) <= (300.0f * 300.0f))
             return;
     }
 
-    auto foundElements = *pFileContentMMap | std::views::filter([&nModelID](auto& v) {
+    auto foundElements = FileContentMMap | std::views::filter([&nModelID](auto& v)
+    {
         return v.first == nModelID;
     });
 
+    float heading = atan2(dummyMatrix.GetUp().y, -dummyMatrix.GetUp().x);
     for (auto& it : foundElements)
     {
-        m_Lampposts.push_back(CLamppostInfo(dummyMatrix * it.second.vecPos, it.second.colour, it.second.fCustomSizeMult, it.second.nCoronaShowMode, it.second.nNoDistance, it.second.nDrawSearchlight, atan2(dummyMatrix.GetUp()->y, -dummyMatrix.GetUp()->x), it.second.fObjectDrawDistance));
+        m_Lampposts.push_back(CLamppostInfo(dummyMatrix * it.second.vecLocalPos, it.second.vecLocalPos, it.second.colour, it.second.fCustomSizeMult, it.second.nCoronaShowMode, it.second.nNoDistance, it.second.nDrawSearchlight, heading, it.second.fObjectDrawDistance));
     }
 }
 
-void CLODLightManager::IV::RegisterLODLights()
+WplInstance* PossiblyAddThisEntity(WplInstance* pInstance)
+{
+    if (m_bCatchLamppostsNow && FileContentMMap.contains(pInstance->ModelNameHash))
+        RegisterLamppost(pInstance);
+
+    return pInstance;
+}
+
+void LoadDatFileIV()
+{
+    CIniReader iniReader("");
+    auto DataFilePath = iniReader.GetIniPath();
+    DataFilePath.replace_extension(".dat");
+
+    if (FILE* hFile = CFileMgr::OpenFile(DataFilePath.string().c_str(), "r"))
+    {
+        unsigned int nModelIV = 0xFFFFFFFF;
+
+        while (const char* pLine = CFileMgr::LoadLine(hFile))
+        {
+            if (pLine[0] && pLine[0] != '#')
+            {
+                if (pLine[0] == '%')
+                {
+                    if (strcmp(pLine, "%additional_coronas") != 0)
+                        nModelIV = hashStringLowercaseFromSeed((char*)(pLine + 1), 0);
+                    else
+                        nModelIV = 0xFFFFFFFF;
+                }
+                else
+                {
+                    float			fOffsetX, fOffsetY, fOffsetZ;
+                    unsigned int	nRed, nGreen, nBlue, nAlpha;
+                    float			fCustomSize = 1.0f;
+                    float			fDrawDistance = 0.0f;
+                    int				nNoDistance = 0;
+                    int				nDrawSearchlight = 0;
+                    int				nCoronaShowMode = 0;
+                    if (sscanf(pLine, "%3d %3d %3d %3d %f %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &fDrawDistance, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight) != 12)
+                        sscanf(pLine, "%3d %3d %3d %3d %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight);
+                    FileContentMMap.insert(std::make_pair(nModelIV, CLamppostInfo(CVector(0.0f, 0.0f, 0.0f), CVector(fOffsetX, fOffsetY, fOffsetZ), CRGBA(static_cast<unsigned char>(nRed), static_cast<unsigned char>(nGreen), static_cast<unsigned char>(nBlue), static_cast<unsigned char>(nAlpha)), fCustomSize, nCoronaShowMode, nNoDistance, nDrawSearchlight, 0.0f, fDrawDistance)));
+                }
+            }
+        }
+
+        m_bCatchLamppostsNow = true;
+        CFileMgr::CloseFile(hFile);
+    }
+    else
+    {
+        bRenderLodLights = 0;
+    }
+}
+
+void RegisterLODLights()
 {
     static auto SolveEqSys = [](float a, float b, float c, float d, float value) -> float
     {
@@ -545,12 +285,19 @@ void CLODLightManager::IV::RegisterLODLights()
             SolveEqSys(fCoronaDist, 0.0f, lamppost.fObjectDrawDistance, 3.5f, distance);
 
         if (bSlightlyIncreaseRadiusWithDistance)
-            fRadius *= min(SolveEqSys(fCoronaDist, 1.0f, fCoronaFarClip, 4.0f, distance), 3.0f);
+            fRadius *= min(SolveEqSys(fCoronaDist, 1.0f, 9000.0, 4.0f, distance), 3.0f);
 
         float fAlphaDistMult = 110.0f - SolveEqSys(fCoronaDist / 4.0f, 10.0f, lamppost.fObjectDrawDistance * 4.0f, 100.0f, distance);
 
         // Calculate base alpha
         float baseAlpha = fCoronaAlphaMultiplier * ((bAlpha * (lamppost.colour.a / 255.0f)) / fAlphaDistMult);
+
+        if (!lamppost.nNoDistance)
+        {
+            // Fade in alpha as camera moves away, similar to how radius is handled
+            float alphaFade = SolveEqSys(fCoronaDist, 0.0f, lamppost.fObjectDrawDistance, 1.0f, distance);
+            baseAlpha *= alphaFade;
+        }
 
         if (lamppost.fCustomSizeMult != 0.45f)
         {
@@ -595,24 +342,22 @@ void CLODLightManager::IV::RegisterLODLights()
             bool isRedTime = ((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49));
             bool isGreenTime = ((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59));
 
-            // Heading check
-            float absHeading = std::abs(lamppost.fHeading);
-            bool isInHeadingRange = (absHeading >= (M_PI / 6.0f) && absHeading <= (5.0f * M_PI / 6.0f));
+            // Determine orientation based on heading
+            float heading = lamppost.fHeading;
+            bool isFacingEastWest = (heading >= -5.0f * M_PI / 6.0f && heading <= -M_PI / 6.0f) ||
+                (heading >= M_PI / 6.0f && heading <= 5.0f * M_PI / 6.0f);
 
-            bool shouldDraw = false;
+            // Swap phases for E/W traffic lights
+            bool redPhase = isRedTime;
+            bool greenPhase = isGreenTime;
+            if (isFacingEastWest)
+            {
+                std::swap(redPhase, greenPhase);
+            }
 
-            if (isYellow && isYellowTime)
-            {
-                shouldDraw = true;
-            }
-            else if (isInHeadingRange)
-            {
-                shouldDraw = (isRed && isRedTime) || (isGreen && isGreenTime);
-            }
-            else
-            {
-                shouldDraw = (isGreenAlt && isRedTime) || (isRed && isGreenTime);
-            }
+            bool shouldDraw = (isYellow && isYellowTime) ||
+                (isRed && redPhase) ||
+                ((isGreen || isGreenAlt) && greenPhase);
 
             if (shouldDraw)
             {
@@ -627,16 +372,83 @@ void CLODLightManager::IV::RegisterLODLights()
     }
 }
 
+void Init()
+{
+    CIniReader iniReader("");
+    bRenderLodLights = iniReader.ReadInteger("LodLights", "RenderLodLights", 1) != 0;
+    fCoronaRadiusMultiplier = iniReader.ReadFloat("LodLights", "CoronaRadiusMultiplier", 1.0f);
+    fCoronaAlphaMultiplier = iniReader.ReadFloat("LodLights", "CoronaAlphaMultiplier", 1.0f);
+    bSlightlyIncreaseRadiusWithDistance = iniReader.ReadInteger("LodLights", "SlightlyIncreaseRadiusWithDistance", 1) != 0;
+    fCoronaFarClip = iniReader.ReadFloat("LodLights", "CoronaFarClip", 0.0f);
+    bool DisableDefaultLodLights = iniReader.ReadInteger("LodLights", "DisableDefaultLodLights", 1) != 0;
+    int32_t DisableCoronasWaterReflection = iniReader.ReadInteger("LodLights", "DisableCoronasWaterReflection", 0);
+
+    struct LoadObjectInstanceHook
+    {
+        void operator()(injector::reg_pack& regs)
+        {
+            regs.esi = *(uintptr_t*)(regs.ebp + 0x8);
+            regs.eax = (regs.esp + 0x1C);
+
+            PossiblyAddThisEntity((WplInstance*)regs.esi);
+        }
+    };
+
+    if (bRenderLodLights)
+    {
+        GetMemoryAddresses();
+        IncreaseCoronaLimit();
+        LoadDatFileIV();
+        RegisterCustomCoronas();
+
+        auto pattern = hook::pattern("E8 ? ? ? ? 83 3D ? ? ? ? ? 74 05 E8 ? ? ? ? 6A 05"); //+
+        injector::MakeCALL(pattern.get(0).get<uintptr_t>(0), RegisterLODLights, true);
+        pattern = hook::pattern("8B 75 08 8D 44 24 1C 50 FF 76 1C C6 44 24"); //+
+        injector::MakeInline<LoadObjectInstanceHook>(pattern.get(0).get<uintptr_t>(0), pattern.get(0).get<uintptr_t>(7));
+    }
+
+    if (DisableDefaultLodLights)
+    {
+        auto pattern = hook::pattern("83 F8 08 0F 8C ? ? ? ? 83 3D");
+        injector::WriteMemory<uint8_t>(pattern.get_first(2), 0, true);
+    }
+
+    auto pattern = hook::pattern("E8 ? ? ? ? 83 C4 08 80 3D ? ? ? ? ? 74 32 6A 00 6A 0C");
+    static auto jmp = pattern.get(0).get<uintptr_t>(8);
+    if (DisableCoronasWaterReflection == 1)
+    {
+        injector::MakeNOP(pattern.get(0).get<uintptr_t>(0), 5, true);
+    }
+    else
+    {
+        if (DisableCoronasWaterReflection == 2)
+        {
+            struct ReflectionsHook
+            {
+                void operator()(injector::reg_pack& regs)
+                {
+                    regs.edx = *(uintptr_t*)(regs.esi + 0x938);
+                    if (fCamHeight < 100.0f)
+                    {
+                        *(uintptr_t*)(regs.esp - 4) = (uintptr_t)jmp;
+                    }
+                }
+            }; injector::MakeInline<ReflectionsHook>(pattern.get(0).get<uintptr_t>(-6), pattern.get(0).get<uintptr_t>(0));
+            injector::WriteMemory<uint8_t>(pattern.get(0).get<uintptr_t>(-1), 0x52, true); // push edx
+        }
+    }
+}
+
 extern "C" __declspec(dllexport) void InitializeASI()
 {
     static std::once_flag flag;
     std::call_once(flag, []()
     {
-        CLODLightManager::IV::Init();
+        Init();
     });
 }
 
-BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
 {
     if (reason == DLL_PROCESS_ATTACH)
     {

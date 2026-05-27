@@ -49,10 +49,13 @@ workspace "III.VC.SA.IV.Project2DFX"
    defines { "_CRT_SECURE_NO_WARNINGS" }
 
    files { "source/%{prj.name}/*.h", "source/%{prj.name}/*.cpp" }
+   files { "source/%{prj.name}/*.hpp", "source/%{prj.name}/*.ixx" }
+   files { "source/*.hpp", "source/*.ixx" }
    files { "resources/*.rc" }
    files { "external/hooking/Hooking.Patterns.h", "external/hooking/Hooking.Patterns.cpp" }
    files { "external/injector/safetyhook/include/**.hpp", "external/injector/safetyhook/src/**.cpp" }
    files { "external/injector/zydis/**.h", "external/injector/zydis/**.c" }
+  files { "data/**/*.ini" }
    includedirs { "includes" }
    includedirs { "external/hooking" }
    includedirs { "external/injector/safetyhook/include" }
@@ -73,11 +76,10 @@ project "2DFXDataGrabber"
    targetdir "data/%{prj.name}/"
    targetextension ".exe"
    characterset ("MBCS")
+   removefiles { "source/*.hpp", "source/*.ixx" }
 project "IIILodLights"
-    files { "includes/*.h", "includes/*.cpp" }
 project "VCLodLights"
-    files { "includes/*.h", "includes/*.cpp" }
 project "SALodLights"
-    files { "includes/*.h", "includes/*.cpp" }
 project "IVLodLights"
-    files { "includes/CLODLightManager.h", "includes/CLODLightManager.cpp" }
+   removefiles { "source/*.hpp", "source/*.ixx" }
+   files { "source/FileMgr.ixx", "source/LamppostInfo.ixx", "source/Timer.ixx" }

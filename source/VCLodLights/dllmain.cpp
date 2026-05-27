@@ -1,70 +1,217 @@
-﻿#include "..\includes\stdafx.h"
-#include "..\includes\CLODLightManager.h"
-#include "..\includes\CLODLights.h"
-#include "CSearchlights.h"
+﻿#define NOMINMAX
+#include "stdafx.h"
+#include <ranges>
 
-int numCoronas;
-std::vector<CEntityVC> VecEntities;
-std::vector<int> ExplosionTypes = { 0,2,6,7,8,9,10,11 }; //1,3,4,5 - barrel crash
-RwCamera*& Camera = *(RwCamera**)0x8100BC;
-int* CTimer::m_snTimeInMillisecondsPauseMode = (int*)0x974B2C;
-float* CTimer::ms_fTimeStep = (float*)0x975424;
+import ComVars;
+import LamppostInfo;
+import LODLights;
+import Game;
+import Timer;
+import ModelInfo;
+import Camera;
+import Clock;
+import Entity;
+import Sprite;
+import Misc;
+import SearchLightCone;
+import Timecycle;
+import ModelInfo;
+import Heli;
+import PointLights;
 
-char* CLODLightManager::VC::CurrentTimeHours = (char*)0xA10B6B;
-char* CLODLightManager::VC::CurrentTimeMinutes = (char*)0xA10B92;
-float** CLODLightManager::VC::fCurrentFarClip = (float**)0x4A602D;
-char(__cdecl *CLODLightManager::VC::GetIsTimeInRange)(char hourA, char hourB) = (char(__cdecl *)(char, char)) 0x4870F0;
-bool(__cdecl *const CLODLightManager::VC::CShadowsStoreStaticShadow)(unsigned int id, unsigned char type, RwTexture *particle, CVector *pos, float x1, float y1, float x2, float y2, short alpha, unsigned char red, unsigned char green, unsigned char blue, float, float, float drawdist, bool lifetime, float updist) = (decltype(CLODLightManager::VC::CShadowsStoreStaticShadow))0x56E780;
-float(__cdecl *CLODLightManager::VC::FindGroundZFor3DCoord)(float x, float y, float z, BOOL *pCollisionResult, CEntity **pGroundObject) = (float(__cdecl *)(float, float, float, BOOL *, CEntity **)) 0x4D53A0;
-RwV3D* (__cdecl *CLODLightManager::VC::TransformPoint)(RwV3d *a1, RwV3d *a2, int a3, RwMatrix *a4) = (struct RwV3D *(__cdecl *)(RwV3d *a1, RwV3d *a2, int a3, RwMatrix *a4)) 0x647160;
-bool CLODLightManager::VC::CCameraIsSphereVisible(RwV3D *origin, float radius)
+using RwV3D = RwV3d;
+
+void RegisterCustomCoronas()
 {
-    RwV3D SpherePos;
-    SpherePos.x = origin->x;
-    SpherePos.y = origin->y;
-    SpherePos.z = origin->z;
-    if (origin->z <= *(float *)0x688640)
-        SpherePos.z = FindGroundZFor3DCoord(origin->x, origin->y, origin->z, nullptr, nullptr);
-    TransformPoint(&SpherePos, &SpherePos, 1, (RwMatrix*)0x7E4EA8);
+    unsigned short nModelID = 65534;
+    auto itEnd = FileContent.upper_bound(PackKey(nModelID, 0xFFFF));
+    for (auto it = FileContent.lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
+        m_Lampposts.push_back(CLamppostInfo(it->second.vecLocalPos, { 0.0f, 0.0f, 0.0f }, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
+}
 
-    if (SpherePos.y + radius >= *(float *)0x978534)
+void RegisterLamppost(CEntity* pObj)
+{
+    unsigned short nModelID = pObj->GetModelIndex();
+
+    auto foundElements = FileContent | std::views::filter([minKey = PackKey(nModelID, 0), maxKey = PackKey(nModelID, 0xFFFF)](const auto& kv)
     {
-        if (SpherePos.y - radius <= *(float *)0xA10678)
+        return kv.first >= minKey && kv.first <= maxKey;
+    });
+
+    auto ms_modelInfoPtrs = *CModelInfo::pp_modelInfoPtrs;
+    auto modelInfo = (CSimpleModelInfo*)ms_modelInfoPtrs[nModelID];
+
+    // Get bounding box height from model info
+    float objectHeight = 0.0f;
+    if (modelInfo && modelInfo->m_colModel)
+    {
+        // Get height from bounding box
+        objectHeight = modelInfo->m_colModel->boundingBox.max.z - modelInfo->m_colModel->boundingBox.min.z;
+    }
+
+    float heading = atan2(-pObj->GetMatrix().GetRight().y, pObj->GetMatrix().GetRight().x);
+    for (const auto& [key, data] : foundElements)
+    {
+        CVector worldPos = pObj->GetMatrix() * data.vecLocalPos;
+        m_Lampposts.push_back(CLamppostInfo(
+            worldPos,
+            data.vecLocalPos,
+            data.colour,
+            data.fCustomSizeMult,
+            data.nCoronaShowMode,
+            data.nNoDistance,
+            data.nDrawSearchlight ? static_cast<int>(objectHeight) : 0,
+            heading,
+            std::min(data.fObjectDrawDistance, modelInfo->m_lodDistances[2])
+        ));
+    }
+}
+
+CEntity* PossiblyAddThisEntity(CEntity* pEntity)
+{
+    if (pEntity && m_bCatchLamppostsNow && IsModelALamppost(pEntity->GetModelIndex()))
+        RegisterLamppost(pEntity);
+    return pEntity;
+}
+
+namespace CWorld
+{
+    std::vector<CEntity*> aBigBuildings;
+    injector::hook_back<void(__cdecl*)(CEntity*)> hbAdd;
+    void __cdecl Add(CEntity* entity)
+    {
+        aBigBuildings.emplace_back(entity);
+        hbAdd.fun(entity);
+    }
+}
+
+void ApplyMemoryPatches()
+{
+    auto pattern = hook::pattern("E8 ? ? ? ? 0F BF 43 ? 59 8B 0C 85 ? ? ? ? 89 CF");
+    CWorld::hbAdd.fun = injector::MakeCALL(pattern.get_first(), CWorld::Add, true).get();
+
+    pattern = hook::pattern("E8 ? ? ? ? 0F BF 56");
+    CWorld::hbAdd.fun = injector::MakeCALL(pattern.get_first(), CWorld::Add, true).get();
+
+    pattern = hook::pattern("E8 ? ? ? ? 83 C4 ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8");
+    static auto CGameInitialiseHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    {
+        static bool bOnce = false;
+        if (!bOnce)
         {
-            if (SpherePos.y * *(float *)0x7E4F44 + SpherePos.x * *(float *)0x7E4F40 <= radius)
+            LoadDatFile();
+            if (!m_bCatchLamppostsNow)
             {
-                if (SpherePos.y * *(float *)0x7E4F50 + SpherePos.x * *(float *)0x7E4F4C <= radius)
+                bRenderLodLights = 0;
+                bRenderSearchlightEffects = 0;
+            }
+
+            CLODLights::Init(numCoronas);
+
+            for (auto entity : CWorld::aBigBuildings)
+                PossiblyAddThisEntity(entity);
+
+            RegisterCustomCoronas();
+            m_bCatchLamppostsNow = false;
+            m_Lampposts.shrink_to_fit();
+            FileContent.clear();
+            CWorld::aBigBuildings.clear();
+        }
+
+        bOnce = true;
+    });
+
+    pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? C3");
+    static auto RenderEffectsHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    {
+        if (bRenderLodLights)
+            CLODLights::RenderBuffered();
+
+        if (bRenderSearchlightEffects)
+        {
+            RenderAllSearchLights();
+
+            if (pHelis)
+            {
+                auto NumOfHelisRequired = *pNumRandomHelis;
+                if (NumOfHelisRequired)
                 {
-                    if (SpherePos.z * *(float *)0x7E4F60 + SpherePos.y * *(float *)0x7E4F5C <= radius)
+                    Pre_SearchLightCone();
+                    for (auto i = 0; i < NumOfHelisRequired; i++)
                     {
-                        if (SpherePos.z * *(float *)0x7E4F6C + SpherePos.y * *(float *)0x7E4F68 <= radius)
-                            return true;
+                        auto heli = pHelis[i];
+                        if (heli && heli->m_nLastShotTime)
+                        {
+                            RwV3D EndPoint = { heli->m_fSearchLightX, heli->m_fSearchLightY, heli->GetPosition().z };
+                            if (EndPoint.x && EndPoint.y)
+                            {
+                                EndPoint.z = CWorld::FindGroundZFor3DCoord(EndPoint.x, EndPoint.y, EndPoint.z, nullptr, nullptr);
+                                SearchLightCone(heli->GetPosition(), EndPoint, 13.0f, 0.1f, CRGBA(255, 255, 255, 255), 1.0f, true);
+                            }
+                        }
                     }
+                    Post_SearchLightCone();
                 }
             }
         }
-    }
-    return false;
-}
-void(__cdecl *CLODLightManager::VC::RegisterCorona)(int id, char r, char g, char b, char alpha, RwV3D *pos, float radius, float farClp, char a9, char lensflare, char a11, char see_through_effect, char trace, float a14, char a15, float a16) = (void(__cdecl *)(int id, char r, char g, char b, char alpha, RwV3D *pos, float radius, float farClp, char a9, char lensflare, char a11, char see_through_effect, char trace, float a14, char a15, float a16)) 0x5427A0;
-void(__fastcall *CLODLightManager::VC::CVectorNormalize)(RwV3D *in) = (void(__fastcall *)(RwV3D *in)) 0x4DFEA0;
-RwV3D *(__cdecl *CLODLightManager::VC::CrossProduct)(RwV3D *out, RwV3D *a, RwV3D *b) = (RwV3D *(__cdecl *)(RwV3D *out, RwV3D *a, RwV3D *b)) 0x4E00B0;
-int(__cdecl *CLODLightManager::VC::RwIm3DTransform)(RxObjSpace3dVertex *pVerts, unsigned int numVerts, RwMatrix *ltm, unsigned int flags) = (int(__cdecl *)(RxObjSpace3dVertex *pVerts, unsigned int numVerts, RwMatrix *ltm, unsigned int flags)) 0x65AE90;
-int(__cdecl *CLODLightManager::VC::RwIm3DRenderIndexedPrimitive)(int primType, short *indices, int numIndices) = (int(__cdecl *)(int primType, short *indices, int numIndices)) 0x65AF90;
-int(__cdecl *CLODLightManager::VC::RwIm3DEnd)() = (int(__cdecl *)()) 0x65AF60;
-int(__cdecl *CLODLightManager::VC::RwRenderStateSetVC)(RwRenderState nState, void *pParam) = (int(__cdecl *)(RwRenderState nState, void *pParam)) 0x649BA0;
-void RwRenderStateSetVC(RwRenderState nState, void *pParam)
-{
-    CLODLightManager::VC::RwRenderStateSetVC(nState, pParam);
-}
-void(*_RwRenderStateSet)(RwRenderState nState, void *pParam) = &RwRenderStateSetVC;
+    });
 
-CVector* GetCamPos()
-{
-    return (CVector*)(0x7E4688 + 0x7D8);
+    pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? B9 ? ? ? ? E8 ? ? ? ? 80 3D");
+    static auto CGameProcessHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    {
+        CLODLights::RegisterLODLights();
+    });
 }
 
-void CLODLightManager::VC::Init()
+void GetMemoryAddresses()
+{
+    CModelInfo::GetModelInfo = (decltype(CModelInfo::GetModelInfo))0x55F7D0;
+    CTimer::m_snTimeInMillisecondsPauseMode.SetAddress((unsigned int*)0x974B2C);
+    CTimer::ms_fTimeStep.SetAddress((float*)0x975424);
+    TheCamera.SetAddress((CCamera*)0x7E4688);
+
+    CWeather::Foggyness.SetAddress((float*)0x94DDC0);
+    gpCoronaTexture = (RwTexture**)0x695538;
+
+    CSprite::CalcScreenCoorsMax = (decltype(CSprite::CalcScreenCoorsMax))0x5778B0;
+    CSprite::FlushSpriteBuffer = (decltype(CSprite::FlushSpriteBuffer))0x577790;
+    CSprite::RenderOneXLUSprite_Rotate_Aspect = (decltype(CSprite::RenderOneXLUSprite_Rotate_Aspect))0x576FE0;
+    CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect = (decltype(CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect))0x576B30;
+
+    Scene.SetAddress((CScene*)0x8100B8);
+    RwEngineInstance.SetAddress((RwGlobals**)0x7870C0);
+
+    RwIm3DTransform = (decltype(RwIm3DTransform))0x65AE90;
+    RwIm3DRenderIndexedPrimitive = (decltype(RwIm3DRenderIndexedPrimitive))0x65AF90;
+    RwIm3DEnd = (decltype(RwIm3DEnd))0x65AF60;
+
+    CGame::currArea.SetAddress((int*)0x978810);
+
+    CWorld::FindGroundZFor3DCoordCR = (decltype(CWorld::FindGroundZFor3DCoordCR))0x4D53A0;
+    CClock::GetIsTimeInRange = (decltype(CClock::GetIsTimeInRange))0x4870F0;
+
+    CClock::ms_nGameClockHours.SetAddress((uint8_t*)0xA10B6B);
+    CClock::ms_nGameClockMinutes.SetAddress((uint8_t*)0xA10B92);
+
+    CTimeCycle::m_fCurrentFarClip.SetAddress((float*)0x9B6A6C);
+
+    CModelInfo::pp_modelInfoPtrs = (CBaseModelInfo***)(0x406557 + 3);
+
+    CModelInfo::Get2dEffect = (decltype(CModelInfo::Get2dEffect))0x53F260;
+
+    CRenderer::ms_lodDistScale.SetAddress((float*)0x690220);
+
+    CShadows::StoreStaticShadow = (decltype(CShadows::StoreStaticShadow))0x56E780;
+
+    RwRenderStateSet = (decltype(RwRenderStateSet))0x649BA0;
+
+    pHelis = (CHeli**)0x813D10;
+    pNumRandomHelis = (int16_t*)0xA10A6A;
+
+    CPointLights::AddLightWithoutEntity = (decltype(CPointLights::AddLightWithoutEntity))0x567700;
+}
+
+void Init()
 {
     CIniReader iniReader("");
     bRenderLodLights = iniReader.ReadInteger("LodLights", "RenderLodLights", 1) != 0;
@@ -105,497 +252,9 @@ void CLODLightManager::VC::Init()
 
     bRandomExplosionEffects = iniReader.ReadInteger("Misc", "RandomExplosionEffects", 0) != 0;
     bReplaceSmokeTrailWithBulletTrail = iniReader.ReadInteger("Misc", "ReplaceSmokeTrailWithBulletTrail", 0) != 0;
-    bFestiveLights = iniReader.ReadInteger("Misc", "FestiveLights", 1) != 0;
-    bFestiveLightsAlways = iniReader.ReadInteger("Misc", "bFestiveLightsAlways", 0) != 0;
 
+    GetMemoryAddresses();
     ApplyMemoryPatches();
-}
-
-template<uintptr_t addr>
-void CWorldAddHook()
-{
-    using func_hook = injector::function_hooker<addr, void(CEntityVC* EntityVC)>;
-    injector::make_static_hook<func_hook>([](func_hook::func_type CWorldAdd, CEntityVC* EntityVC)
-    {
-        if (CLODLightManager::VC::bPreloadLODs)
-        {
-            if (EntityVC->m_nModelIndex == 2600 || EntityVC->m_nModelIndex == 2544 || EntityVC->m_nModelIndex == 2634 || EntityVC->m_nModelIndex == 2545)
-            {
-                EntityVC->m_bIsVisible = 0;
-            }
-        }
-        VecEntities.push_back(*EntityVC);
-
-        CWorldAdd(EntityVC);
-    });
-}
-
-template<uintptr_t addr>
-void RenderSirenParticles()
-{
-    using func_hook = injector::function_hooker<addr, void(int id, char r, char g, char b, char alpha, RwV3D *pos, float radius, float farClp, char a9, char lensflare, char a11, char see_through_effect, char trace, float a14, char a15, float a16)>;
-    injector::make_static_hook<func_hook>([](func_hook::func_type RegisterCorona, int id, char r, char g, char b, char alpha, RwV3D *pos, float radius, float farClp, char a9, char lensflare, char a11, char see_through_effect, char trace, float a14, char a15, float a16)
-    {
-        RegisterCorona(id, r, g, b, alpha, pos, radius, farClp, a9, lensflare, a11, see_through_effect, trace, a14, a15, a16);
-        CLODLightManager::VC::CShadowsStoreStaticShadow(id, 2, *(RwTexture **)0x978DB4, (CVector*)pos, 8.0f, 0.0f, 0.0f, -8.0f, 80, r != 0 ? 25 : 0, g != 0 ? 25 : 0, b != 0 ? 25 : 0, 15.0f, 1.0f, farClp, false, 8.0f);
-    });
-}
-
-template<uintptr_t addr>
-void CBulletTracesAddTrace()
-{
-    using func_hook = injector::function_hooker<addr, void(CVector *, CVector *, float, unsigned int, unsigned char)>;
-    injector::make_static_hook<func_hook>([](func_hook::func_type AddTrace, CVector* start, CVector* end, float, unsigned int, unsigned char)
-    {
-        CVector endPoint = CVector();
-        endPoint.x = (end->x - start->x) * 0.15f;
-        endPoint.y = (end->y - start->y) * 0.15f;
-        endPoint.z = (end->z - start->z) * 0.15f;
-        injector::cstd<void(short, CVector const&, CVector const&, CEntity *, float, int, int, int, int)>::call<0x5648F0>(56, *start, endPoint, 0, 0.0f, 0, 0, 0, 0);
-    });
-}
-
-template<uintptr_t addr>
-void CExplosionAddModifiedExplosion()
-{
-    using func_hook = injector::function_hooker<addr, bool(CEntity*, CEntity*, int, CVector*, uint32_t, bool)>;
-    injector::make_static_hook<func_hook>([](func_hook::func_type AddExplosion, CEntity* pTarget, CEntity* pSource, int nType, CVector* pVector, uint32_t uTimer, bool bUnknown)
-    {
-        std::random_device rng;
-        std::mt19937 urng(rng());
-        std::shuffle(ExplosionTypes.begin(), ExplosionTypes.end(), urng);
-        injector::MakeNOP(0x5C6661, 5, true);
-        for (auto it = ExplosionTypes.begin(); it != ExplosionTypes.end(); ++it)
-        {
-            if (*it == nType)
-                break;
-            AddExplosion(pTarget, pSource, *it, pVector, uTimer, bUnknown);
-        }
-        injector::MakeCALL(0x5C6661, 0x4D82D0, true);
-
-        return AddExplosion(pTarget, pSource, nType, pVector, uTimer, bUnknown);
-    });
-}
-
-template<uintptr_t addr>
-void CCoronasRegisterFestiveCoronaForEntity()
-{
-    using func_hook = injector::function_hooker<addr, void(unsigned int nID, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, char a10, char a11, char a12, char a13, float a14, char a15, float a16)>;
-    injector::make_static_hook<func_hook>([](func_hook::func_type RegisterCorona, unsigned int nID, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, char a10, char a11, char a12, char a13, float a14, char a15, float a16)
-    {
-        auto it = CLODLights::FestiveLights.find(nID);
-        if (it != CLODLights::FestiveLights.end())
-        {
-            RegisterCorona(nID, it->second.r, it->second.g, it->second.b, A, Position, Size, Range, pTex, a10, a11, a12, a13, a14, a15, a16);
-        }
-        else
-        {
-            CLODLights::FestiveLights[nID] = CRGBA(random(0, 255), random(0, 255), random(0, 255), 0);
-            RegisterCorona(nID, R, G, B, A, Position, Size, Range, pTex, a10, a11, a12, a13, a14, a15, a16);
-        }
-    });
-}
-
-void CLODLightManager::VC::ApplyMemoryPatches()
-{
-    injector::WriteMemory<char>(0x542E66, 127, true); // sun reflection
-    injector::WriteMemory<float>(0x68A860, 300.0f, true); // Traffic lights coronas draw distance
-
-    RenderSirenParticles<(0x58C704)>();
-    RenderSirenParticles<(0x58C764)>();
-
-    struct GenericIDEHook
-    {
-        void operator()(injector::reg_pack& regs)
-        {
-            *(uint8_t*)(regs.ebp + 0x7D7C38) = 32;
-
-            static char* buffer = (char *)0x7D7C38;
-            unsigned int modelID = 0, IDEDrawDistance = 0;
-
-            auto tempptr = strchr(buffer, ',');
-            auto tempptr2 = strchr(buffer, '.');
-
-            if (!tempptr && !tempptr2)
-            {
-                sscanf(buffer, "%d %*s %*s %*d %d %*s %*s %*s", &modelID, &IDEDrawDistance);
-                if ((modelID >= 300 && modelID <= 632))
-                {
-                    if (IDEDrawDistance >= 10 && IDEDrawDistance < 300)
-                    {
-                        char sIDEDrawDistance[5] = { 0 }, Flags2[20] = { 0 };
-                        sprintf(sIDEDrawDistance, "%d", IDEDrawDistance);
-                        tempptr = strstr(buffer + 10, sIDEDrawDistance);
-
-                        if (IDEDrawDistance >= 100)
-                            strncpy(Flags2, tempptr + 4, 15);
-                        else
-                            strncpy(Flags2, tempptr + 3, 15);
-
-                        strncpy(tempptr, "300  ", 5);
-                        strncpy(tempptr + 5, Flags2, 15);
-                    }
-                }
-            }
-            else
-            {
-                tempptr2 = strstr(buffer, "shad_exp");
-                if (!tempptr && tempptr2)
-                {
-                    sscanf(tempptr2 + 11, "%d", &IDEDrawDistance);
-
-                    if (IDEDrawDistance >= 100 && IDEDrawDistance < 300)
-                    {
-                        strncpy(tempptr2 + 11, "300", 3);
-                    }
-                }
-            }
-        }
-    }; injector::MakeInline<GenericIDEHook>(0x48D4BD, 0x48D4BD + 7);
-
-    struct Render
-    {
-        void operator()(injector::reg_pack&)
-        {
-            ((void(__cdecl *)())0x543500)(); //CCoronas::Render();
-
-            if (bRenderLodLights)
-                CLODLights::RenderBuffered();
-
-            if (bRenderSearchlightEffects)
-                CSearchlights::RenderSearchLightsVC();
-        }
-    }; injector::MakeInline<Render>(0x4A653D);
-
-
-    if (bRenderLodLights)
-    {
-        CLODLights::Inject();
-
-        //injector::MakeNOP(0x544186, 6, true); //disable ambientBrightness change
-        //injector::MakeNOP(0x544533, 6, true);
-
-        CWorldAddHook<(0x48AD9C)>();
-        CWorldAddHook<(0x48AF52)>();
-
-        struct asmInit
-        {
-            void operator()(injector::reg_pack& regs)
-            {
-                LoadDatFile();
-
-                for (auto i : VecEntities)
-                {
-                    if (m_bCatchLamppostsNow && IsModelALamppost(i.m_nModelIndex))
-                    {
-                        RegisterLamppost(&i);
-                    }
-                }
-
-                RegisterCustomCoronas();
-                m_bCatchLamppostsNow = false;
-                m_Lampposts.shrink_to_fit();
-                VecEntities.clear();
-                pFileContent->clear();
-
-                injector::MakeCALL(0x4A6547, RegisterLODLights, true);
-            }
-        }; injector::MakeInline<asmInit>(0x4A4D10);
-    }
-
-    if (nSmoothEffect)
-    {
-        nSmoothEffect = 1;
-    }
-
-    if (fTrafficLightsShadowsDrawDistance)
-    {
-        injector::WriteMemory<float>(0x68A848, fTrafficLightsShadowsDrawDistance, true);
-    }
-
-    if (fStaticShadowsDrawDistance)
-    {
-        injector::WriteMemory<float>(0x6882A4, fStaticShadowsDrawDistance, true);
-        injector::WriteMemory(0x541590 + 0x7A4 + 2, &fStaticShadowsDrawDistance, true);
-        injector::WriteMemory(0x541590 + 0x8D5 + 2, &fStaticShadowsDrawDistance, true);
-    }
-
-    if (fStaticShadowsIntensity)
-    {
-        injector::WriteMemory<float>(0x69587C, fStaticShadowsIntensity, true);
-        injector::WriteMemory<int>(0x465914, 255, true);
-    }
-
-    if (fTrafficLightsShadowsIntensity)
-    {
-        injector::WriteMemory(0x463F90 + 0x7E9 + 2, &fTrafficLightsShadowsIntensity, true);
-        injector::WriteMemory(0x463F90 + 0x82E + 2, &fTrafficLightsShadowsIntensity, true);
-        injector::WriteMemory(0x463F90 + 0x873 + 2, &fTrafficLightsShadowsIntensity, true);
-        injector::WriteMemory(0x463F90 + 0xF4F + 2, &fTrafficLightsShadowsIntensity, true);
-        injector::WriteMemory(0x463F90 + 0xF94 + 2, &fTrafficLightsShadowsIntensity, true);
-        injector::WriteMemory(0x463F90 + 0xFD7 + 2, &fTrafficLightsShadowsIntensity, true);
-        injector::WriteMemory(0x463F90 + 0x18CE + 2, &fTrafficLightsShadowsIntensity, true);
-        injector::WriteMemory(0x463F90 + 0x1913 + 2, &fTrafficLightsShadowsIntensity, true);
-        injector::WriteMemory(0x463F90 + 0x1956 + 2, &fTrafficLightsShadowsIntensity, true);
-    }
-
-    if (bIncreasePedsCarsShadowsDrawDistance)
-    {
-        injector::MakeJMP(0x56DA3F, 0x56DBF3, true); //ped shadows draw distance
-
-        //Car Shadows
-        injector::WriteMemory<unsigned char>(0x0056DEC1, 0x85u, true); //headlight twitching fix
-        injector::WriteMemory<unsigned char>(0x0056DD36, 0x75u, true); //headlight on far distance
-        injector::WriteMemory<unsigned char>(0x0056E004, 0x75u, true); //shadow on far distance
-        injector::WriteMemory<unsigned char>(0x0058E2B7, 0x55u, true); //rgb
-        injector::WriteMemory<unsigned char>(0x0058E2B9, 0x55u, true);
-        injector::WriteMemory<unsigned char>(0x0058E2BB, 0x55u, true);
-    }
-
-    if (fDrawDistance)
-    {
-        injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (fDrawDistance / 1.8f), true);
-        injector::MakeInline<0x498B65>([](injector::reg_pack& regs)
-        {
-            *(uintptr_t*)regs.esp = 0x498CC8;
-            injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (fDrawDistance / 1.8f), true);
-        });
-
-
-        struct DDHookNoLambda
-        {
-            void operator()(injector::reg_pack& regs)
-            {
-                _asm {fstp dword ptr ds : [00690220h]}
-                injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (fDrawDistance / 1.8f), true);
-            }
-        }; injector::MakeInline<DDHookNoLambda>(0x490132, 0x490132 + 6);
-        injector::WriteMemory<float>(0x499800 + 3, 1.2f * (fDrawDistance / 1.8f), true);
-    }
-
-    if (fMaxDrawDistanceForNormalObjects)
-    {
-        injector::WriteMemory<float>(0x69022C, fMaxDrawDistanceForNormalObjects, true);
-    }
-
-    if (bEnableDrawDistanceChanger)
-    {
-        injector::MakeJMP(0x4A65CD, DrawDistanceChanger, true);
-
-        injector::WriteMemory(0x4A602B + 0x2, &fNewFarClip, true);
-        //injector::WriteMemory(0x4A6037 + 0x2, &fNewFarClip, true);
-    }
-
-    if (bPreloadLODs)
-    {
-        injector::WriteMemory<uint8_t>(0x487CD8, 0xEB, true);
-        injector::WriteMemory<uint8_t>(0x4A68A0, 0xC3, true);
-
-        injector::MakeNOP(0x40DFE4, 5, true);
-        injector::MakeNOP(0x40E242, 5, true);
-
-        injector::MakeNOP(0x40E150, 5, true);
-        injector::MakeNOP(0x40E157, 5, true);
-
-        //struct SetupBigBuildingVisibilityHook //Lods in the interiors
-        //{
-        //    void operator()(injector::reg_pack& regs)
-        //    {
-        //        if (*(uint32_t*)0x978810 == 0) //nCurrentInterior
-        //            *(uintptr_t*)(regs.esp - 4) = 0x4C799A;
-        //        else
-        //            *(uintptr_t*)(regs.esp - 4) = 0x4C7961;
-        //    }
-        //}; injector::MakeInline<SetupBigBuildingVisibilityHook>(0x4C7957);
-    }
-
-    if (bRandomExplosionEffects)
-    {
-        CExplosionAddModifiedExplosion<(0x44038A)>();
-        CExplosionAddModifiedExplosion<(0x4579A7)>();
-        CExplosionAddModifiedExplosion<(0x5869B5)>();
-        CExplosionAddModifiedExplosion<(0x588DC9)>();
-        CExplosionAddModifiedExplosion<(0x5997C6)>();
-        CExplosionAddModifiedExplosion<(0x59F819)>();
-        CExplosionAddModifiedExplosion<(0x5AD18F)>();
-        CExplosionAddModifiedExplosion<(0x5AD3F2)>();
-        CExplosionAddModifiedExplosion<(0x5AFEC2)>();
-        CExplosionAddModifiedExplosion<(0x5B0320)>();
-        CExplosionAddModifiedExplosion<(0x5B040F)>();
-        CExplosionAddModifiedExplosion<(0x5B0867)>();
-        CExplosionAddModifiedExplosion<(0x5C6DB9)>();
-        CExplosionAddModifiedExplosion<(0x5C6DDC)>();
-        CExplosionAddModifiedExplosion<(0x5C6E23)>();
-        CExplosionAddModifiedExplosion<(0x5C6EDE)>();
-        //CExplosionAddModifiedExplosion<(0x5C6EFD)>(); //molotov
-        CExplosionAddModifiedExplosion<(0x5C6F3D)>();
-        CExplosionAddModifiedExplosion<(0x5C704E)>();
-        //CExplosionAddModifiedExplosion<(0x5C706D)>(); //molotov
-        CExplosionAddModifiedExplosion<(0x5C70AD)>();
-        CExplosionAddModifiedExplosion<(0x5C71C5)>();
-        CExplosionAddModifiedExplosion<(0x5C720F)>();
-        CExplosionAddModifiedExplosion<(0x5C8B89)>(); //barrels
-        CExplosionAddModifiedExplosion<(0x60A51D)>();
-        CExplosionAddModifiedExplosion<(0x630168)>();
-    }
-
-    if (bReplaceSmokeTrailWithBulletTrail)
-    {
-        CBulletTracesAddTrace<(0x573E69)>();
-    }
-
-    if (bFestiveLights)
-    {
-        auto now = std::chrono::system_clock::now();
-        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-        struct tm *date = std::localtime(&now_c);
-        if (bFestiveLightsAlways || (date->tm_mon == 0 && date->tm_mday <= 1) || (date->tm_mon == 11 && date->tm_mday >= 31))
-        {
-            CLODLights::RegisterCorona = &CLODLights::RegisterFestiveCorona;
-            CCoronasRegisterFestiveCoronaForEntity<(0x5419E0)>();
-            CCoronasRegisterFestiveCoronaForEntity<(0x5421A5)>();
-        }
-    }
-}
-
-void CLODLightManager::VC::RegisterCustomCoronas()
-{
-    unsigned short      nModelID = 65534;
-
-    auto    itEnd = pFileContent->upper_bound(PackKey(nModelID, 0xFFFF));
-    for (auto it = pFileContent->lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
-        m_Lampposts.push_back(CLamppostInfo(it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
-}
-
-void CLODLightManager::VC::RegisterLamppost(CEntityVC* entity)
-{
-    auto    itEnd = pFileContent->upper_bound(PackKey(entity->m_nModelIndex, 0xFFFF));
-    for (auto it = pFileContent->lower_bound(PackKey(entity->m_nModelIndex, 0)); it != itEnd; it++)
-        m_Lampposts.push_back(CLamppostInfo(entity->matrix * it->second.vecPos, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, atan2(entity->matrix.GetUp()->y, -entity->matrix.GetUp()->x)));
-}
-
-void CLODLightManager::VC::RegisterLODLights()
-{
-    if (GetIsTimeInRange(19, 7))
-    {
-        unsigned char   bAlpha = 0;
-        float           fRadius = 0.0f;
-        unsigned int    nTime = *CurrentTimeHours * 60 + *CurrentTimeMinutes;
-        unsigned int    curMin = *CurrentTimeMinutes;
-        fCoronaFarClip = autoFarClip ? **fCurrentFarClip : fCoronaFarClip;
-
-        if (nTime >= 19 * 60)
-            bAlpha = static_cast<unsigned char>((3.0f / 4.0f)*nTime - 825.0f); // http://goo.gl/O03RpE {(19*60)a + y = 30,  (24*60)a + y = 255}
-        else if (nTime < 3 * 60)
-            bAlpha = 255;
-        else
-            bAlpha = static_cast<unsigned char>((-15.0f / 16.0f)*nTime + 424.0f); // http://goo.gl/M8Dev9 {(7*60)a + y = 30,  (3*60)a + y = 255}
-
-        for (auto it = m_Lampposts.cbegin(); it != m_Lampposts.cend(); it++)
-        {
-            if ((it->vecPos.z >= -15.0f) && (it->vecPos.z <= 1030.0f))
-            {
-
-                CVector*    pCamPos = (CVector*)GetCamPos();
-                float       fDistSqr = (pCamPos->x - it->vecPos.x)*(pCamPos->x - it->vecPos.x) + (pCamPos->y - it->vecPos.y)*(pCamPos->y - it->vecPos.y) + (pCamPos->z - it->vecPos.z)*(pCamPos->z - it->vecPos.z);
-
-                if ((fDistSqr > 250.0f*250.0f && fDistSqr < fCoronaFarClip*fCoronaFarClip) || it->nNoDistance)
-                {
-                    if (it->nNoDistance)
-                        fRadius = 3.5f;
-                    else
-                        fRadius = (fDistSqr < 300.0f*300.0f) ? (0.07f)*sqrt(fDistSqr) - 17.5f : 3.5f; // http://goo.gl/vhAZSx
-
-                    if (bSlightlyIncreaseRadiusWithDistance)
-                        fRadius *= min((0.0025f)*sqrt(fDistSqr) + 0.25f, 4.0f); // http://goo.gl/3kDpnC
-
-                    if (it->fCustomSizeMult != 0.45f)
-                    {
-                        if (!it->nCoronaShowMode)
-                        {
-                            CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0xFF, 255.0f, false, false);
-                            if (bRenderStaticShadowsForLODs) CShadowsStoreStaticShadow(reinterpret_cast<unsigned int>(&*it), 2, *(RwTexture **)0x978DB4, (CVector*)&it->vecPos, 8.0f, 0.0f, 0.0f, -8.0f, bAlpha, it->colour.r, it->colour.g, it->colour.b, 15.0f, 1.0f, fCoronaFarClip, false, 0.0f);
-                        }
-                        else
-                        {
-                            static float blinking = 1.0f;
-                            if (IsBlinkingNeeded(it->nCoronaShowMode))
-                                blinking -= *CTimer::ms_fTimeStep / 1000.0f;
-                            else
-                                blinking += *CTimer::ms_fTimeStep / 1000.0f;
-
-                            (blinking > 1.0f) ? blinking = 1.0f : (blinking < 0.0f) ? blinking = 0.0f : 0.0f;
-
-                            CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, blinking * (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0xFF, 255.0f, false, false);
-                        }
-                    }
-                    else
-                    {
-                        if ((it->colour.r >= 250 && it->colour.g >= 100 && it->colour.b <= 100) && ((curMin == 9 || curMin == 19 || curMin == 29 || curMin == 39 || curMin == 49 || curMin == 59))) //yellow
-                        {
-                            CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0xFF, 255.0f, false, false);
-                        }
-                        else
-                        {
-                            if ((abs(it->fHeading) >= (3.1415f / 6.0f) && abs(it->fHeading) <= (5.0f * 3.1415f / 6.0f)))
-                            {
-                                if ((it->colour.r >= 250 && it->colour.g < 100 && it->colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
-                                {
-                                    CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0xFF, 255.0f, false, false);
-                                }
-                                else
-                                {
-                                    if ((it->colour.r == 0 && it->colour.g >= 250 && it->colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
-                                    {
-                                        CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0xFF, 255.0f, false, false);
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                if ((it->colour.r == 0 && it->colour.g >= 250 && it->colour.b == 0) && (((curMin >= 0 && curMin < 9) || (curMin >= 20 && curMin < 29) || (curMin >= 40 && curMin < 49)))) //red
-                                {
-                                    CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0xFF, 255.0f, false, false);
-                                }
-                                else
-                                {
-                                    if ((it->colour.r >= 250 && it->colour.g < 100 && it->colour.b == 0) && (((curMin > 9 && curMin < 19) || (curMin > 29 && curMin < 39) || (curMin > 49 && curMin < 59)))) //green
-                                    {
-                                        CLODLights::RegisterCorona(reinterpret_cast<unsigned int>(&*it), nullptr, it->colour.r, it->colour.g, it->colour.b, (bAlpha * (it->colour.a / 255.0f)), it->vecPos, (fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier), fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0xFF, 255.0f, false, false);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    CLODLights::Update();
-}
-
-
-void CLODLightManager::VC::DrawDistanceChanger()
-{
-    static Fps _fps;
-    if (bAdaptiveDrawDistanceEnabled)
-    {
-        _fps.update();
-        int FPScount = _fps.get();
-        if (FPScount < nMinFPSValue)
-        {
-            fMinDrawDistanceOnTheGround -= 2.0f;
-        }
-        else if (FPScount >= nMaxFPSValue)
-        {
-            fMinDrawDistanceOnTheGround += 2.0f;
-        }
-        if (fMinDrawDistanceOnTheGround < 800.0f)
-            fMinDrawDistanceOnTheGround = 800.0f;
-        else if (fMinDrawDistanceOnTheGround > fMaxPossibleDrawDistance)
-            fMinDrawDistanceOnTheGround = fMaxPossibleDrawDistance;
-    }
-    fNewFarClip = (fFactor1 / fFactor2) * (GetCamPos()->z) + fMinDrawDistanceOnTheGround;
 }
 
 extern "C" __declspec(dllexport) void InitializeASI()
@@ -603,17 +262,11 @@ extern "C" __declspec(dllexport) void InitializeASI()
     static std::once_flag flag;
     std::call_once(flag, []()
     {
-        if (injector::address_manager::singleton().IsVC())
-        {
-            if (injector::address_manager::singleton().GetMajorVersion() == 1 && injector::address_manager::singleton().GetMinorVersion() == 0)
-            {
-                CLODLightManager::VC::Init();
-            }
-        }
+        Init();
     });
 }
 
-BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
 {
     if (reason == DLL_PROCESS_ATTACH)
     {
