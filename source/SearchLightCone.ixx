@@ -77,15 +77,14 @@ export void __cdecl SearchLightCone(RwV3D StartPoint, RwV3D EndPoint, float Targ
     constexpr int NUM_STEPS = 64;
     const float angleStep = (2.0f * 3.1415926535f) / NUM_STEPS;
 
+    RwV3D b = { 0.0f, 0.0f, 1.0f };
+    RwV3D out = a.Cross(b);
+    out.Normalise();
+    RwV3D perp2 = out.Cross(a);
+    perp2.Normalise();
+
     for (int step = 0; step <= NUM_STEPS; ++step)
     {
-        RwV3D b = { 0.0f, 0.0f, 1.0f };
-        RwV3D out, perp2;
-        out = a.Cross(b);
-        out.Normalise();
-        perp2 = out.Cross(a);
-        perp2.Normalise();
-
         const float angle = static_cast<float>(step) * angleStep;
         const float sinVal = sinf(angle);
         const float cosVal = cosf(angle);
@@ -207,7 +206,6 @@ export void RenderAllSearchLights()
 
                 const CVector camPos = TheCamera->GetCoords();
                 const float fDistSqr = (camPos - lamp.vecPos).MagnitudeSqr();
-                const float fDist = std::sqrt(fDistSqr);
 
                 // Rendering range with smooth fade zones
                 constexpr float MIN_DIST = 45.0f;
@@ -215,9 +213,23 @@ export void RenderAllSearchLights()
                 constexpr float FADE_OUT_START = 280.0f;
                 constexpr float MAX_DIST = 300.0f;
 
-                // Hard cutoffs at extremes
-                if (fDist < MIN_DIST || fDist > MAX_DIST)
+                constexpr float MIN_DIST_SQ = MIN_DIST * MIN_DIST;
+                constexpr float MAX_DIST_SQ = MAX_DIST * MAX_DIST;
+
+                if (fDistSqr < MIN_DIST_SQ || fDistSqr > MAX_DIST_SQ)
                     continue;
+
+                // Frame slicing: very distant searchlights only processed every 4th frame
+                //constexpr float FAR_SLICE_DIST_SQ = 240.0f * 240.0f;
+                //if (fDistSqr > FAR_SLICE_DIST_SQ)
+                //{
+                //    const unsigned int lampId = reinterpret_cast<unsigned int>(&lamp);
+                //    const uint8_t frameSlice4 = static_cast<uint8_t>(RwEngineInstance->renderFrame & 3u);
+                //    if (((lampId >> 5) & 3u) != frameSlice4)
+                //        continue;
+                //}
+
+                const float fDist = std::sqrt(fDistSqr);
 
                 float fVisibility = 1.0f;
 
@@ -242,6 +254,17 @@ export void RenderAllSearchLights()
 
                 RwV3D EndPoint = *reinterpret_cast<const RwV3D*>(&lamp.vecPos);
                 EndPoint.z -= static_cast<float>(lamp.nDrawSearchlight); // object height
+
+                // Skip if the entire cone is behind the camera
+                {
+                    RwV3D startScreen, endScreen;
+                    float w, h;
+                    RwV3D startWorld = *reinterpret_cast<const RwV3D*>(&lamp.vecPos);
+                    const bool startVisible = CSprite::CalcScreenCoors(&startWorld, &startScreen, &w, &h, true, true) != 0;
+                    const bool endVisible = CSprite::CalcScreenCoors(&EndPoint, &endScreen, &w, &h, true, true) != 0;
+                    if (!startVisible && !endVisible)
+                        continue;
+                }
 
                 const float height = lamp.vecPos.z - EndPoint.z;
                 const float targetRadius = std::min(8.0f * height, 90.0f);
