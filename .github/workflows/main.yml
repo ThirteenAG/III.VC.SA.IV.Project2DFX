@@ -100,7 +100,7 @@ jobs:
     - name: Get release info
       if: github.event.inputs.release != '' && github.event.inputs.release != 'none'
       id: release_info
-      uses: cardinalby/git-get-release-action@1.2.5
+      uses: cardinalby/git-get-release-action@1.2.6
       env:
        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
