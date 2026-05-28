@@ -122,8 +122,6 @@ void DrawDistanceChanger()
             adaptiveBase -= step;
         else
             adaptiveBase += step;
-
-        adaptiveBase = std::clamp(adaptiveBase, fFarClipMinMultiplier, fFarClipMaxMultiplier);
     }
 
     float camZ = GetCamPos()->z;
@@ -228,7 +226,6 @@ void ApplyMemoryPatches()
 
     if (fStaticShadowsIntensity)
     {
-        fStaticShadowsIntensity *= 0.00390625f;
         injector::WriteMemory(0x6FD13C, &fStaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
         injector::WriteMemory(0x6FD16E, &fStaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0
         injector::WriteMemory(0x6FD17C, &fStaticShadowsIntensity, true); // = 0x859AA0 + 0x0->fmul    ds : flt_859AA0

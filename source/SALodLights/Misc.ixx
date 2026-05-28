@@ -190,6 +190,7 @@ export struct CObject : public CPhysical
 export namespace CWeather
 {
     GameRef<float> Foggyness;
+    GameRef<float> UnderWaterness;
 }
 
 export RwTexture** gpCoronaTexture;

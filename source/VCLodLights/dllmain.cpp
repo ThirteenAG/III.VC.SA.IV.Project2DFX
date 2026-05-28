@@ -112,8 +112,6 @@ void DrawDistanceChanger()
             adaptiveBase -= step;
         else
             adaptiveBase += step;
-
-        adaptiveBase = std::clamp(adaptiveBase, fFarClipMinMultiplier, fFarClipMaxMultiplier);
     }
 
     float camZ = GetCamPos()->z;

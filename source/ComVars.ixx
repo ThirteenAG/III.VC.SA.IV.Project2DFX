@@ -24,7 +24,6 @@ export
     int nSmoothEffect;
     float fSearchlightEffectVisibilityFactor;
     bool bAdaptiveDrawDistanceEnabled;
-    int nMinFPSValue, nMaxFPSValue;
     float fNewFarClip, fMaxPossibleDrawDistance;
     float fMaxDrawDistanceForNormalObjects, fTimedObjectsDrawDistance, fNeonsDrawDistance, fLODObjectsDrawDistance;
     float fGenericObjectsDrawDistance, fAllNormalObjectsDrawDistance, fVegetationDrawDistance;
@@ -39,6 +38,11 @@ export
     float fFarClipMaxMultiplier;
     unsigned int nFarClipTargetFPS;
 
+    float fCoronaAlphaNearMinMult = 0.50f;
+    float fCoronaAlphaReachOneAt = 350.0f;
+    float fCoronaAlphaBoostStartAt = 700.0f;
+    float fCoronaAlphaFarBoostMax = 4.0f;
+
     void ReadIniSettings()
     {
         CIniReader iniReader("");
@@ -52,11 +56,16 @@ export
             fCoronaFarClip = iniReader.ReadFloat("LodLights", "CoronaFarClip", 0.0f);
         else
             autoFarClip = true;
+        fCoronaAlphaNearMinMult = iniReader.ReadFloat("LodLights", "CoronaAlphaNearMinMult", 0.50f);
+        fCoronaAlphaReachOneAt = iniReader.ReadFloat("LodLights", "CoronaAlphaReachOneAt", 350.0f);
+        fCoronaAlphaBoostStartAt = iniReader.ReadFloat("LodLights", "CoronaAlphaBoostStartAt", 700.0f);
+        fCoronaAlphaFarBoostMax = iniReader.ReadFloat("LodLights", "CoronaAlphaFarBoostMax", 4.0f);
 
         // StaticShadows section
         bRenderStaticShadowsForLODs = iniReader.ReadInteger("StaticShadows", "RenderStaticShadowsForLODs", 0) != 0;
         bIncreasePedsCarsShadowsDrawDistance = iniReader.ReadInteger("StaticShadows", "IncreaseCarsShadowsDrawDistance", 0) != 0;
         fStaticShadowsIntensity = iniReader.ReadFloat("StaticShadows", "StaticShadowsIntensity", 0.0f);
+        fStaticShadowsIntensity *= 0.00390625f;
         fStaticShadowsDrawDistance = iniReader.ReadFloat("StaticShadows", "StaticShadowsDrawDistance", 0.0f);
         fTrafficLightsShadowsIntensity = iniReader.ReadFloat("StaticShadows", "TrafficLightsShadowsIntensity", 0.0f);
         fTrafficLightsShadowsDrawDistance = iniReader.ReadFloat("StaticShadows", "TrafficLightsShadowsDrawDistance", 0.0f);

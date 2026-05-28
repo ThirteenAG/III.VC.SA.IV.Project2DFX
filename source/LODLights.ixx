@@ -513,7 +513,7 @@ public:
                 fRadius = SolveEqSys(fEffectiveCoronaDist, 0.0f, fEffectiveDrawDistance, 1.75f, distance);
 
             if (bSlightlyIncreaseRadiusWithDistance)
-                fRadius *= std::min(SolveEqSys(fEffectiveCoronaDist, 1.0f, REFERENCE_FAR_CLIP, 2.0f, distance), 2.0f);
+                fRadius *= std::min(SolveEqSys(fEffectiveCoronaDist, 1.0f, REFERENCE_FAR_CLIP, 4.0f, distance), 4.0f);
 
             // Alpha transition with proper fade-in and fade-out
             float fAlphaMultiplier = 1.0f;
@@ -532,11 +532,18 @@ public:
                 }
             }
 
-            // Slightly decrease alpha for nearby coronas
-            //if (bSlightlyDecreaseAlphaForNearbyCoro)
             {
-                // Similar to radius logic: alpha multiplier ranges from 0.5 (near) to 1.0 (far)
-                float alphaDistMult = std::min(0.5f + (distance - fEffectiveCoronaDist) / 1000.0f, 1.0f);
+                // Distance from corona fade-in start zone
+                const float d = distance - fEffectiveCoronaDist;
+
+                float alphaDistMult = fCoronaAlphaNearMinMult + std::clamp(d / fCoronaAlphaReachOneAt, 0.0f, 1.0f) * (1.0f - fCoronaAlphaNearMinMult);
+
+                if (d > fCoronaAlphaBoostStartAt)
+                {
+                    const float t = std::clamp((d - fCoronaAlphaBoostStartAt) / 900.0f, 0.0f, 1.0f);
+                    alphaDistMult = 1.0f + t * (fCoronaAlphaFarBoostMax - 1.0f);
+                }
+
                 fAlphaMultiplier *= alphaDistMult;
             }
 
