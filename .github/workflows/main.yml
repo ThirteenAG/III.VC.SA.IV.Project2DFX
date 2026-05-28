@@ -52,19 +52,19 @@ jobs:
       run: |
         msbuild -m build/III.VC.SA.IV.Project2DFX.slnx /property:Configuration=Release /property:Platform=Win32
 
-#    - name: Download III.VC.SA.LimitAdjuster
-#      uses: robinraju/release-downloader@v1.13
-#      with:
-#        repository: "GTAmodding/III.VC.SA.LimitAdjuster"
-#        latest: true
-#        fileName: "III.VC.SA.LimitAdjuster.zip"
-# 
-#    - name: Unpack dependencies
-#      run: |
-#          7z x III.VC.SA.LimitAdjuster.zip -odata/IIILodLights/ -y
-#          7z x III.VC.SA.LimitAdjuster.zip -odata/VCLodLights/ -y
-#          7z x III.VC.SA.LimitAdjuster.zip -odata/SALodLights/ -y
-#          del III.VC.SA.LimitAdjuster.zip
+    - name: Download III.VC.SA.LimitAdjuster
+      uses: robinraju/release-downloader@v1.13
+      with:
+        repository: "GTAmodding/III.VC.SA.LimitAdjuster"
+        latest: true
+        fileName: "III.VC.SA.LimitAdjuster.zip"
+ 
+    - name: Unpack dependencies
+      run: |
+          7z x III.VC.SA.LimitAdjuster.zip -odata/IIILodLights/ -y
+          7z x III.VC.SA.LimitAdjuster.zip -odata/VCLodLights/ -y
+          7z x III.VC.SA.LimitAdjuster.zip -odata/SALodLights/ -y
+          del III.VC.SA.LimitAdjuster.zip
 
     - name: Pack binaries
       shell: cmd
