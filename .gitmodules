@@ -7,3 +7,6 @@
 [submodule "external/injector"]
 	path = external/injector
 	url = https://github.com/ThirteenAG/injector
+[submodule "external/filewatch"]
+	path = external/filewatch
+	url = https://github.com/ThomasMonkman/filewatch
