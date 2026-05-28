@@ -273,6 +273,55 @@ void ApplyMemoryPatches()
                 auto modelID = regs.ecx;
                 float drawDist = *(float*)(regs.esp + 0xC);
 
+                auto isInteriorObjectID = [](int id) -> bool
+                {
+                    if (id < 0) return false;
+                    if (id >= 910 && id <= 955) return true;
+                    if (id >= 1700 && id <= 1776) return true;
+                    if (id >= 2360 && id <= 2872) return true;
+                    if (id >= 2880 && id <= 2882) return true;
+                    if (id >= 13590 && id <= 13667) return true;
+                    if (id >= 14383 && id <= 14495) return true;
+                    if (id >= 14497 && id <= 14528) return true;
+                    if (id >= 14530 && id <= 14540) return true;
+                    if (id >= 14542 && id <= 14554) return true;
+                    if (id == 14556) return true;
+                    if (id >= 14558 && id <= 14614) return true;
+                    if (id >= 14616 && id <= 14630) return true;
+                    if (id >= 14632 && id <= 14633) return true;
+                    if (id >= 14635 && id <= 14641) return true;
+                    if (id == 14643) return true;
+                    if (id >= 14650 && id <= 14657) return true;
+                    if (id >= 14660 && id <= 14695) return true;
+                    if (id >= 14699 && id <= 14728) return true;
+                    if (id >= 14735 && id <= 14762) return true;
+                    if (id >= 14764 && id <= 14765) return true;
+                    if (id >= 14770 && id <= 14856) return true;
+                    if (id >= 14858 && id <= 14883) return true;
+                    if (id >= 14885 && id <= 14898) return true;
+                    if (id >= 14900 && id <= 14903) return true;
+                    if (id >= 15025 && id <= 15043) return true;
+                    if (id >= 15046 && id <= 15064) return true;
+                    if (id >= 18000 && id <= 18036) return true;
+                    if (id >= 18038 && id <= 18075) return true;
+                    if (id >= 18077 && id <= 18086) return true;
+                    if (id >= 18088 && id <= 18092) return true;
+                    if (id >= 18094 && id <= 18095) return true;
+                    if (id >= 18098 && id <= 18101) return true;
+                    if (id >= 18104 && id <= 18105) return true;
+                    if (id == 18109) return true;
+                    if (id == 18112) return true;
+
+                    if (id >= 1327 && id <= 1572) return true; //dynamic2.ide
+                    return false;
+                };
+
+                if (isInteriorObjectID(modelID))
+                {
+                    *(float*)&regs.edx = drawDist;
+                    return;
+                }
+
                 if (fVegetationDrawDistance)
                 {
                     if (modelID >= 615 && modelID <= 792 && drawDist <= 300.0f)
