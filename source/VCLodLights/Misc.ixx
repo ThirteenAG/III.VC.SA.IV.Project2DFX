@@ -250,6 +250,7 @@ export namespace CRenderer
 
 export namespace CShadows
 {
+    RwTexture** gpShadowExplosionTex = nullptr;
     bool(__cdecl* StoreStaticShadow)(unsigned int id, unsigned char type, RwTexture* particle, CVector* pos, float x1, float y1, float x2, float y2, short alpha, unsigned char red, unsigned char green, unsigned char blue, float, float, float drawdist, bool lifetime, float updist) = nullptr;
 }
 

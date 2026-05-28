@@ -2,6 +2,7 @@ module;
 
 #define NOMINMAX
 #include <stdafx.h>
+#include <unordered_map>
 
 export module LODLights;
 
@@ -116,10 +117,13 @@ public:
 export class CLODLights
 {
 private:
-    static inline std::map<unsigned int, CLODLightsLinkedListNode*> UsedMap;
+    static inline std::unordered_map<unsigned int, CLODLightsLinkedListNode*> UsedMap;
     static inline CLODLightsLinkedListNode FreeList, UsedList;
     static inline std::vector<CLODLightsLinkedListNode> aLinkedList;
     static inline std::vector<CRegisteredCorona> aCoronas;
+    static inline uint8_t CurrentFrameStamp = 1;
+    static inline CLODLightsLinkedListNode* pFarthestNode = nullptr;
+    static inline float fFarthestDistSq = 0.0f;
 public:
     static int& bChangeBrightnessImmediately;
     static float& ScreenMult;
@@ -128,86 +132,143 @@ public:
     static void RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, unsigned char flareType, unsigned char reflectionType, unsigned char LOSCheck, unsigned char unused, float normalAngle, bool bNeonFade, float PullTowardsCam, bool bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool bWhiteCore)
     {
         UNREFERENCED_PARAMETER(unused);
+        UNREFERENCED_PARAMETER(bFadeIntensity);
+        UNREFERENCED_PARAMETER(pAttachTo);
 
-        CVector		vecPosToCheck = Position;
-        CVector* pCamPos = GetCamPos();
-        if (Range * Range >= (pCamPos->x - vecPosToCheck.x) * (pCamPos->x - vecPosToCheck.x) + (pCamPos->y - vecPosToCheck.y) * (pCamPos->y - vecPosToCheck.y))
+        const CVector* pCamPos = GetCamPos();
+        const float dx = pCamPos->x - Position.x;
+        const float dy = pCamPos->y - Position.y;
+        const float rangeSq = Range * Range;
+        const float dist2DSq = dx * dx + dy * dy;
+
+        if (rangeSq < dist2DSq)
+            return;
+
+        if (bNeonFade)
         {
-            if (bNeonFade)
-            {
-                float		fDistFromCam = CVector(*pCamPos - vecPosToCheck).Magnitude();
+            const float distSq = dist2DSq + (pCamPos->z - Position.z) * (pCamPos->z - Position.z);
+            const float fDistFromCam = std::sqrt(distSq);
 
-                if (fDistFromCam < 35.0f)
-                    return;
-                if (fDistFromCam < 50.0f)
-                    A *= static_cast<unsigned char>((fDistFromCam - 35.0f) * (2.0f / 3.0f));
-            }
-
-            // Is corona already present?
-            CRegisteredCorona* pSuitableSlot;
-            auto it = UsedMap.find(nID);
-
-            if (it != UsedMap.end())
-            {
-                pSuitableSlot = it->second->GetFrom();
-
-                if (pSuitableSlot->Intensity == 0 && A == 0)
-                {
-                    // Mark as free
-                    it->second->GetFrom()->Identifier = 0;
-                    it->second->Add(&FreeList);
-                    UsedMap.erase(nID);
-                    return;
-                }
-            }
-            else
-            {
-                if (!A)
-                    return;
-
-                // Adding a new element
-                auto	pNewEntry = FreeList.First();
-                if (!pNewEntry)
-                {
-                    //LogToFile("ERROR: Not enough space for coronas!");
-                    return;
-                }
-
-                pSuitableSlot = pNewEntry->GetFrom();
-
-                // Add to used list and push this index to the map
-                pNewEntry->Add(&UsedList);
-                UsedMap[nID] = pNewEntry;
-
-                pSuitableSlot->FadedIntensity = A;
-                pSuitableSlot->OffScreen = true;
-                pSuitableSlot->JustCreated = true;
-                pSuitableSlot->Identifier = nID;
-            }
-
-            pSuitableSlot->Red = R;
-            pSuitableSlot->Green = G;
-            pSuitableSlot->Blue = B;
-            pSuitableSlot->Intensity = A;
-            pSuitableSlot->Coordinates = Position;
-            pSuitableSlot->Size = Size;
-            pSuitableSlot->NormalAngle = normalAngle;
-            pSuitableSlot->Range = Range;
-            pSuitableSlot->pTex = pTex;
-            pSuitableSlot->FlareType = flareType;
-            pSuitableSlot->ReflectionType = reflectionType;
-            pSuitableSlot->LOSCheck = LOSCheck;
-            pSuitableSlot->RegisteredThisFrame = true;
-            pSuitableSlot->PullTowardsCam = PullTowardsCam;
-            pSuitableSlot->FadeSpeed = FadeSpeed;
-
-            pSuitableSlot->NeonFade = bNeonFade;
-            pSuitableSlot->OnlyFromBelow = bOnlyFromBelow;
-            pSuitableSlot->WhiteCore = bWhiteCore;
-
-            pSuitableSlot->bIsAttachedToEntity = false;
-            pSuitableSlot->pEntityAttachedTo = nullptr;
+            if (fDistFromCam < 35.0f)
+                return;
+            if (fDistFromCam < 50.0f)
+                A = static_cast<unsigned char>(A * ((fDistFromCam - 35.0f) * (2.0f / 3.0f)));
         }
+
+        CRegisteredCorona* pSuitableSlot = nullptr;
+        auto it = UsedMap.find(nID);
+
+        if (it != UsedMap.end())
+        {
+            pSuitableSlot = it->second->GetFrom();
+
+            if (pSuitableSlot->Intensity == 0 && A == 0)
+            {
+                pSuitableSlot->Identifier = 0;
+                it->second->Add(&FreeList);
+                UsedMap.erase(it);
+                return;
+            }
+        }
+        else
+        {
+            if (!A)
+                return;
+
+            auto pNewEntry = FreeList.First();
+            if (!pNewEntry)
+            {
+                // Validate cached farthest node
+                if (pFarthestNode)
+                {
+                    auto* pCorona = pFarthestNode->GetFrom();
+                    if (!pCorona->Identifier)
+                    {
+                        pFarthestNode = nullptr;
+                        fFarthestDistSq = 0.0f;
+                    }
+                    else
+                    {
+                        const float cdx = pCamPos->x - pCorona->Coordinates.x;
+                        const float cdy = pCamPos->y - pCorona->Coordinates.y;
+                        fFarthestDistSq = cdx * cdx + cdy * cdy;
+                    }
+                }
+
+                // Rebuild cache if missing
+                if (!pFarthestNode)
+                {
+                    for (auto pNode = UsedList.First(); pNode && pNode != &UsedList; pNode = pNode->GetNextNode())
+                    {
+                        auto* pCorona = pNode->GetFrom();
+                        if (!pCorona->Identifier)
+                            continue;
+                        const float cdx = pCamPos->x - pCorona->Coordinates.x;
+                        const float cdy = pCamPos->y - pCorona->Coordinates.y;
+                        const float dSq = cdx * cdx + cdy * cdy;
+                        if (dSq > fFarthestDistSq)
+                        {
+                            fFarthestDistSq = dSq;
+                            pFarthestNode = pNode;
+                        }
+                    }
+                }
+
+                // Only evict if cached farthest is farther than incoming
+                if (pFarthestNode && fFarthestDistSq > dist2DSq)
+                {
+                    const unsigned int evictId = pFarthestNode->GetFrom()->Identifier;
+                    pFarthestNode->GetFrom()->Identifier = 0;
+                    UsedMap.erase(evictId);
+                    pFarthestNode->Add(&FreeList);
+                    pFarthestNode = nullptr;  // Invalidate cache after eviction
+                    fFarthestDistSq = 0.0f;
+                    pNewEntry = FreeList.First();
+                }
+
+                if (!pNewEntry)
+                    return;
+            }
+
+            pSuitableSlot = pNewEntry->GetFrom();
+            pNewEntry->Add(&UsedList);
+            UsedMap.emplace(nID, pNewEntry);
+
+            pSuitableSlot->FadedIntensity = A;
+            pSuitableSlot->OffScreen = true;
+            pSuitableSlot->JustCreated = true;
+            pSuitableSlot->Identifier = nID;
+        }
+
+        pSuitableSlot->Red = R;
+        pSuitableSlot->Green = G;
+        pSuitableSlot->Blue = B;
+        pSuitableSlot->Intensity = A;
+        pSuitableSlot->Coordinates = Position;
+        pSuitableSlot->Size = Size;
+        pSuitableSlot->NormalAngle = normalAngle;
+        pSuitableSlot->Range = Range;
+        pSuitableSlot->pTex = pTex;
+        pSuitableSlot->FlareType = flareType;
+        pSuitableSlot->ReflectionType = reflectionType;
+        pSuitableSlot->LOSCheck = LOSCheck;
+        pSuitableSlot->RegisteredThisFrame = CurrentFrameStamp;
+        pSuitableSlot->PullTowardsCam = PullTowardsCam;
+        pSuitableSlot->FadeSpeed = FadeSpeed;
+
+        pSuitableSlot->NeonFade = bNeonFade;
+        pSuitableSlot->OnlyFromBelow = bOnlyFromBelow;
+        pSuitableSlot->WhiteCore = bWhiteCore;
+
+        pSuitableSlot->bIsAttachedToEntity = false;
+        pSuitableSlot->pEntityAttachedTo = nullptr;
+    }
+
+    static void TouchCorona(unsigned int nID)
+    {
+        auto it = UsedMap.find(nID);
+        if (it != UsedMap.end())
+            it->second->GetFrom()->RegisteredThisFrame = CurrentFrameStamp;
     }
 
     static void RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, int coronaType, unsigned char flareType, bool enableReflection, bool checkObstacles, int unused, float normalAngle, bool longDistance, float nearClip, unsigned char bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool reflectionDelay)
@@ -222,8 +283,8 @@ public:
         {
             while (pNode != &UsedList)
             {
-                unsigned int	nIndex = pNode->GetFrom()->Identifier;
-                auto			pNext = pNode->GetNextNode();
+                unsigned int nIndex = pNode->GetFrom()->Identifier;
+                auto pNext = pNode->GetNextNode();
 
                 pNode->GetFrom()->Update();
 
@@ -246,10 +307,14 @@ public:
         {
             aLinkedList.resize(numCoronas);
             aCoronas.resize(numCoronas);
+            UsedMap.clear();
+            UsedMap.reserve(numCoronas);
 
             // Initialise the lists
             FreeList.Init();
             UsedList.Init();
+            pFarthestNode = nullptr;
+            fFarthestDistSq = 0.0f;
 
             for (size_t i = 0; i < aLinkedList.size(); i++)
             {
@@ -261,11 +326,14 @@ public:
 
     static void RenderBuffered()
     {
-        int nWidth = Scene->m_pRwCamera->frameBuffer->width;
-        int nHeight = Scene->m_pRwCamera->frameBuffer->height;
+        const int nWidth = Scene->m_pRwCamera->frameBuffer->width;
+        const int nHeight = Scene->m_pRwCamera->frameBuffer->height;
+        const float farPlane = Scene->m_pRwCamera->farPlane;
+        const CVector* pCamPos = GetCamPos();
+        const float fogyness = CWeather::Foggyness;
 
         RwRaster* pLastRaster = nullptr;
-        bool bLastZWriteRenderState = true;
+        bool bLastZTestEnable = true;
 
         RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, FALSE);
         RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
@@ -273,73 +341,87 @@ public:
         RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
         RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
 
-        for (size_t i = 0; i < aCoronas.size(); i++)
+        for (auto pNode = UsedList.First(); pNode && pNode != &UsedList; pNode = pNode->GetNextNode())
         {
-            if (aCoronas[i].Identifier)
+            auto& corona = *pNode->GetFrom();
+            if (!corona.Identifier || corona.Intensity == 0)
+                continue;
+
+            RwV3d vecCoronaCoords{ corona.Coordinates.x, corona.Coordinates.y, corona.Coordinates.z };
+            RwV3d vecTransformedCoords;
+            float fComputedWidth, fComputedHeight;
+
+            if (!CSprite::CalcScreenCoors(&vecCoronaCoords, &vecTransformedCoords, &fComputedWidth, &fComputedHeight, true, true))
             {
-                if (aCoronas[i].Intensity > 0)
-                {
-                    RwV3d	vecCoronaCoords, vecTransformedCoords;
-                    float	fComputedWidth, fComputedHeight;
-
-                    vecCoronaCoords.x = aCoronas[i].Coordinates.x;
-                    vecCoronaCoords.y = aCoronas[i].Coordinates.y;
-                    vecCoronaCoords.z = aCoronas[i].Coordinates.z;
-
-                    if (CSprite::CalcScreenCoors(&vecCoronaCoords, &vecTransformedCoords, &fComputedWidth, &fComputedHeight, true, true))
-                    {
-                        aCoronas[i].OffScreen = !(vecTransformedCoords.x >= 0.0 && vecTransformedCoords.x <= nWidth &&
-                            vecTransformedCoords.y >= 0.0 && vecTransformedCoords.y <= nHeight);
-
-                        if (aCoronas[i].Intensity > 0 && vecTransformedCoords.z <= aCoronas[i].Range)
-                        {
-                            float fInvFarClip = 1.0f / vecTransformedCoords.z;
-                            float fHalfRange = aCoronas[i].Range * 0.5f;
-
-                            short nFadeIntensity = (short)(aCoronas[i].Intensity * (vecTransformedCoords.z > fHalfRange ? 1.0f - (vecTransformedCoords.z - fHalfRange) / fHalfRange : 1.0f));
-
-                            if (bLastZWriteRenderState != aCoronas[i].LOSCheck == false)
-                            {
-                                bLastZWriteRenderState = aCoronas[i].LOSCheck == false;
-                                CSprite::FlushSpriteBuffer();
-                                RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)bLastZWriteRenderState);
-                            }
-
-                            if (aCoronas[i].pTex)
-                            {
-                                float fColourFogMult = std::min(40.0f, vecTransformedCoords.z) * CWeather::Foggyness * 0.025f + 1.0f;
-
-                                if (aCoronas[i].Identifier == 1)	// Sun core
-                                    vecTransformedCoords.z = Scene->m_pRwCamera->farPlane * 0.95f;
-
-                                if (pLastRaster != RwTextureGetRaster(aCoronas[i].pTex))
-                                {
-                                    pLastRaster = RwTextureGetRaster(aCoronas[i].pTex);
-                                    CSprite::FlushSpriteBuffer();
-
-                                    RwRenderStateSet(rwRENDERSTATETEXTURERASTER, pLastRaster);
-                                }
-
-                                RwV3d		vecCoronaCoordsAfterPull = vecCoronaCoords;
-                                CVector		vecTempVector(vecCoronaCoordsAfterPull);
-                                vecTempVector -= *GetCamPos();
-                                vecTempVector.Normalise();
-
-                                vecCoronaCoordsAfterPull.x -= (vecTempVector.x * aCoronas[i].PullTowardsCam);
-                                vecCoronaCoordsAfterPull.y -= (vecTempVector.y * aCoronas[i].PullTowardsCam);
-                                vecCoronaCoordsAfterPull.z -= (vecTempVector.z * aCoronas[i].PullTowardsCam);
-
-                                if (CSprite::CalcScreenCoors(&vecCoronaCoordsAfterPull, &vecTransformedCoords, &fComputedWidth, &fComputedHeight, true, true))
-                                {
-                                    CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect(vecTransformedCoords.x, vecTransformedCoords.y, vecTransformedCoords.z, aCoronas[i].Size * fComputedHeight, aCoronas[i].Size * fComputedHeight * fColourFogMult, static_cast<uint8_t>(static_cast<float>(aCoronas[i].Red) / fColourFogMult), static_cast<uint8_t>(static_cast<float>(aCoronas[i].Green) / fColourFogMult), static_cast<uint8_t>(static_cast<float>(aCoronas[i].Blue) / fColourFogMult), nFadeIntensity, fInvFarClip * 20.0f, 0.0, 0xFF);
-                                }
-                            }
-                        }
-                    }
-                    else
-                        aCoronas[i].OffScreen = true;
-                }
+                corona.OffScreen = true;
+                continue;
             }
+
+            corona.OffScreen = !(vecTransformedCoords.x >= 0.0f && vecTransformedCoords.x <= nWidth &&
+                vecTransformedCoords.y >= 0.0f && vecTransformedCoords.y <= nHeight);
+
+            if (vecTransformedCoords.z > corona.Range)
+                continue;
+
+            const float invFarClip = 1.0f / vecTransformedCoords.z;
+            const float halfRange = corona.Range * 0.5f;
+            const float fadeFactor = vecTransformedCoords.z > halfRange ? 1.0f - (vecTransformedCoords.z - halfRange) / halfRange : 1.0f;
+            const short fadeIntensity = static_cast<short>(corona.Intensity * fadeFactor);
+
+            if (!corona.pTex)
+                continue;
+
+            const bool zTestEnable = !corona.LOSCheck;
+            if (bLastZTestEnable != zTestEnable)
+            {
+                bLastZTestEnable = zTestEnable;
+                CSprite::FlushSpriteBuffer();
+                RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)bLastZTestEnable);
+            }
+
+            const RwRaster* pRaster = RwTextureGetRaster(corona.pTex);
+            if (pLastRaster != pRaster)
+            {
+                pLastRaster = const_cast<RwRaster*>(pRaster);
+                CSprite::FlushSpriteBuffer();
+                RwRenderStateSet(rwRENDERSTATETEXTURERASTER, pLastRaster);
+            }
+
+            const float fColourFogMult = std::min(40.0f, vecTransformedCoords.z) * fogyness * 0.025f + 1.0f;
+            if (corona.Identifier == 1)
+                vecTransformedCoords.z = farPlane * 0.95f;
+
+            float renderHeight = corona.Size * fComputedHeight;
+
+            if (renderHeight < 0.35f)
+                continue;
+
+            if (corona.PullTowardsCam != 0.0f)
+            {
+                CVector vecCoronaCoordsAfterPull(vecCoronaCoords.x, vecCoronaCoords.y, vecCoronaCoords.z);
+                CVector vecTempVector(vecCoronaCoordsAfterPull);
+                vecTempVector -= *pCamPos;
+                vecTempVector.Normalise();
+
+                vecCoronaCoordsAfterPull.x -= vecTempVector.x * corona.PullTowardsCam;
+                vecCoronaCoordsAfterPull.y -= vecTempVector.y * corona.PullTowardsCam;
+                vecCoronaCoordsAfterPull.z -= vecTempVector.z * corona.PullTowardsCam;
+
+                if (!CSprite::CalcScreenCoors(&vecCoronaCoordsAfterPull, &vecTransformedCoords, &fComputedWidth, &fComputedHeight, true, true))
+                    continue;
+
+                renderHeight = corona.Size * fComputedHeight;
+                if (renderHeight < 0.35f)
+                    continue;
+            }
+
+            CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect(
+                vecTransformedCoords.x, vecTransformedCoords.y, vecTransformedCoords.z,
+                renderHeight, renderHeight * fColourFogMult,
+                static_cast<uint8_t>(static_cast<float>(corona.Red) / fColourFogMult),
+                static_cast<uint8_t>(static_cast<float>(corona.Green) / fColourFogMult),
+                static_cast<uint8_t>(static_cast<float>(corona.Blue) / fColourFogMult),
+                fadeIntensity, invFarClip * 20.0f, 0.0, 0xFF);
         }
 
         CSprite::FlushSpriteBuffer();
@@ -353,12 +435,21 @@ public:
             return;
         }
 
+        ++CurrentFrameStamp;
+        if (!CurrentFrameStamp)
+            ++CurrentFrameStamp;
+
         static auto SolveEqSys = [](float a, float b, float c, float d, float value) -> float
         {
             float determinant = a - c;
             float x = (b - d) / determinant;
             float y = (a * d - b * c) / determinant;
             return std::min(x * value + y, d);
+        };
+
+        static auto FastRadiusFalloff = [](float radius) -> float
+        {
+            return std::clamp(1.0f / (0.75f * radius + 0.25f), 0.3f, 1.0f);
         };
 
         unsigned char bAlpha = 0;
@@ -381,12 +472,15 @@ public:
         const CVector* pCamPos = &TheCamera->GetCoords();
         const float fScale = 1.0f;
         const float fCoronaFarClipSq = fCoronaFarClip * fCoronaFarClip;
+        const float fVeryFarDistSq = 260.0f * 260.0f;
+        const uint8_t frameSlice4 = CurrentFrameStamp & 3;
 
         for (auto it = m_Lampposts.cbegin(); it != m_Lampposts.cend(); ++it)
         {
             if (it->vecPos.z < -15.0f || it->vecPos.z > 1030.0f)
                 continue;
 
+            unsigned int coronaId = reinterpret_cast<unsigned int>(&*it);
             float dx = pCamPos->x - it->vecPos.x;
             float dy = pCamPos->y - it->vecPos.y;
             float dz = pCamPos->z - it->vecPos.z;
@@ -400,6 +494,15 @@ public:
             if (!it->nNoDistance &&
                 (fDistSqr <= fEffectiveCoronaDistSq || fDistSqr >= fCoronaFarClipSq))
                 continue;
+
+            if (fDistSqr > fVeryFarDistSq)
+            {
+                if (((coronaId >> 5) & 3u) != frameSlice4)
+                {
+                    TouchCorona(coronaId);
+                    continue;
+                }
+            }
 
             float distance = std::sqrt(fDistSqr);
             float fRadius;
@@ -454,10 +557,7 @@ public:
                 // Example: radius 1.0 = 100% alpha, radius 2.0 = 70% alpha, radius 3.0 = 50% alpha
                 if (finalRadius > 1.0f)
                 {
-                    // Adjust these values to tune the effect:
-                    // - Lower multiplier = more aggressive dimming
-                    // - Higher clamp min = prevents coronas from getting too dim
-                    radiusAlphaScale = std::clamp(1.0f / std::sqrt(finalRadius), 0.3f, 1.0f);
+                    radiusAlphaScale = FastRadiusFalloff(finalRadius);
                 }
 
                 unsigned char alpha = static_cast<unsigned char>(std::clamp(normalizedAlpha * radiusAlphaScale * 255.0f, 0.0f, 255.0f));
@@ -513,7 +613,7 @@ public:
                     if (bRenderStaticShadowsForLODs)
                         CShadows::StoreStaticShadow(
                             reinterpret_cast<unsigned int>(&*it), SSHADT_INTENSIVE,
-                            *(RwTexture**)0xC403F4, (CVector*)&it->vecPos,
+                            *CShadows::gpShadowExplosionTex, (CVector*)&it->vecPos,
                             8.0f, 0.0f, 0.0f, -8.0f, bAlpha,
                             it->colour.r / 3, it->colour.g / 3, it->colour.b / 3,
                             15.0f, 1.0f, fCoronaFarClip, false, 0.0f

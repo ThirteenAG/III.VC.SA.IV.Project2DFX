@@ -431,6 +431,7 @@ void GetMemoryAddresses()
 
     CRenderer::ms_lodDistScale.SetAddress((float*)0x5F726C);
 
+    CShadows::gpShadowExplosionTex = (RwTexture**)0x8F2A00;
     CShadows::StoreStaticShadow = (decltype(CShadows::StoreStaticShadow))0x5130A0;
 
     RwRenderStateSet = (decltype(RwRenderStateSet))0x5A43C0;
