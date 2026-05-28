@@ -198,7 +198,7 @@ void ConvertDFFTo2DFX()
                                         else if (buf.find("RANDOM_FLASHING") != std::string::npos || buf.find("RANDOM_FLASHIN_ALWAYS_AT_WET_WEATHER") != std::string::npos ||
                                                  buf.find("ALWAYS_AT_WET_WEATHER") != std::string::npos)
                                         {
-                                            BlinkType = BlinkTypes::RANDOM_FLASHING;
+                                            BlinkType = BlinkTypes::DEFAULT;
                                         }
                                         else if (buf.find("LIGHTS_ANIM_SPEED_4X") != std::string::npos)
                                         {

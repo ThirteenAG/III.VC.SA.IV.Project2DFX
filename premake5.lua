@@ -55,14 +55,25 @@ workspace "III.VC.SA.IV.Project2DFX"
    files { "external/hooking/Hooking.Patterns.h", "external/hooking/Hooking.Patterns.cpp" }
    files { "external/injector/safetyhook/include/**.hpp", "external/injector/safetyhook/src/**.cpp" }
    files { "external/injector/zydis/**.h", "external/injector/zydis/**.c" }
-  files { "data/**/*.ini" }
+   files { "data/**/*.ini" }
    includedirs { "includes" }
    includedirs { "external/hooking" }
    includedirs { "external/injector/safetyhook/include" }
    includedirs { "external/injector/zydis" }
    includedirs { "external/injector/include" }
    includedirs { "external/inireader" }
-      
+   includedirs { "external/filewatch" }
+
+   vpaths {
+      ["source"] = { "source/**.*" },
+      ["shaders"] = { "source/**.fx", "source/**.vs", "source/**.ps", "source/**.hlsl" },
+      ["ini"] = { "data/**.ini" },
+      ["data"] = { "data/**.cfg", "data/**.dat" },
+      ["resources/*"] = { "resources/*" },
+      ["includes/*"] = { "includes/**" },
+      ["external/*"] = { "external/**" },
+   }
+
    filter "configurations:Debug"
       defines "DEBUG"
       symbols "On"

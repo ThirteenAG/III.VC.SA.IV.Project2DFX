@@ -253,3 +253,22 @@ export namespace CShadows
     bool(__cdecl* StoreStaticShadow)(unsigned int id, unsigned char type, RwTexture* particle, CVector* pos, float x1, float y1, float x2, float y2, short alpha, unsigned char red, unsigned char green, unsigned char blue, float, float, float drawdist, bool lifetime, float updist) = nullptr;
 }
 
+export namespace CGeneral
+{
+    constexpr int MYRAND_MAX = 65535;
+
+    unsigned int __cdecl GetRandomNumber()
+    {
+        return rand();
+    }
+
+    float GetRandomNumberInRange(float low, float high)
+    {
+        return low + (high - low) * (CGeneral::GetRandomNumber() / float(MYRAND_MAX + 1));
+    }
+
+    int32_t GetRandomNumberInRange(int32_t low, int32_t high)
+    {
+        return low + (high - low) * (CGeneral::GetRandomNumber() / float(MYRAND_MAX + 1));
+    }
+}

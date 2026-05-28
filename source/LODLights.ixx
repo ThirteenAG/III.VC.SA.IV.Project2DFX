@@ -348,7 +348,10 @@ public:
     static void RegisterLODLights()
     {
         if (!(CClock::GetIsTimeInRange(20, 7) && CGame::currArea == 0))
+        {
+            Update();
             return;
+        }
 
         static auto SolveEqSys = [](float a, float b, float c, float d, float value) -> float
         {

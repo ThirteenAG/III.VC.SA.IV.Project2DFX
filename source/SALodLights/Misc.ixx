@@ -213,3 +213,19 @@ export namespace CShadows
     bool(__cdecl* StoreStaticShadow)(unsigned int id, unsigned char type, RwTexture* particle, CVector* pos, float x1, float y1, float x2, float y2, short alpha, unsigned char red, unsigned char green, unsigned char blue, float, float, float drawdist, bool lifetime, float updist) = nullptr;
 }
 
+export GameRef<int> gGameState([]() -> int*
+{
+    auto pattern = hook::pattern("89 35 ? ? ? ? B8 ? ? ? ? 0F A2");
+    if (!pattern.empty())
+        return *pattern.get_first<int*>(2);
+    return nullptr;
+});
+
+export void (__fastcall* CreateRwObject)(CEntity* entity, void* edx) = nullptr;
+
+export namespace CStreaming
+{
+    void (__cdecl* RequestModel)(signed int dwModelId, int flags) = nullptr;
+    void (__cdecl* LoadAllRequestedModels)(char bOnlyPriorityRequests) = nullptr;
+}
+
