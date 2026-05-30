@@ -424,7 +424,7 @@ void ApplyMemoryPatches()
 
         static std::vector<CEntity*> lodPtrs;
 
-        pattern = hook::pattern("0F BF 48 ? 0F BF 56");
+        pattern = hook::pattern("8A 48 ? 80 F9 ? 8B 3C 95");
         static auto LinkLodsHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
         {
             lodPtrs.push_back((CEntity*)regs.eax);
