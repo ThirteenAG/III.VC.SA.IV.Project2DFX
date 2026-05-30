@@ -310,6 +310,7 @@ public:
         uint8_t m_nLaneSide;
         uint8_t m_nLaneCount;
         uint8_t m_nLaneIndex;
+        bool    m_bWaterNode;  // cached at spawn/transition — zero-cost read in render
         CVector m_vecPos;
         CVector m_vecDir;
         uint16_t m_nStuckFrames;
@@ -709,6 +710,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         impostor.m_nLaneCount = laneCount;
         impostor.m_nLaneIndex = lane;
         impostor.m_fLaneOffset = ComputeLaneOffset(true, laneCount, lane, laneLink);
+        impostor.m_bWaterNode = (bool)node.bWaterPath;
         impostor.m_vecPos = node.GetPosition();
         impostor.m_vecDir = CVector(1.0f, 0.0f, 0.0f);
         impostor.m_nStuckFrames = 0;
@@ -926,6 +928,7 @@ void CMovingThings::UpdateDistantCarImpostors()
             impostor.m_nLaneCount = laneCount;
             impostor.m_nLaneIndex = laneIndex;
             impostor.m_fLaneOffset = ComputeLaneOffset(true, laneCount, laneIndex, nextLink);
+            impostor.m_bWaterNode = (bool)ThePaths->m_pathNodes[targetPrevNode].bWaterPath;
             impostor.m_nStuckFrames = 0;
         }
 
@@ -1048,9 +1051,21 @@ void CMovingThings::RenderDistantCarImpostors()
         float dirDot = DotProduct(impostor.m_vecDir, camPos - impostor.m_vecPos);
         bool approaching = dirDot > 0.0f;
 
-        uint8 red = approaching ? 255 : 255;
-        uint8 green = approaching ? 255 : 40;
-        uint8 blue = approaching ? 230 : 40;
+        uint8 red, green, blue;
+        if (impostor.m_bWaterNode)
+        {
+            // Maritime nav lights: green starboard (approaching), white stern (receding)
+            red   = approaching ? 0   : 220;
+            green = approaching ? 200 : 220;
+            blue  = approaching ? 80  : 220;
+        }
+        else
+        {
+            // Road vehicle: white headlights (approaching), red tail lights (receding)
+            red   = approaching ? 255 : 255;
+            green = approaching ? 255 : 40;
+            blue  = approaching ? 230 : 40;
+        }
         uint8 alpha = 150;
 
         float fadeFar = Clamp((maxDist - dist) / 250.0f, 0.0f, 1.0f);
