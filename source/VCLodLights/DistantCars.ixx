@@ -474,6 +474,19 @@ static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& imposto
     CVector dir = segment / segmentLen;
     CVector travelDir = dir;
     CVector right(-dir.y, dir.x, 0.0f);
+
+    {
+        CPathNode& node = ThePaths->m_pathNodes[impostor.m_nPrevNode];
+        for (int32 li = 0; li < (int32)node.numLinks; li++)
+        {
+            int32 conn = node.firstLink + li;
+            if (ThePaths->ConnectedNode(conn) != impostor.m_nNextNode) continue;
+            CCarPathLink link = ThePaths->m_carPathLinks[ThePaths->m_carPathConnections[conn]];
+            impostor.m_fLaneOffset = ComputeLaneOffset(true, impostor.m_nLaneCount, impostor.m_nLaneIndex, link);
+            break;
+        }
+    }
+
     CVector pos = fromPos + segment * impostor.m_fProgress + right * impostor.m_fLaneOffset;
     pos.z += 0.55f;
 
@@ -709,7 +722,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         impostor.m_nLaneSide = laneSide;
         impostor.m_nLaneCount = laneCount;
         impostor.m_nLaneIndex = lane;
-        impostor.m_fLaneOffset = ComputeLaneOffset(true, laneCount, lane, laneLink);
+        impostor.m_fLaneOffset = 0.0f; // recomputed each frame in ComputeImpostorTransform
         impostor.m_bWaterNode = (bool)node.bWaterPath;
         impostor.m_vecPos = node.GetPosition();
         impostor.m_vecDir = CVector(1.0f, 0.0f, 0.0f);
@@ -927,7 +940,7 @@ void CMovingThings::UpdateDistantCarImpostors()
             impostor.m_nLaneSide = laneSide;
             impostor.m_nLaneCount = laneCount;
             impostor.m_nLaneIndex = laneIndex;
-            impostor.m_fLaneOffset = ComputeLaneOffset(true, laneCount, laneIndex, nextLink);
+            // m_fLaneOffset recomputed each frame in ComputeImpostorTransform
             impostor.m_bWaterNode = (bool)ThePaths->m_pathNodes[targetPrevNode].bWaterPath;
             impostor.m_nStuckFrames = 0;
         }
@@ -1055,16 +1068,16 @@ void CMovingThings::RenderDistantCarImpostors()
         if (impostor.m_bWaterNode)
         {
             // Maritime nav lights: green starboard (approaching), white stern (receding)
-            red   = approaching ? 0   : 220;
+            red = approaching ? 0 : 220;
             green = approaching ? 200 : 220;
-            blue  = approaching ? 80  : 220;
+            blue = approaching ? 80 : 220;
         }
         else
         {
             // Road vehicle: white headlights (approaching), red tail lights (receding)
-            red   = approaching ? 255 : 255;
+            red = approaching ? 255 : 255;
             green = approaching ? 255 : 40;
-            blue  = approaching ? 230 : 40;
+            blue = approaching ? 230 : 40;
         }
         uint8 alpha = 150;
 
