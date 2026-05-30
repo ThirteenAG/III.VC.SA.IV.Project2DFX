@@ -30,6 +30,7 @@ export
     bool bLoadAllBinaryIPLs, bPreloadLODs;
     float fDrawDistance;
     bool bRandomExplosionEffects, bReplaceSmokeTrailWithBulletTrail;
+    float fStaticSunSize;
 
     float fFarClipMultiplier = 1.0f;
     float fFarClipStaticMultiplier;
@@ -88,6 +89,7 @@ export
         fFarClipMinMultiplier = iniReader.ReadFloat("FarClip", "MinMultiplier", 1.0f);
         fFarClipMaxMultiplier = iniReader.ReadFloat("FarClip", "MaxMultiplier", 30.0f);
         nFarClipTargetFPS = iniReader.ReadInteger("FarClip", "TargetFPS", 60);
+        fStaticSunSize = iniReader.ReadFloat("FarClip", "StaticSunSize", 20.0f);
 
         // IDETweaker section
         fMaxDrawDistanceForNormalObjects = iniReader.ReadFloat("IDETweaker", "MaxDrawDistanceForNormalObjects", 300.0f);

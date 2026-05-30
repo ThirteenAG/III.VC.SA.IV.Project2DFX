@@ -198,8 +198,14 @@ void ApplyMemoryPatches()
     pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? 8B 0D ? ? ? ? 51 E8 ? ? ? ? 8B 15 ? ? ? ? 52 E8 ? ? ? ? 83 C4 ? 83 C4");
     injector::MakeCALL(pattern.get_first(), DrawDistanceChanger, true);
 
-    injector::WriteMemory(0x6FC65C + 2, &fSunSizeMult1, true);
-    injector::WriteMemory(0x6FC6E8 + 2, &fSunSizeMult2, true);
+    //injector::WriteMemory(0x6FC65C + 2, &fSunSizeMult1, true);
+    //injector::WriteMemory(0x6FC6E8 + 2, &fSunSizeMult2, true);
+
+    if (fStaticSunSize)
+    {
+        injector::WriteMemory(0x6FC656, &fStaticSunSize, true);
+        injector::WriteMemory(0x6FC6E2, &fStaticSunSize, true);
+    }
 
     injector::WriteMemory(0x6FC051 + 0x2, 0x7080 * 0xA, true); // sun reflection
     injector::WriteMemory<float>(0x49DCF4, 550.0f, true); //Traffic lights corona draw distance
