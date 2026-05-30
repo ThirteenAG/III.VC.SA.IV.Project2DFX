@@ -109,11 +109,11 @@ public:
 
     float OneWayLaneOffset() const
     {
-        if (numLeftLanes)
+        if (numLeftLanes == 0)
             return 0.5f - (float)numRightLanes / 2.0f;
-        if (numRightLanes)
-            return 0.5f - GetNodePathWidth() / 5.4f / 2.0f;
-        return 0.5f - (float)numLeftLanes / 2.0f;
+        if (numRightLanes == 0)
+            return 0.5f - (float)numLeftLanes / 2.0f;
+        return 0.5f;
     }
 };
 
@@ -253,6 +253,7 @@ public:
         uint8_t  m_nLaneSide;
         uint8_t  m_nLaneCount;
         uint8_t  m_nLaneIndex;
+        bool     m_bWaterNode;  // cached at spawn/transition — zero-cost read in render
         CVector  m_vecPos;
         CVector  m_vecDir;
         uint16_t m_nStuckFrames;
@@ -440,12 +441,32 @@ static float ComputeDynamicImpostorDensityScale(float camTravelSpeed)
     return Clamp(density, 0.2f, 1.25f);
 }
 
-static float ComputeLaneOffset(bool useRightSide, int32 laneCount, int32 laneIndex, CCarPathLink link)
+static float ComputeLinkBaseOffset(uint8 fromArea, int16 fromNode, uint8 toArea, int16 toNode, CCarPathLink& link)
+{
+    CVector fromPos = ThePaths->m_pPathNodes[fromArea][fromNode].GetPosition();
+    CVector toPos = ThePaths->m_pPathNodes[toArea][toNode].GetPosition();
+    CVector segment = toPos - fromPos;
+    float segmentLen = segment.Magnitude2D();
+    if (segmentLen < 0.001f)
+        return 0.0f;
+
+    CVector dir = segment / segmentLen;
+    CVector right(dir.y, -dir.x, 0.0f);
+    CVector mid = fromPos + segment * 0.5f;
+    CVector2D linkPos = link.GetPosition();
+    CVector toLink(linkPos.x - mid.x, linkPos.y - mid.y, 0.0f);
+    return DotProduct(toLink, right);
+}
+
+static float ComputeLaneLateralOffset(uint8 fromArea, int16 fromNode, uint8 toArea, int16 toNode, uint8 laneSide, int32 laneCount, int32 laneIndex, CCarPathLink& link)
 {
     laneCount = Max(1, laneCount);
     laneIndex = Clamp(laneIndex, 0, laneCount - 1);
-    float sideSign = useRightSide ? -1.0f : 1.0f;
-    return sideSign * (laneIndex + link.OneWayLaneOffset()) * 5.0f;
+
+    float laneWidth = Clamp(link.GetNodePathWidth(), 2.5f, 6.0f);
+    constexpr float sideSign = 1.0f;
+    float localOffset = sideSign * ((float)laneIndex + 0.5f) * laneWidth;
+    return ComputeLinkBaseOffset(fromArea, fromNode, toArea, toNode, link) + localOffset;
 }
 
 static bool IsTraversalAlongLinkDir(uint8 fromArea, int16 fromNode, uint8 toArea, int16 toNode, CCarPathLink& link)
@@ -490,7 +511,30 @@ static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& imposto
         return false;
 
     CVector dir = segment / segmentLen;
-    CVector right(-dir.y, dir.x, 0.0f);
+    CVector right(dir.y, -dir.x, 0.0f);
+    CCarPathLink laneLink;
+    bool foundLink = false;
+    {
+        CPathNode& node = ThePaths->m_pPathNodes[impostor.m_nPrevArea][impostor.m_nPrevNode];
+        for (int32 li = 0; li < (int32)node.m_nNumLinks; li++)
+        {
+            int32 conn = node.m_wBaseLinkId + li;
+            CNodeAddress addr = ThePaths->GetConnectedAddress(impostor.m_nPrevArea, conn);
+            if (addr.m_nAreaId != impostor.m_nNextArea || addr.m_nNodeId != impostor.m_nNextNode) continue;
+            if (!ThePaths->GetLaneLinkByConnection(impostor.m_nPrevArea, conn, laneLink)) continue;
+            foundLink = true;
+            break;
+        }
+    }
+    if (foundLink)
+    {
+        impostor.m_fLaneOffset = ComputeLaneLateralOffset(
+            impostor.m_nPrevArea, impostor.m_nPrevNode,
+            impostor.m_nNextArea, impostor.m_nNextNode,
+            impostor.m_nLaneSide, impostor.m_nLaneCount, impostor.m_nLaneIndex, laneLink);
+    }
+    // else: keep cached m_fLaneOffset as fallback
+
     CVector pos = fromPos + segment * impostor.m_fProgress + right * impostor.m_fLaneOffset;
     pos.z += 0.55f;
 
@@ -704,7 +748,8 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         impostor.m_nLaneSide = laneSide;
         impostor.m_nLaneCount = (uint8)laneCount;
         impostor.m_nLaneIndex = (uint8)lane;
-        impostor.m_fLaneOffset = ComputeLaneOffset(true, laneCount, lane, laneLink);
+        impostor.m_fLaneOffset = 0.0f; // will be computed correctly on first ComputeImpostorTransform
+        impostor.m_bWaterNode = (bool)node.m_bWaterNode;
         impostor.m_vecPos = node.GetPosition();
         impostor.m_vecDir = CVector(1.0f, 0.0f, 0.0f);
         impostor.m_nStuckFrames = 0;
@@ -890,11 +935,19 @@ void CMovingThings::UpdateDistantCarImpostors()
             uint8 targetNextArea = nextArea;
             int16 targetNextNode = nextNode;
 
+            int8 leftLanes = (int8)nextLink.numLeftLanes;
+            int8 rightLanes = (int8)nextLink.numRightLanes;
+
             bool useRight = UseRightLaneGroupForTraversal(targetPrevArea, targetPrevNode, targetNextArea, targetNextNode, nextLink);
-            int8 leftLanes = Max((int8)1, (int8)nextLink.numLeftLanes);
-            int8 rightLanes = Max((int8)1, (int8)nextLink.numRightLanes);
-            int8 laneCount = Max((int8)1, useRight ? rightLanes : leftLanes);
             uint8 laneSide = useRight ? 1 : 0;
+            int8 laneCount = laneSide ? rightLanes : leftLanes;
+            if (laneCount <= 0)
+            {
+                laneSide = laneSide ? 0 : 1;
+                laneCount = laneSide ? rightLanes : leftLanes;
+            }
+
+            laneCount = Max((int8)1, laneCount);
             uint8 laneIndex = Min((uint8)(laneCount - 1), impostor.m_nLaneIndex);
 
             CVector tgFrom = ThePaths->m_pPathNodes[targetPrevArea][targetPrevNode].GetPosition();
@@ -942,7 +995,8 @@ void CMovingThings::UpdateDistantCarImpostors()
             impostor.m_nLaneSide = laneSide;
             impostor.m_nLaneCount = (uint8)laneCount;
             impostor.m_nLaneIndex = laneIndex;
-            impostor.m_fLaneOffset = ComputeLaneOffset(true, laneCount, laneIndex, nextLink);
+            // m_fLaneOffset will be recomputed in ComputeImpostorTransform for the new segment
+            impostor.m_bWaterNode = (bool)ThePaths->m_pPathNodes[targetPrevArea][targetPrevNode].m_bWaterNode;
             impostor.m_nStuckFrames = 0;
             MarkLaneBucketsDirty();
         }
@@ -1031,9 +1085,21 @@ void CMovingThings::RenderDistantCarImpostors()
 
         bool approaching = DotProduct(impostor.m_vecDir, camPos - impostor.m_vecPos) > 0.0f;
 
-        uint8 red = 255;
-        uint8 green = approaching ? 255 : 40;
-        uint8 blue = approaching ? 230 : 40;
+        uint8 red, green, blue;
+        if (impostor.m_bWaterNode)
+        {
+            // Maritime nav lights: green starboard (approaching), white stern (receding)
+            red = approaching ? 0 : 220;
+            green = approaching ? 200 : 220;
+            blue = approaching ? 80 : 220;
+        }
+        else
+        {
+            // Road vehicle: white headlights (approaching), red tail lights (receding)
+            red = 255;
+            green = approaching ? 255 : 40;
+            blue = approaching ? 230 : 40;
+        }
         float fade = Clamp((maxDist - dist) / 250.0f, 0.0f, 1.0f)
             * Clamp((dist - 140.0f) / 120.0f, 0.0f, 1.0f);
         uint8 alpha = (uint8)(150 * fade);
