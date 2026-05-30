@@ -18,6 +18,7 @@ using uint16 = uint16_t;
 using int16 = int16_t;
 using uint8 = uint8_t;
 using int8 = int8_t;
+using uint64 = uint64_t;
 
 #define Max(a, b)           ((a) > (b) ? (a) : (b))
 #define Min(a, b)           ((a) < (b) ? (a) : (b))
@@ -303,11 +304,14 @@ constexpr int   PATH_GRID_H = 8;
 constexpr float PATH_CELL_W = PATH_WORLD_SIZE / PATH_GRID_W;  // 750
 constexpr float PATH_CELL_H = PATH_WORLD_SIZE / PATH_GRID_H;  // 750
 
-static int s_visibleAreas[NUM_PATH_MAP_AREAS];
-static int s_numVisibleAreas = 0;
+static int  s_visibleAreas[NUM_PATH_MAP_AREAS];
+static bool s_visibleAreaMask[NUM_PATH_MAP_AREAS];
+static int  s_numVisibleAreas = 0;
 static void RebuildVisibleAreaCache(const CVector& camPos, float maxDist)
 {
     s_numVisibleAreas = 0;
+    for (int i = 0; i < NUM_PATH_MAP_AREAS; i++)
+        s_visibleAreaMask[i] = false;
 
     // AABB of the area that the camera can see (circle approximated as square)
     float camMinX = camPos.x - maxDist;
@@ -332,6 +336,7 @@ static void RebuildVisibleAreaCache(const CVector& camPos, float maxDist)
         if (cellMaxY < camMinY || cellMinY > camMaxY) continue;
 
         s_visibleAreas[s_numVisibleAreas++] = i;
+        s_visibleAreaMask[i] = true;
     }
 
     // Fallback: any loaded area
@@ -339,7 +344,10 @@ static void RebuildVisibleAreaCache(const CVector& camPos, float maxDist)
     {
         for (int i = 0; i < NUM_PATH_MAP_AREAS; i++)
             if (ThePaths->m_pPathNodes[i] && ThePaths->m_dwNumVehicleNodes[i] > 0)
+            {
                 s_visibleAreas[s_numVisibleAreas++] = i;
+                s_visibleAreaMask[i] = true;
+            }
     }
 }
 
@@ -351,10 +359,55 @@ static int32 GetRandomVisibleCarArea()
 
 static bool IsImpostorInVisibleArea(const CMovingThings::CDistantCarImpostor& imp)
 {
-    for (int i = 0; i < s_numVisibleAreas; i++)
-        if (s_visibleAreas[i] == imp.m_nPrevArea)
-            return true;
-    return false;
+    return imp.m_nPrevArea < NUM_PATH_MAP_AREAS && s_visibleAreaMask[imp.m_nPrevArea];
+}
+
+static uint64 MakeLaneKey(uint8 prevArea, int16 prevNode, uint8 nextArea, int16 nextNode, uint8 laneSide, uint8 laneIndex)
+{
+    return (uint64)prevArea |
+        ((uint64)(uint16)prevNode << 8) |
+        ((uint64)nextArea << 24) |
+        ((uint64)(uint16)nextNode << 32) |
+        ((uint64)laneSide << 48) |
+        ((uint64)laneIndex << 56);
+}
+
+static thread_local std::unordered_map<uint64, std::vector<int32>> s_laneBuckets;
+static thread_local bool s_laneBucketsDirty = true;
+
+static void MarkLaneBucketsDirty()
+{
+    s_laneBucketsDirty = true;
+}
+
+static void RebuildLaneBuckets()
+{
+    s_laneBuckets.clear();
+    s_laneBuckets.reserve(CMovingThings::aDistantCarImpostors.size());
+
+    for (int32 i = 0; i < (int32)CMovingThings::aDistantCarImpostors.size(); i++)
+    {
+        const auto& imp = CMovingThings::aDistantCarImpostors[i];
+        if (!imp.m_bActive)
+            continue;
+
+        uint64 key = MakeLaneKey(imp.m_nPrevArea, imp.m_nPrevNode, imp.m_nNextArea, imp.m_nNextNode, imp.m_nLaneSide, imp.m_nLaneIndex);
+        s_laneBuckets[key].push_back(i);
+    }
+
+    s_laneBucketsDirty = false;
+}
+
+static const std::vector<int32>* GetLaneBucket(uint8 prevArea, int16 prevNode, uint8 nextArea, int16 nextNode, uint8 laneSide, uint8 laneIndex)
+{
+    if (s_laneBucketsDirty)
+        RebuildLaneBuckets();
+
+    uint64 key = MakeLaneKey(prevArea, prevNode, nextArea, nextNode, laneSide, laneIndex);
+    auto it = s_laneBuckets.find(key);
+    if (it == s_laneBuckets.end())
+        return nullptr;
+    return &it->second;
 }
 
 static bool IsPathSegmentExcludedForImpostor(uint8 fromArea, int16 fromNode, uint8 toArea, int16 toNode)
@@ -550,6 +603,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
 {
     impostor.m_bActive = false;
     impostor.m_nCoronaId = coronaId;
+    MarkLaneBucketsDirty();
 
     for (int32 attempts = 0; attempts < 128; attempts++)
     {
@@ -583,20 +637,22 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
 
         static std::vector<float> occupied, gapStart, gapEnd;
         occupied.clear();
-        occupied.reserve(aDistantCarImpostors.size());
 
         CVector fromNodePos = node.GetPosition();
         CVector toNodePos = ThePaths->m_pPathNodes[toArea][toNode].GetPosition();
         float segLen = (toNodePos - fromNodePos).Magnitude2D();
         float minGap = (segLen > 0.001f) ? Min(0.35f, 16.0f / segLen) : 0.35f;
 
-        for (const auto& other : aDistantCarImpostors)
+        if (const auto* laneBucket = GetLaneBucket(fromArea, fromNode, toArea, toNode, laneSide, (uint8)lane))
         {
-            if (!other.m_bActive) continue;
-            if (other.m_nPrevNode != fromNode || other.m_nPrevArea != fromArea) continue;
-            if (other.m_nNextNode != toNode || other.m_nNextArea != toArea)   continue;
-            if (other.m_nLaneSide != laneSide || other.m_nLaneIndex != (uint8)lane) continue;
-            occupied.push_back(other.m_fProgress);
+            occupied.reserve(laneBucket->size());
+            for (int32 idx : *laneBucket)
+            {
+                const auto& other = aDistantCarImpostors[idx];
+                if (!other.m_bActive)
+                    continue;
+                occupied.push_back(other.m_fProgress);
+            }
         }
 
         int32 numOccupied = (int32)occupied.size();
@@ -652,6 +708,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         impostor.m_vecPos = node.GetPosition();
         impostor.m_vecDir = CVector(1.0f, 0.0f, 0.0f);
         impostor.m_nStuckFrames = 0;
+        MarkLaneBucketsDirty();
         return true;
     }
 
@@ -672,19 +729,22 @@ void CMovingThings::ShutdownDistantCarImpostors()
         imp.m_bActive = false;
         HideImpostorCorona(imp);
     }
+    MarkLaneBucketsDirty();
 }
 
 void CMovingThings::UpdateDistantCarImpostors()
 {
-    if (ThePaths->GetNumCarPathNodes() <= 0)
-        return;
-
     float   dt = CTimer::GetTimeStepInSeconds();
     CVector camPos = TheCamera->GetCoords();
     float   maxDist = CTimeCycle::m_fCurrentFarClip;
 
-    RebuildVisibleAreaCache(camPos, maxDist);
     UpdateExtendedPathStreaming(camPos, maxDist);
+
+    int32 totalCarNodes = ThePaths->GetNumCarPathNodes();
+    if (totalCarNodes <= 0)
+        return;
+
+    RebuildVisibleAreaCache(camPos, maxDist);
 
     float evictDistSqr = (maxDist * 1.1f) * (maxDist * 1.1f);
     for (auto& imp : aDistantCarImpostors)
@@ -700,6 +760,7 @@ void CMovingThings::UpdateDistantCarImpostors()
         {
             imp.m_bActive = false;
             HideImpostorCorona(imp);
+            MarkLaneBucketsDirty();
         }
     }
 
@@ -731,6 +792,7 @@ void CMovingThings::UpdateDistantCarImpostors()
             if ((imp.m_vecPos - camPos).MagnitudeSqr2D() < SQR(700.0f)) continue;
             imp.m_bActive = false;
             HideImpostorCorona(imp);
+            MarkLaneBucketsDirty();
             disableBudget--;
             activeCount--;
         }
@@ -779,6 +841,7 @@ void CMovingThings::UpdateDistantCarImpostors()
             {
                 impostor.m_bActive = false;
                 HideImpostorCorona(impostor);
+                MarkLaneBucketsDirty();
             }
             continue;
         }
@@ -840,13 +903,19 @@ void CMovingThings::UpdateDistantCarImpostors()
             float minEntryGap = (tgSegLen > 0.001f) ? Min(0.35f, 16.0f / tgSegLen) : 0.35f;
 
             bool canEnter = true;
-            for (const auto& other : aDistantCarImpostors)
+            if (const auto* laneBucket = GetLaneBucket(targetPrevArea, targetPrevNode, targetNextArea, targetNextNode, laneSide, laneIndex))
             {
-                if (!other.m_bActive || &other == &impostor) continue;
-                if (other.m_nPrevNode != targetPrevNode || other.m_nPrevArea != targetPrevArea) continue;
-                if (other.m_nNextNode != targetNextNode || other.m_nNextArea != targetNextArea) continue;
-                if (other.m_nLaneSide != laneSide || other.m_nLaneIndex != laneIndex) continue;
-                if (other.m_fProgress < minEntryGap) { canEnter = false; break; }
+                for (int32 idx : *laneBucket)
+                {
+                    const auto& other = aDistantCarImpostors[idx];
+                    if (!other.m_bActive || &other == &impostor)
+                        continue;
+                    if (other.m_fProgress < minEntryGap)
+                    {
+                        canEnter = false;
+                        break;
+                    }
+                }
             }
 
             if (!canEnter)
@@ -860,6 +929,7 @@ void CMovingThings::UpdateDistantCarImpostors()
                     {
                         impostor.m_bActive = false;
                         HideImpostorCorona(impostor);
+                        MarkLaneBucketsDirty();
                     }
                 }
                 break;
@@ -874,6 +944,7 @@ void CMovingThings::UpdateDistantCarImpostors()
             impostor.m_nLaneIndex = laneIndex;
             impostor.m_fLaneOffset = ComputeLaneOffset(true, laneCount, laneIndex, nextLink);
             impostor.m_nStuckFrames = 0;
+            MarkLaneBucketsDirty();
         }
 
         if (!impostor.m_bActive) continue;
@@ -890,28 +961,19 @@ void CMovingThings::UpdateDistantCarImpostors()
 
     int32 sortedCount = (int32)sortedIdx.size();
 
-    for (int32 i = 1; i < sortedCount; i++)
+    std::sort(sortedIdx.begin(), sortedIdx.end(), [](int32 a, int32 b)
     {
-        int32 key = sortedIdx[i];
-        const CDistantCarImpostor& keyImp = aDistantCarImpostors[key];
-        int32 j = i - 1;
-        while (j >= 0)
-        {
-            const CDistantCarImpostor& jImp = aDistantCarImpostors[sortedIdx[j]];
-            bool keyBeforeJ;
-            if (keyImp.m_nPrevArea != jImp.m_nPrevArea)   keyBeforeJ = keyImp.m_nPrevArea < jImp.m_nPrevArea;
-            else if (keyImp.m_nPrevNode != jImp.m_nPrevNode)   keyBeforeJ = keyImp.m_nPrevNode < jImp.m_nPrevNode;
-            else if (keyImp.m_nNextArea != jImp.m_nNextArea)   keyBeforeJ = keyImp.m_nNextArea < jImp.m_nNextArea;
-            else if (keyImp.m_nNextNode != jImp.m_nNextNode)   keyBeforeJ = keyImp.m_nNextNode < jImp.m_nNextNode;
-            else if (keyImp.m_nLaneSide != jImp.m_nLaneSide)   keyBeforeJ = keyImp.m_nLaneSide < jImp.m_nLaneSide;
-            else if (keyImp.m_nLaneIndex != jImp.m_nLaneIndex)  keyBeforeJ = keyImp.m_nLaneIndex < jImp.m_nLaneIndex;
-            else                                                  keyBeforeJ = keyImp.m_fProgress > jImp.m_fProgress;
-            if (!keyBeforeJ) break;
-            sortedIdx[j + 1] = sortedIdx[j];
-            j--;
-        }
-        sortedIdx[j + 1] = key;
-    }
+        const CDistantCarImpostor& lhs = CMovingThings::aDistantCarImpostors[a];
+        const CDistantCarImpostor& rhs = CMovingThings::aDistantCarImpostors[b];
+
+        if (lhs.m_nPrevArea != rhs.m_nPrevArea) return lhs.m_nPrevArea < rhs.m_nPrevArea;
+        if (lhs.m_nPrevNode != rhs.m_nPrevNode) return lhs.m_nPrevNode < rhs.m_nPrevNode;
+        if (lhs.m_nNextArea != rhs.m_nNextArea) return lhs.m_nNextArea < rhs.m_nNextArea;
+        if (lhs.m_nNextNode != rhs.m_nNextNode) return lhs.m_nNextNode < rhs.m_nNextNode;
+        if (lhs.m_nLaneSide != rhs.m_nLaneSide) return lhs.m_nLaneSide < rhs.m_nLaneSide;
+        if (lhs.m_nLaneIndex != rhs.m_nLaneIndex) return lhs.m_nLaneIndex < rhs.m_nLaneIndex;
+        return lhs.m_fProgress > rhs.m_fProgress;
+    });
 
     for (int32 pass = 0; pass < 3; pass++)
     {
