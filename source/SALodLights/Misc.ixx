@@ -189,6 +189,7 @@ export struct CObject : public CPhysical
 
 export namespace CWeather
 {
+    GameRef<float> Rain;
     GameRef<float> Foggyness;
     GameRef<float> UnderWaterness;
 }
@@ -202,6 +203,11 @@ export GameRef<RwGlobals*> RwEngineInstance;
 export void RwRenderStateSet(RwRenderState nState, void* pParam)
 {
     RwEngineInstance->dOpenDevice.fpRenderStateSet(nState, pParam);
+}
+
+export void RwRenderStateGet(RwRenderState nState, void* pParam)
+{
+    RwEngineInstance->dOpenDevice.fpRenderStateGet(nState, pParam);
 }
 
 export namespace CRenderer
@@ -231,3 +237,22 @@ export namespace CStreaming
     void (__cdecl* LoadAllRequestedModels)(char bOnlyPriorityRequests) = nullptr;
 }
 
+export namespace CGeneral
+{
+    constexpr int MYRAND_MAX = 65535;
+
+    unsigned int __cdecl GetRandomNumber()
+    {
+        return rand();
+    }
+
+    float GetRandomNumberInRange(float low, float high)
+    {
+        return low + (high - low) * (CGeneral::GetRandomNumber() / float(MYRAND_MAX + 1));
+    }
+
+    int32_t GetRandomNumberInRange(int32_t low, int32_t high)
+    {
+        return low + (high - low) * (CGeneral::GetRandomNumber() / float(MYRAND_MAX + 1));
+    }
+}

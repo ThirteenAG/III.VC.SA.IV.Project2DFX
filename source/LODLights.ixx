@@ -335,6 +335,20 @@ public:
         RwRaster* pLastRaster = nullptr;
         bool bLastZTestEnable = true;
 
+        void* oldZWrite = nullptr;
+        void* oldVertexAlpha = nullptr;
+        void* oldSrcBlend = nullptr;
+        void* oldDstBlend = nullptr;
+        void* oldZTest = nullptr;
+        void* oldRaster = nullptr;
+
+        RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &oldZWrite);
+        RwRenderStateGet(rwRENDERSTATEVERTEXALPHAENABLE, &oldVertexAlpha);
+        RwRenderStateGet(rwRENDERSTATESRCBLEND, &oldSrcBlend);
+        RwRenderStateGet(rwRENDERSTATEDESTBLEND, &oldDstBlend);
+        RwRenderStateGet(rwRENDERSTATEZTESTENABLE, &oldZTest);
+        RwRenderStateGet(rwRENDERSTATETEXTURERASTER, &oldRaster);
+
         RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, FALSE);
         RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
         RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
@@ -425,6 +439,13 @@ public:
         }
 
         CSprite::FlushSpriteBuffer();
+
+        RwRenderStateSet(rwRENDERSTATETEXTURERASTER, oldRaster);
+        RwRenderStateSet(rwRENDERSTATEZTESTENABLE, oldZTest);
+        RwRenderStateSet(rwRENDERSTATEDESTBLEND, oldDstBlend);
+        RwRenderStateSet(rwRENDERSTATESRCBLEND, oldSrcBlend);
+        RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, oldVertexAlpha);
+        RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, oldZWrite);
     }
 
     static void RegisterLODLights()

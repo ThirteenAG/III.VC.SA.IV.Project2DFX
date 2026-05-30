@@ -19,6 +19,7 @@ import Timecycle;
 import ModelInfo;
 import Heli;
 import PointLights;
+import DistantCars;
 
 using RwV3D = RwV3d;
 
@@ -239,8 +240,21 @@ void ApplyMemoryPatches()
     pattern = hook::pattern("E8 ? ? ? ? 6A ? 68 ? ? ? ? 68 ? ? ? ? E8 ? ? ? ? 83 C4 ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8");
     CWorld::shRepositionCertainDynamicObjects = safetyhook::create_inline(injector::GetBranchDestination(pattern.get_first()).as_int(), CWorld::RepositionCertainDynamicObjects);
 
-    pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? C3");
-    static auto RenderEffectsHook = safetyhook::create_mid(pattern.count(2).get(1).get<void*>(), [](SafetyHookContext& regs)
+    pattern = hook::pattern("C7 05 ? ? ? ? ? ? ? ? 66 C7 05 ? ? ? ? ? ? C7 05 ? ? ? ? ? ? ? ? C7 05 ? ? ? ? ? ? ? ? 8D 44 20");
+    static auto CMovingThingsInitHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    {
+        CMovingThings::InitDistantCarImpostors();
+    });
+
+    pattern = hook::pattern("01 C2 89 C8 01 D6");
+    static auto CMovingThingsUpdateHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    {
+        CLODLights::RegisterLODLights();
+        CMovingThings::UpdateDistantCarImpostors();
+    });
+
+    pattern = hook::pattern("BE B0 F6 62 00");
+    static auto CMovingThingsRenderHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
         if (bRenderLodLights)
             CLODLights::RenderBuffered();
@@ -272,12 +286,15 @@ void ApplyMemoryPatches()
                 }
             }
         }
+
+        if (bRenderLodLights)
+            CMovingThings::RenderDistantCarImpostors();
     });
 
-    pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? B9 ? ? ? ? E8 ? ? ? ? 80 3D");
-    static auto CGameProcessHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    pattern = hook::pattern("C6 05 ? ? ? ? ? C6 05 ? ? ? ? ? C6 04 C5");
+    static auto CMovingThingsShutdownHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
-        CLODLights::RegisterLODLights();
+        CMovingThings::ShutdownDistantCarImpostors();
     });
 
     if (fTrafficLightsShadowsDrawDistance)
@@ -397,6 +414,7 @@ void GetMemoryAddresses()
     CTimer::ms_fTimeStep.SetAddress((float*)0x8E2CB4);
     TheCamera.SetAddress((CCamera*)0x6FACF8);
 
+    CWeather::Rain.SetAddress((float*)0x8E2BFC);
     CWeather::Foggyness.SetAddress((float*)0x885AF4);
     gpCoronaTexture = (RwTexture**)0x5FAF44;
 
@@ -433,6 +451,7 @@ void GetMemoryAddresses()
     CShadows::StoreStaticShadow = (decltype(CShadows::StoreStaticShadow))0x5130A0;
 
     RwRenderStateSet = (decltype(RwRenderStateSet))0x5A43C0;
+    RwRenderStateGet = (decltype(RwRenderStateGet))0x5A4410;
 
     pHelis = (CHeli**)0x72CF50;
     pNumRandomHelis = (int16_t*)0x95CCAA;
@@ -440,6 +459,8 @@ void GetMemoryAddresses()
     CPointLights::AddLightWithoutEntity = (decltype(CPointLights::AddLightWithoutEntity))0x510790;
 
     AddParticle = (decltype(AddParticle))0x50D140;
+
+    CTheZones::GetZoneInfoForTimeOfDay = (decltype(CTheZones::GetZoneInfoForTimeOfDay))0x4B6FB0;
 }
 
 void Init()

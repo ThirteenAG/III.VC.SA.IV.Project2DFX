@@ -18,6 +18,7 @@ import SearchLightCone;
 import Timecycle;
 import ModelInfo;
 import PointLights;
+import DistantCars;
 
 using RwV3D = RwV3d;
 
@@ -145,46 +146,47 @@ void ApplyMemoryPatches()
         }
     });
 
-    pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? A1 ? ? ? ? 6A ? 50 B9");
-    static auto RenderEffectsHook1 = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    pattern = hook::pattern("E8 ? ? ? ? 8B F0 8A 44 24");
+    CFileLoader::shLoadObjectInstance = safetyhook::create_inline(injector::GetBranchDestination(pattern.get_first()).as_int(), CFileLoader::LoadObjectInstance);
+
+    pattern = hook::pattern("BA ? ? ? ? 57 8B FA 33 C0 81 C2 ? ? ? ? 81 FA ? ? ? ? B9 ? ? ? ? ? ? 7C ? E8");
+    static auto CMovingThingsInitHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    {
+        CLODLights::Init(numCoronas);
+
+        RegisterCustomCoronas();
+        m_bCatchLamppostsNow = false;
+        m_Lampposts.shrink_to_fit();
+        FileContent.clear();
+
+        CMovingThings::InitDistantCarImpostors();
+    });
+
+    pattern = hook::pattern("8B 4C 24 ? 89 4F ? 89 4C 24 ? B9 ? ? ? ? 89 57 ? E8 ? ? ? ? 8A 1D");
+    static auto CMovingThingsUpdateHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    {
+        CLODLights::RegisterLODLights();
+        CMovingThings::UpdateDistantCarImpostors();
+    });
+
+    pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? A1 ? ? ? ? 6A ? 50 B9");
+    static auto CMovingThingsRenderHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
         if (bRenderLodLights)
             CLODLights::RenderBuffered();
-    });
 
-    pattern = hook::pattern("E8 ? ? ? ? 80 3D ? ? ? ? ? 74 ? 6A");
-    static auto RenderEffectsHook2 = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
-    {
         if (bRenderSearchlightEffects)
             RenderAllSearchLights();
+
+        if (bRenderLodLights)
+            CMovingThings::RenderDistantCarImpostors();
     });
 
-    if (bRenderLodLights)
+    pattern = hook::pattern("BE ? ? ? ? 8D 4E ? E8 ? ? ? ? ? ? ? 81 C6 ? ? ? ? 81 FE ? ? ? ? 7C ? 5E C3");
+    static auto CMovingThingsShutdownHook = safetyhook::create_mid(pattern.count(2).get(1).get<void*>(), [](SafetyHookContext& regs)
     {
-        auto pattern = hook::pattern("E8 ? ? ? ? 6A ? 6A ? 6A ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? 6A ? 6A ? 6A ? E8 ? ? ? ? E8 ? ? ? ? E8");
-        static auto CGameInit2Hook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
-        {
-            CLODLights::Init(numCoronas);
-        });
-
-        pattern = hook::pattern("E8 ? ? ? ? 83 C4 ? E8 ? ? ? ? E8 ? ? ? ? B9 ? ? ? ? E8 ? ? ? ? 56");
-        static auto CGameInitialiseHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
-        {
-            RegisterCustomCoronas();
-            m_bCatchLamppostsNow = false;
-            m_Lampposts.shrink_to_fit();
-            FileContent.clear();
-        });
-
-        pattern = hook::pattern("E8 ? ? ? ? 8B F0 8A 44 24");
-        CFileLoader::shLoadObjectInstance = safetyhook::create_inline(injector::GetBranchDestination(pattern.get_first()).as_int(), CFileLoader::LoadObjectInstance);
-
-        pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? A1 ? ? ? ? 85 C0 74");
-        static auto CGameProcessHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
-        {
-            CLODLights::RegisterLODLights();
-        });
-    }
+        CMovingThings::ShutdownDistantCarImpostors();
+    });
 
     pattern = hook::pattern("DB 05 ? ? ? ? D8 15 ? ? ? ? DF E0 F6 C4 05 7A");
     static auto FarClipHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
@@ -455,7 +457,9 @@ void GetMemoryAddresses()
     CTimer::ms_fTimeStep.SetAddress((float*)0xB7CB5C);
     TheCamera.SetAddress((CCamera*)0xB6F028);
 
+    CWeather::Rain.SetAddress((float*)0xC81324);
     CWeather::Foggyness.SetAddress((float*)0xC81300);
+    CWeather::UnderWaterness.SetAddress((float*)0xC8132C);
     gpCoronaTexture = (RwTexture**)0xC3E000;
 
     CSprite::CalcScreenCoorsMaxMin = (decltype(CSprite::CalcScreenCoorsMaxMin))0x70CE30;
@@ -494,6 +498,8 @@ void GetMemoryAddresses()
     CreateRwObject = (decltype(CreateRwObject))0x533D30;
     CStreaming::RequestModel = (decltype(CStreaming::RequestModel))0x4087E0;
     CStreaming::LoadAllRequestedModels = (decltype(CStreaming::LoadAllRequestedModels))0x40EA10;
+
+    MakeRequestForNodesToBeLoaded = (decltype(MakeRequestForNodesToBeLoaded))0x450D70;
 }
 
 void Init()

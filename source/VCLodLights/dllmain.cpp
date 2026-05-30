@@ -19,6 +19,7 @@ import Timecycle;
 import ModelInfo;
 import Heli;
 import PointLights;
+import DistantCars;
 
 using RwV3D = RwV3d;
 
@@ -234,8 +235,21 @@ void ApplyMemoryPatches()
         bOnce = true;
     });
 
-    pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? C3");
-    static auto RenderEffectsHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    pattern = hook::pattern("C7 05 ? ? ? ? ? ? ? ? C7 05 ? ? ? ? ? ? ? ? C7 05 ? ? ? ? ? ? ? ? 31 ED");
+    static auto CMovingThingsInitHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    {
+        CMovingThings::InitDistantCarImpostors();
+    });
+
+    pattern = hook::pattern("8D 14 C0 8D 14 52 01 C2 89 C8");
+    static auto CMovingThingsUpdateHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    {
+        CLODLights::RegisterLODLights();
+        CMovingThings::UpdateDistantCarImpostors();
+    });
+
+    pattern = hook::pattern("BD C0 43 93 00 8D 80");
+    static auto CMovingThingsRenderHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
         if (bRenderLodLights)
             CLODLights::RenderBuffered();
@@ -267,12 +281,15 @@ void ApplyMemoryPatches()
                 }
             }
         }
+
+        if (bRenderLodLights)
+            CMovingThings::RenderDistantCarImpostors();
     });
 
-    pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? B9 ? ? ? ? E8 ? ? ? ? 80 3D");
-    static auto CGameProcessHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
+    pattern = hook::pattern("C6 05 ? ? ? ? ? C7 05 ? ? ? ? ? ? ? ? 83 C4 08");
+    static auto CMovingThingsShutdownHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
-        CLODLights::RegisterLODLights();
+        CMovingThings::ShutdownDistantCarImpostors();
     });
 
     if (fTrafficLightsShadowsDrawDistance)
@@ -374,6 +391,7 @@ void GetMemoryAddresses()
     CTimer::ms_fTimeStep.SetAddress((float*)0x975424);
     TheCamera.SetAddress((CCamera*)0x7E4688);
 
+    CWeather::Rain.SetAddress((float*)0x975340);
     CWeather::Foggyness.SetAddress((float*)0x94DDC0);
     gpCoronaTexture = (RwTexture**)0x695538;
 
@@ -409,6 +427,7 @@ void GetMemoryAddresses()
     CShadows::StoreStaticShadow = (decltype(CShadows::StoreStaticShadow))0x56E780;
 
     RwRenderStateSet = (decltype(RwRenderStateSet))0x649BA0;
+    RwRenderStateGet = (decltype(RwRenderStateGet))0x649BF0;
 
     pHelis = (CHeli**)0x813D10;
     pNumRandomHelis = (int16_t*)0xA10A6A;
@@ -416,6 +435,8 @@ void GetMemoryAddresses()
     CPointLights::AddLightWithoutEntity = (decltype(CPointLights::AddLightWithoutEntity))0x567700;
 
     AddParticle = (decltype(AddParticle))0x5648F0;
+
+    CTheZones::GetZoneInfoForTimeOfDay = (decltype(CTheZones::GetZoneInfoForTimeOfDay))0x4DC500;
 }
 
 void Init()

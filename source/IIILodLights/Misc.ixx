@@ -200,6 +200,7 @@ public:
 
 export namespace CWeather
 {
+    GameRef<float> Rain;
     GameRef<float> Foggyness;
 }
 
@@ -209,6 +210,7 @@ export GameRef<CScene> Scene;
 
 export GameRef<RwGlobals*> RwEngineInstance;
 
+export bool(__cdecl* RwRenderStateGet)(RwRenderState nState, void* pParam) = nullptr;
 export bool(__cdecl* RwRenderStateSet)(RwRenderState nState, void* pParam) = nullptr;
 
 export namespace CRenderer

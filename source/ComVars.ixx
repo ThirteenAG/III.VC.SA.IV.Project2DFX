@@ -43,6 +43,9 @@ export
     float fCoronaAlphaBoostStartAt = 700.0f;
     float fCoronaAlphaFarBoostMax = 4.0f;
 
+    int nNumDistantCarImpostors = 2000;
+    float fDistantCarsRadiusMultiplier = 1.0f;
+
     void ReadIniSettings()
     {
         CIniReader iniReader("");
@@ -60,6 +63,8 @@ export
         fCoronaAlphaReachOneAt = iniReader.ReadFloat("LodLights", "CoronaAlphaReachOneAt", 350.0f);
         fCoronaAlphaBoostStartAt = iniReader.ReadFloat("LodLights", "CoronaAlphaBoostStartAt", 700.0f);
         fCoronaAlphaFarBoostMax = iniReader.ReadFloat("LodLights", "CoronaAlphaFarBoostMax", 4.0f);
+        nNumDistantCarImpostors = iniReader.ReadInteger("LodLights", "MaxNumberOfDistantCars", 2000);
+        fDistantCarsRadiusMultiplier = iniReader.ReadFloat("LodLights", "DistantCarsRadiusMultiplier", 1.0f);
 
         // StaticShadows section
         bRenderStaticShadowsForLODs = iniReader.ReadInteger("StaticShadows", "RenderStaticShadowsForLODs", 0) != 0;

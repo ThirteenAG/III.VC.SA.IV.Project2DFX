@@ -935,6 +935,9 @@ int _tmain(int argc, _TCHAR* argv[])
                 if (!CoronaSize || ID == 4481 || ID == 4483) //destruct2 destruct03
                     continue;
 
+                if (ID == 1143) //nbbridgerdb
+                    continue;
+
                 auto GetPrecison = [](float value) -> int
                 {
                     int width = 10;
