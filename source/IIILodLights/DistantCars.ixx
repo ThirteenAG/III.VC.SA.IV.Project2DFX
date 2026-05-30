@@ -534,9 +534,18 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
     if (ThePaths->m_numCarPathNodes <= 0)
         return false;
 
+    // Pin each slot to a proportional window of the node array so the pool
+    // stays evenly distributed across the map regardless of farclip.
+    int32 totalNodes  = ThePaths->m_numCarPathNodes;
+    int32 poolSize    = Max(1, (int32)aDistantCarImpostors.size());
+    int32 slotIndex   = (int32)(coronaId - 0x7F000000u);
+    int32 rangeStart  = (int32)((int64_t)slotIndex       * totalNodes / poolSize);
+    int32 rangeEnd    = (int32)((int64_t)(slotIndex + 1) * totalNodes / poolSize);
+    if (rangeEnd <= rangeStart) rangeEnd = rangeStart + 1;
+
     for (int32 attempts = 0; attempts < 128; attempts++)
     {
-        int16 fromNode = CGeneral::GetRandomNumber() % ThePaths->m_numCarPathNodes;
+        int16 fromNode = (int16)(rangeStart + CGeneral::GetRandomNumber() % (rangeEnd - rangeStart));
         CPathNode& node = ThePaths->m_pathNodes[fromNode];
         if (node.numLinks == 0)
             continue;

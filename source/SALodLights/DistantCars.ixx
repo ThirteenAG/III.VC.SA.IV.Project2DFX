@@ -308,9 +308,12 @@ constexpr float PATH_CELL_H = PATH_WORLD_SIZE / PATH_GRID_H;  // 750
 static int  s_visibleAreas[NUM_PATH_MAP_AREAS];
 static bool s_visibleAreaMask[NUM_PATH_MAP_AREAS];
 static int  s_numVisibleAreas = 0;
+static int  s_loadedAreas[NUM_PATH_MAP_AREAS];
+static int  s_numLoadedAreas = 0;
 static void RebuildVisibleAreaCache(const CVector& camPos, float maxDist)
 {
     s_numVisibleAreas = 0;
+    s_numLoadedAreas = 0;
     for (int i = 0; i < NUM_PATH_MAP_AREAS; i++)
         s_visibleAreaMask[i] = false;
 
@@ -324,6 +327,8 @@ static void RebuildVisibleAreaCache(const CVector& camPos, float maxDist)
     {
         if (!ThePaths->m_pPathNodes[i] || ThePaths->m_dwNumVehicleNodes[i] == 0)
             continue;
+
+        s_loadedAreas[s_numLoadedAreas++] = i;
 
         int   gridX = i % PATH_GRID_W;
         int   gridY = i / PATH_GRID_W;
@@ -340,16 +345,21 @@ static void RebuildVisibleAreaCache(const CVector& camPos, float maxDist)
         s_visibleAreaMask[i] = true;
     }
 
-    // Fallback: any loaded area
     if (s_numVisibleAreas == 0)
     {
-        for (int i = 0; i < NUM_PATH_MAP_AREAS; i++)
-            if (ThePaths->m_pPathNodes[i] && ThePaths->m_dwNumVehicleNodes[i] > 0)
-            {
-                s_visibleAreas[s_numVisibleAreas++] = i;
-                s_visibleAreaMask[i] = true;
-            }
+        for (int i = 0; i < s_numLoadedAreas; i++)
+        {
+            int idx = s_loadedAreas[i];
+            s_visibleAreas[s_numVisibleAreas++] = idx;
+            s_visibleAreaMask[idx] = true;
+        }
     }
+}
+
+static int32 GetRandomLoadedCarArea()
+{
+    if (s_numLoadedAreas == 0) return -1;
+    return s_loadedAreas[CGeneral::GetRandomNumber() % s_numLoadedAreas];
 }
 
 static int32 GetRandomVisibleCarArea()
@@ -649,13 +659,23 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
     impostor.m_nCoronaId = coronaId;
     MarkLaneBucketsDirty();
 
+    // Each slot is pinned to a home area derived from its corona ID so that
+    // the pool is spread evenly across all 64 world grid cells regardless of
+    // the current farclip.  If the home area isn't loaded yet (player hasn't
+    // been near it), the slot stays inactive until it is.
+    int32 slotIndex = (int32)(coronaId - 0x7F000000u);
+    uint8 homeArea  = (uint8)(slotIndex % NUM_PATH_MAP_AREAS);
+
+    if (!ThePaths->IsAreaLoaded(homeArea))
+        return false;
+
+    int32 numNodes = (int32)ThePaths->m_dwNumVehicleNodes[homeArea];
+    if (numNodes <= 0)
+        return false;
+
     for (int32 attempts = 0; attempts < 128; attempts++)
     {
-        int32 areaIdx = GetRandomVisibleCarArea();
-        if (areaIdx < 0) return false;
-        uint8 fromArea = (uint8)areaIdx;
-
-        int32 numNodes = (int32)ThePaths->m_dwNumVehicleNodes[fromArea];
+        uint8 fromArea = homeArea;
         int16 fromNode = (int16)(CGeneral::GetRandomNumber() % numNodes);
         CPathNode& node = ThePaths->m_pPathNodes[fromArea][fromNode];
         if (node.m_nNumLinks == 0) continue;
@@ -791,17 +811,13 @@ void CMovingThings::UpdateDistantCarImpostors()
 
     RebuildVisibleAreaCache(camPos, maxDist);
 
-    float evictDistSqr = (maxDist * 1.1f) * (maxDist * 1.1f);
     for (auto& imp : aDistantCarImpostors)
     {
         if (!imp.m_bActive) continue;
-        if (ShouldKeepImpostorAliveNearCamera(imp, camPos)) continue; // always keep close ones
 
-        bool beyondFarClip = (imp.m_vecPos - camPos).MagnitudeSqr2D() > evictDistSqr;
         bool areaUnloaded = !ThePaths->IsAreaLoaded(imp.m_nPrevArea);
-        bool areaNotVisible = !IsImpostorInVisibleArea(imp);
 
-        if (beyondFarClip || areaUnloaded || areaNotVisible)
+        if (areaUnloaded)
         {
             imp.m_bActive = false;
             HideImpostorCorona(imp);
