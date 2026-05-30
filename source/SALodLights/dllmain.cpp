@@ -514,7 +514,7 @@ extern "C" __declspec(dllexport) void InitializeASI()
     static std::once_flag flag;
     std::call_once(flag, []()
     {
-        Init();
+        CallbackHandler::RegisterCallbackAtGetSystemTimeAsFileTime(Init, hook::pattern("8B 2D ? ? ? ? 83 C4 ? 6A"));
     });
 }
 

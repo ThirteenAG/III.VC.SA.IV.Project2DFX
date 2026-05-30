@@ -444,7 +444,7 @@ extern "C" __declspec(dllexport) void InitializeASI()
     static std::once_flag flag;
     std::call_once(flag, []()
     {
-        Init();
+        CallbackHandler::RegisterCallback(Init, hook::pattern("F3 0F 10 44 24 ? F3 0F 59 05 ? ? ? ? EB ? E8"));
     });
 }
 

@@ -25,30 +25,9 @@
 #include "Hooking.Patterns.h"
 
 #include "gameref.hpp"
+#include "callbacks.h"
 
 #include "rw.h"
-
-//#include "Maths.h"
-//#include "General.h"
-//#include "Camera.h"
-//
-//template<typename T>
-//inline T random(T a, T b)
-//{
-//    return a + static_cast<T>(rand() * (1.0f / RAND_MAX) * (b - a));
-//}
-//
-//template<typename T>
-//inline T Min(const T& a, const T& b)
-//{
-//    return a > b ? b : a;
-//}
-//
-//template<typename T>
-//inline T Max(const T& a, const T& b)
-//{
-//    return a > b ? a : b;
-//}
 
 inline bool IsModuleUAL(HMODULE mod)
 {

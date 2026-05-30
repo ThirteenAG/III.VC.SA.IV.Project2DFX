@@ -446,7 +446,7 @@ extern "C" __declspec(dllexport) void InitializeASI()
     static std::once_flag flag;
     std::call_once(flag, []()
     {
-        Init();
+        CallbackHandler::RegisterCallbackAtGetSystemTimeAsFileTime(Init, hook::pattern("E8 ? ? ? ? 68 ? ? ? ? 68 ? ? ? ? E8 ? ? ? ? 89 C5 59 85 ED 59 74"));
     });
 }
 
