@@ -229,6 +229,12 @@ void __cdecl AddTrace(CVector* start, CVector* end)
     shAddTrace.unsafe_ccall(start, end, 0.0f, 0, 0);
 }
 
+void DrawDistanceFMUL(SafetyHookContext& ctx)
+{
+    float f = fDrawDistance;
+    _asm {fmul dword ptr[f]}
+}
+
 void ApplyMemoryPatches()
 {
     auto pattern = hook::pattern("E8 ? ? ? ? 59 53 E8 ? ? ? ? 59 81 C4 ? ? ? ? 5D");
@@ -335,23 +341,8 @@ void ApplyMemoryPatches()
 
     if (fDrawDistance)
     {
-        injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (fDrawDistance / 1.8f), true);
-        injector::MakeInline<0x486AF2>([](injector::reg_pack&)
-        {
-            injector::thiscall<void()>::call<0x488CC0>();
-            injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (fDrawDistance / 1.8f), true);
-        });
-        injector::MakeInline<0x486B3A>([](injector::reg_pack& regs)
-        {
-            *(uintptr_t*)regs.esp = 0x486D16;
-            injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (fDrawDistance / 1.8f), true);
-        });
-        injector::MakeInline<0x48B314>([](injector::reg_pack& regs)
-        {
-            *(uintptr_t*)regs.esp = 0x48B42C;
-            injector::WriteMemory<float>(0x5F726C, *(float*)0x5F726C * (fDrawDistance / 1.8f), true);
-        });
-        injector::WriteMemory<float>(0x487629 + 6, 1.2f * (fDrawDistance / 1.8f), true);
+        pattern = hook::pattern("D8 0D ? ? ? ? D9 9B ? ? ? ? 80 7B");
+        static auto CRendererms_lodDistScaleHook = safetyhook::create_mid(pattern.get_first(), DrawDistanceFMUL);
     }
 
     if (fMaxDrawDistanceForNormalObjects)

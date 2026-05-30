@@ -199,6 +199,12 @@ void __cdecl AddTrace(CVector* start, CVector* end, float thickness, uint32_t li
     shAddTrace.unsafe_ccall(start, end, 0.0f, 0, 0);
 }
 
+void DrawDistanceFMUL(SafetyHookContext& ctx)
+{
+    float f = fDrawDistance;
+    _asm {fmul dword ptr[f]}
+}
+
 void ApplyMemoryPatches()
 {
     auto pattern = hook::pattern("E8 ? ? ? ? 0F BF 43 ? 59 8B 0C 85 ? ? ? ? 89 CF");
@@ -338,22 +344,8 @@ void ApplyMemoryPatches()
 
     if (fDrawDistance)
     {
-        injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (fDrawDistance / 1.8f), true);
-        injector::MakeInline<0x498B65>([](injector::reg_pack& regs)
-        {
-            *(uintptr_t*)regs.esp = 0x498CC8;
-            injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (fDrawDistance / 1.8f), true);
-        });
-
-        struct DDHookNoLambda
-        {
-            void operator()(injector::reg_pack& regs)
-            {
-                _asm {fstp dword ptr ds : [00690220h] }
-                injector::WriteMemory<float>(0x690220, *(float*)0x690220 * (fDrawDistance / 1.8f), true);
-            }
-        }; injector::MakeInline<DDHookNoLambda>(0x490132, 0x490132 + 6);
-        injector::WriteMemory<float>(0x499800 + 3, 1.2f * (fDrawDistance / 1.8f), true);
+        pattern = hook::pattern("D8 0D ? ? ? ? D9 9B ? ? ? ? 8B 83");
+        static auto CRendererms_lodDistScaleHook = safetyhook::create_mid(pattern.get_first(), DrawDistanceFMUL);
     }
 
     if (fMaxDrawDistanceForNormalObjects)
@@ -382,6 +374,9 @@ void ApplyMemoryPatches()
         pattern = hook::pattern("E8 ? ? ? ? 83 C4 ? 83 C4 ? 5D 5E 5B C3 ? ? EB");
         shAddTrace = safetyhook::create_inline(injector::GetBranchDestination(pattern.get_first()).as_int(), AddTrace);
     }
+
+    injector::WriteMemory<char>(0x542E66, 127, true); // sun reflection
+    injector::WriteMemory<float>(0x68A860, 300.0f, true); // Traffic lights coronas draw distance
 }
 
 void GetMemoryAddresses()
