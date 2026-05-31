@@ -383,8 +383,16 @@ static uint64 MakeLaneKey(uint8 prevArea, int16 prevNode, uint8 nextArea, int16 
         ((uint64)laneIndex << 56);
 }
 
-static thread_local std::unordered_map<uint64, std::vector<int32>> s_laneBuckets;
-static thread_local bool s_laneBucketsDirty = true;
+static uint64 MakeSegmentKey(uint8 prevArea, int16 prevNode, uint8 nextArea, int16 nextNode)
+{
+    return (uint64)prevArea |
+        ((uint64)(uint16)prevNode << 8) |
+        ((uint64)nextArea << 24) |
+        ((uint64)(uint16)nextNode << 32);
+}
+
+static std::unordered_map<uint64, std::vector<int32>> s_laneBuckets;
+static bool s_laneBucketsDirty = true;
 
 static void MarkLaneBucketsDirty()
 {
@@ -491,12 +499,12 @@ static bool IsTraversalAlongLinkDir(uint8 fromArea, int16 fromNode, uint8 toArea
 static bool CanTraverseSegmentDirection(uint8 fromArea, int16 fromNode, uint8 toArea, int16 toNode, CCarPathLink& link)
 {
     bool along = IsTraversalAlongLinkDir(fromArea, fromNode, toArea, toNode, link);
-    return along ? (link.numRightLanes > 0) : (link.numLeftLanes > 0);
+    return along ? (link.numLeftLanes > 0) : (link.numRightLanes > 0);
 }
 
 static bool UseRightLaneGroupForTraversal(uint8 fromArea, int16 fromNode, uint8 toArea, int16 toNode, CCarPathLink& link)
 {
-    return IsTraversalAlongLinkDir(fromArea, fromNode, toArea, toNode, link);
+    return !IsTraversalAlongLinkDir(fromArea, fromNode, toArea, toNode, link);
 }
 
 static bool ShouldKeepImpostorAliveNearCamera(const CMovingThings::CDistantCarImpostor& impostor, const CVector& camPos)
@@ -522,28 +530,6 @@ static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& imposto
 
     CVector dir = segment / segmentLen;
     CVector right(dir.y, -dir.x, 0.0f);
-    CCarPathLink laneLink;
-    bool foundLink = false;
-    {
-        CPathNode& node = ThePaths->m_pPathNodes[impostor.m_nPrevArea][impostor.m_nPrevNode];
-        for (int32 li = 0; li < (int32)node.m_nNumLinks; li++)
-        {
-            int32 conn = node.m_wBaseLinkId + li;
-            CNodeAddress addr = ThePaths->GetConnectedAddress(impostor.m_nPrevArea, conn);
-            if (addr.m_nAreaId != impostor.m_nNextArea || addr.m_nNodeId != impostor.m_nNextNode) continue;
-            if (!ThePaths->GetLaneLinkByConnection(impostor.m_nPrevArea, conn, laneLink)) continue;
-            foundLink = true;
-            break;
-        }
-    }
-    if (foundLink)
-    {
-        impostor.m_fLaneOffset = ComputeLaneLateralOffset(
-            impostor.m_nPrevArea, impostor.m_nPrevNode,
-            impostor.m_nNextArea, impostor.m_nNextNode,
-            impostor.m_nLaneSide, impostor.m_nLaneCount, impostor.m_nLaneIndex, laneLink);
-    }
-    // else: keep cached m_fLaneOffset as fallback
 
     CVector pos = fromPos + segment * impostor.m_fProgress + right * impostor.m_fLaneOffset;
     pos.z += 0.55f;
@@ -664,7 +650,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
     // the current farclip.  If the home area isn't loaded yet (player hasn't
     // been near it), the slot stays inactive until it is.
     int32 slotIndex = (int32)(coronaId - 0x7F000000u);
-    uint8 homeArea  = (uint8)(slotIndex % NUM_PATH_MAP_AREAS);
+    uint8 homeArea = (uint8)(slotIndex % NUM_PATH_MAP_AREAS);
 
     if (!ThePaths->IsAreaLoaded(homeArea))
         return false;
@@ -720,12 +706,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         }
 
         int32 numOccupied = (int32)occupied.size();
-        for (int32 a = 1; a < numOccupied; a++)
-        {
-            float v = occupied[a]; int32 b = a - 1;
-            while (b >= 0 && occupied[b] > v) { occupied[b + 1] = occupied[b]; b--; }
-            occupied[b + 1] = v;
-        }
+        std::sort(occupied.begin(), occupied.end());
 
         float spawnProgress = -1.0f;
         if (numOccupied == 0)
@@ -768,7 +749,10 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         impostor.m_nLaneSide = laneSide;
         impostor.m_nLaneCount = (uint8)laneCount;
         impostor.m_nLaneIndex = (uint8)lane;
-        impostor.m_fLaneOffset = 0.0f; // will be computed correctly on first ComputeImpostorTransform
+        impostor.m_fLaneOffset = ComputeLaneLateralOffset(
+            fromArea, fromNode,
+            toArea, toNode,
+            laneSide, laneCount, lane, laneLink);
         impostor.m_bWaterNode = (bool)node.m_bWaterNode;
         impostor.m_vecPos = node.GetPosition();
         impostor.m_vecDir = CVector(1.0f, 0.0f, 0.0f);
@@ -1011,7 +995,10 @@ void CMovingThings::UpdateDistantCarImpostors()
             impostor.m_nLaneSide = laneSide;
             impostor.m_nLaneCount = (uint8)laneCount;
             impostor.m_nLaneIndex = laneIndex;
-            // m_fLaneOffset will be recomputed in ComputeImpostorTransform for the new segment
+            impostor.m_fLaneOffset = ComputeLaneLateralOffset(
+                targetPrevArea, targetPrevNode,
+                targetNextArea, targetNextNode,
+                laneSide, laneCount, laneIndex, nextLink);
             impostor.m_bWaterNode = (bool)ThePaths->m_pPathNodes[targetPrevArea][targetPrevNode].m_bWaterNode;
             impostor.m_nStuckFrames = 0;
             MarkLaneBucketsDirty();
@@ -1045,6 +1032,10 @@ void CMovingThings::UpdateDistantCarImpostors()
         return lhs.m_fProgress > rhs.m_fProgress;
     });
 
+    static std::unordered_map<uint64, float> s_segmentLenCache;
+    s_segmentLenCache.clear();
+    s_segmentLenCache.reserve((size_t)sortedCount);
+
     for (int32 pass = 0; pass < 3; pass++)
     {
         for (int32 si = 1; si < sortedCount; si++)
@@ -1056,9 +1047,21 @@ void CMovingThings::UpdateDistantCarImpostors()
             if (prev.m_nNextArea != curr.m_nNextArea || prev.m_nNextNode != curr.m_nNextNode)  continue;
             if (prev.m_nLaneSide != curr.m_nLaneSide || prev.m_nLaneIndex != curr.m_nLaneIndex) continue;
 
-            CVector fp = ThePaths->m_pPathNodes[curr.m_nPrevArea][curr.m_nPrevNode].GetPosition();
-            CVector tp = ThePaths->m_pPathNodes[curr.m_nNextArea][curr.m_nNextNode].GetPosition();
-            float segLen = (tp - fp).Magnitude2D();
+            const uint64 segKey = MakeSegmentKey(curr.m_nPrevArea, curr.m_nPrevNode, curr.m_nNextArea, curr.m_nNextNode);
+            float segLen;
+            auto itSeg = s_segmentLenCache.find(segKey);
+            if (itSeg != s_segmentLenCache.end())
+            {
+                segLen = itSeg->second;
+            }
+            else
+            {
+                CVector fp = ThePaths->m_pPathNodes[curr.m_nPrevArea][curr.m_nPrevNode].GetPosition();
+                CVector tp = ThePaths->m_pPathNodes[curr.m_nNextArea][curr.m_nNextNode].GetPosition();
+                segLen = (tp - fp).Magnitude2D();
+                s_segmentLenCache.emplace(segKey, segLen);
+            }
+
             if (segLen < 0.001f) continue;
 
             float minGap = Min(0.35f, desiredHeadway / segLen);
