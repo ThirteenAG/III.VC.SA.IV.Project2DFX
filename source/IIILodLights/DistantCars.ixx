@@ -901,34 +901,23 @@ void CMovingThings::UpdateDistantCarImpostors()
     }
     int32 sortedCount = static_cast<int32>(sortedIdx.size());
 
-    // Insertion-sort: primary key = (prevNode, nextNode, laneSide, laneIndex) ascending,
-    //                 secondary key = progress descending (front of lane comes first).
-    for (int32 i = 1; i < sortedCount; i++)
+    // Sort: primary key = (prevNode, nextNode, laneSide, laneIndex) ascending,
+    //       secondary key = progress descending (front of lane comes first).
+    std::sort(sortedIdx.begin(), sortedIdx.end(), [](int32 a, int32 b)
     {
-        int32 key = sortedIdx[i];
-        const CDistantCarImpostor& keyImp = aDistantCarImpostors[key];
-        int32 j = i - 1;
-        while (j >= 0)
-        {
-            const CDistantCarImpostor& jImp = aDistantCarImpostors[sortedIdx[j]];
-            bool keyBeforeJ;
-            if (keyImp.m_nPrevNode != jImp.m_nPrevNode)
-                keyBeforeJ = keyImp.m_nPrevNode < jImp.m_nPrevNode;
-            else if (keyImp.m_nNextNode != jImp.m_nNextNode)
-                keyBeforeJ = keyImp.m_nNextNode < jImp.m_nNextNode;
-            else if (keyImp.m_nLaneSide != jImp.m_nLaneSide)
-                keyBeforeJ = keyImp.m_nLaneSide < jImp.m_nLaneSide;
-            else if (keyImp.m_nLaneIndex != jImp.m_nLaneIndex)
-                keyBeforeJ = keyImp.m_nLaneIndex < jImp.m_nLaneIndex;
-            else
-                keyBeforeJ = keyImp.m_fProgress > jImp.m_fProgress; // higher progress = further ahead = comes first
-            if (!keyBeforeJ)
-                break;
-            sortedIdx[j + 1] = sortedIdx[j];
-            j--;
-        }
-        sortedIdx[j + 1] = key;
-    }
+        const CDistantCarImpostor& aImp = aDistantCarImpostors[a];
+        const CDistantCarImpostor& bImp = aDistantCarImpostors[b];
+
+        if (aImp.m_nPrevNode != bImp.m_nPrevNode)
+            return aImp.m_nPrevNode < bImp.m_nPrevNode;
+        if (aImp.m_nNextNode != bImp.m_nNextNode)
+            return aImp.m_nNextNode < bImp.m_nNextNode;
+        if (aImp.m_nLaneSide != bImp.m_nLaneSide)
+            return aImp.m_nLaneSide < bImp.m_nLaneSide;
+        if (aImp.m_nLaneIndex != bImp.m_nLaneIndex)
+            return aImp.m_nLaneIndex < bImp.m_nLaneIndex;
+        return aImp.m_fProgress > bImp.m_fProgress;
+    });
 
     // Multi-pass linear sweep so corrections cascade fully through each lane stream.
     // Also cap follower speed from actual available gap so faster cars never tunnel into slower ones.
