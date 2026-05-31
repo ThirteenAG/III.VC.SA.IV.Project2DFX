@@ -331,6 +331,14 @@ public:
         const float farPlane = Scene->m_pRwCamera->farPlane;
         const CVector* pCamPos = GetCamPos();
         const float fogyness = CWeather::Foggyness;
+        const float screenWidth = static_cast<float>(nWidth);
+        const float screenHeight = static_cast<float>(nHeight);
+
+        const RwMatrix& viewMatrix = Scene->m_pRwCamera->viewMatrix;
+        const float vmRightX = viewMatrix.right.x, vmRightY = viewMatrix.right.y, vmRightZ = viewMatrix.right.z;
+        const float vmUpX = viewMatrix.up.x, vmUpY = viewMatrix.up.y, vmUpZ = viewMatrix.up.z;
+        const float vmAtX = viewMatrix.at.x, vmAtY = viewMatrix.at.y, vmAtZ = viewMatrix.at.z;
+        const float vmPosX = viewMatrix.pos.x, vmPosY = viewMatrix.pos.y, vmPosZ = viewMatrix.pos.z;
 
         RwRaster* pLastRaster = nullptr;
         bool bLastZTestEnable = true;
@@ -361,18 +369,26 @@ public:
             if (!corona.Identifier || corona.Intensity == 0)
                 continue;
 
-            RwV3d vecCoronaCoords{ corona.Coordinates.x, corona.Coordinates.y, corona.Coordinates.z };
-            RwV3d vecTransformedCoords;
-            float fComputedWidth, fComputedHeight;
+            const float worldX = corona.Coordinates.x;
+            const float worldY = corona.Coordinates.y;
+            const float worldZ = corona.Coordinates.z;
 
-            if (!CSprite::CalcScreenCoors(&vecCoronaCoords, &vecTransformedCoords, &fComputedWidth, &fComputedHeight, true, true))
+            const float viewX = worldX * vmRightX + worldY * vmUpX + worldZ * vmAtX + vmPosX;
+            const float viewY = worldX * vmRightY + worldY * vmUpY + worldZ * vmAtY + vmPosY;
+            const float viewZ = worldX * vmRightZ + worldY * vmUpZ + worldZ * vmAtZ + vmPosZ;
+
+            if (viewZ <= 1.0f)
             {
                 corona.OffScreen = true;
                 continue;
             }
 
-            corona.OffScreen = !(vecTransformedCoords.x >= 0.0f && vecTransformedCoords.x <= nWidth &&
-                vecTransformedCoords.y >= 0.0f && vecTransformedCoords.y <= nHeight);
+            const float invViewZ = 1.0f / viewZ;
+            RwV3d vecTransformedCoords{ viewX * screenWidth * invViewZ, viewY * screenHeight * invViewZ, viewZ };
+            float fComputedHeight = screenHeight * invViewZ;
+
+            corona.OffScreen = !(vecTransformedCoords.x >= 0.0f && vecTransformedCoords.x <= screenWidth &&
+                vecTransformedCoords.y >= 0.0f && vecTransformedCoords.y <= screenHeight);
 
             if (vecTransformedCoords.z > corona.Range)
                 continue;
@@ -412,21 +428,39 @@ public:
 
             if (corona.PullTowardsCam != 0.0f)
             {
-                CVector vecCoronaCoordsAfterPull(vecCoronaCoords.x, vecCoronaCoords.y, vecCoronaCoords.z);
-                CVector vecTempVector(vecCoronaCoordsAfterPull);
-                vecTempVector -= *pCamPos;
-                vecTempVector.Normalise();
+                const float dx = worldX - pCamPos->x;
+                const float dy = worldY - pCamPos->y;
+                const float dz = worldZ - pCamPos->z;
+                const float lenSq = dx * dx + dy * dy + dz * dz;
 
-                vecCoronaCoordsAfterPull.x -= vecTempVector.x * corona.PullTowardsCam;
-                vecCoronaCoordsAfterPull.y -= vecTempVector.y * corona.PullTowardsCam;
-                vecCoronaCoordsAfterPull.z -= vecTempVector.z * corona.PullTowardsCam;
+                if (lenSq > 0.0f)
+                {
+                    const float invLen = 1.0f / std::sqrt(lenSq);
+                    const float dirX = dx * invLen;
+                    const float dirY = dy * invLen;
+                    const float dirZ = dz * invLen;
 
-                if (!CSprite::CalcScreenCoors(&vecCoronaCoordsAfterPull, &vecTransformedCoords, &fComputedWidth, &fComputedHeight, true, true))
-                    continue;
+                    const float pullViewX = dirX * vmRightX + dirY * vmUpX + dirZ * vmAtX;
+                    const float pullViewY = dirX * vmRightY + dirY * vmUpY + dirZ * vmAtY;
+                    const float pullViewZ = dirX * vmRightZ + dirY * vmUpZ + dirZ * vmAtZ;
 
-                renderHeight = corona.Size * fComputedHeight;
-                if (renderHeight < 0.35f)
-                    continue;
+                    const float pulledViewX = viewX - pullViewX * corona.PullTowardsCam;
+                    const float pulledViewY = viewY - pullViewY * corona.PullTowardsCam;
+                    const float pulledViewZ = viewZ - pullViewZ * corona.PullTowardsCam;
+
+                    if (pulledViewZ <= 1.0f)
+                        continue;
+
+                    const float invPulledViewZ = 1.0f / pulledViewZ;
+                    vecTransformedCoords.x = pulledViewX * screenWidth * invPulledViewZ;
+                    vecTransformedCoords.y = pulledViewY * screenHeight * invPulledViewZ;
+                    vecTransformedCoords.z = pulledViewZ;
+
+                    fComputedHeight = screenHeight * invPulledViewZ;
+                    renderHeight = corona.Size * fComputedHeight;
+                    if (renderHeight < 0.35f)
+                        continue;
+                }
             }
 
             CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect(
