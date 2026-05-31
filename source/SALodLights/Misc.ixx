@@ -223,7 +223,7 @@ export namespace CShadows
 
 export GameRef<int> gGameState([]() -> int*
 {
-    auto pattern = hook::pattern("89 35 ? ? ? ? B8 ? ? ? ? 0F A2");
+    auto pattern = hook::pattern("83 3D ? ? ? ? ? 75 ? E8 ? ? ? ? 85 C0");
     if (!pattern.empty())
         return *pattern.get_first<int*>(2);
     return nullptr;
