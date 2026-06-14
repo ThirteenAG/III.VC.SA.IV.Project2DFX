@@ -4,9 +4,8 @@
 
 Project2DFX is a set of plugins for GTA III, Vice City, San Andreas, GTA IV: The Complete Edition, GTA Liberty City Stories and GTA Vice City Stories, which adds LOD corona effect to a game map, making LOD-world look a lot better. 
 
-## Donation links
-
-<div align="left">
+<div align="center">
+<a href="https://www.patreon.com/ThirteenAG" target="_blank"><img width="100%" src="https://fusionlegacyinitiative.com/wp-content/uploads/sc-sponsors/sponsors-progress-light-flat-no-goal.svg"></a><br>
 <a href="https://github.com/sponsors/ThirteenAG"><img src="https://img.shields.io/badge/Sponsor_on_GitHub-5c5c5c?style=for-the-badge&logo=github&logoColor=white" width="250"></a><br>
 <a href="https://ko-fi.com/thirteenag"><img src="https://img.shields.io/badge/Support_on_Ko--Fi-ff5e5b?style=for-the-badge&logo=kofi&logoColor=white" width="250"></a><br>
 <a href="https://paypal.me/SergeyP13"><img src="https://img.shields.io/badge/Donate_with_PayPal-009cde?style=for-the-badge&logo=paypal&logoColor=white" width="250"></a><br>
