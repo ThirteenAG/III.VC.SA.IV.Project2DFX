@@ -60,7 +60,7 @@ public:
         requires std::invocable<Fn>&& std::convertible_to<std::invoke_result_t<Fn>, T*>
     explicit GameRef(Fn&& fn)
     {
-        T* result = std::invoke(std::forward<Fn>(fn));
+        T* result = std::invoke(fn);
 
         if (result != nullptr)
         {
@@ -127,7 +127,6 @@ public:
     T& operator=(const T& value) { return assign(value); }
     T& operator=(T&& value) { return assign(std::move(value)); }
 
-    // ====================== OPERATORS (exact match to your old working version) ======================
     template<typename U> T& operator+=(const U& v) { T val = get() + v; return assign(val); }
     template<typename U> T& operator-=(const U& v) { T val = get() - v; return assign(val); }
     template<typename U> T& operator*=(const U& v) { T val = get() * v; return assign(val); }
