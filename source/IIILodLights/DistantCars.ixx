@@ -368,23 +368,6 @@ static bool ShouldKeepImpostorAliveNearCamera(const CMovingThings::CDistantCarIm
     return (impostor.m_vecPos - camPos).MagnitudeSqr2D() < SQR(380.0f);
 }
 
-static bool IsImpostorLaneEntryFree(int16 prevNode, int16 nextNode, uint8 laneSide, uint8 laneIndex, float minEntryGap, const CMovingThings::CDistantCarImpostor* self)
-{
-    for (size_t k = 0; k < CMovingThings::aDistantCarImpostors.size(); k++)
-    {
-        const CMovingThings::CDistantCarImpostor& other = CMovingThings::aDistantCarImpostors[k];
-        if (!other.m_bActive || &other == self)
-            continue;
-        if (other.m_nPrevNode != prevNode || other.m_nNextNode != nextNode)
-            continue;
-        if (other.m_nLaneSide != laneSide || other.m_nLaneIndex != laneIndex)
-            continue;
-        if (other.m_fProgress < minEntryGap)
-            return false;
-    }
-    return true;
-}
-
 static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& impostor)
 {
     if (impostor.m_nPrevNode < 0 || impostor.m_nNextNode < 0 ||
@@ -424,8 +407,7 @@ static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& imposto
 
 void CMovingThings::EnsureDistantCarImpostorPoolSize()
 {
-    int32 desired = nNumDistantCarImpostors;
-    desired = Clamp(desired, 64, 10000);
+    int32 desired = Clamp(nNumDistantCarImpostors, 0, 10000);
 
     size_t oldSize = aDistantCarImpostors.size();
     size_t newSize = static_cast<size_t>(desired);
@@ -687,6 +669,9 @@ void CMovingThings::ShutdownDistantCarImpostors()
 
 void CMovingThings::UpdateDistantCarImpostors()
 {
+    if (nNumDistantCarImpostors <= 0 || aDistantCarImpostors.empty())
+        return;
+
     if (ThePaths->m_numCarPathNodes <= 0)
         return;
 
@@ -703,7 +688,7 @@ void CMovingThings::UpdateDistantCarImpostors()
 
     float densityScale = ComputeDynamicImpostorDensityScale(camTravelSpeed);
     int32 impostorCount = static_cast<int32>(aDistantCarImpostors.size());
-    int32 desiredActive = (int32)Clamp((impostorCount * densityScale), 64, impostorCount);
+    int32 desiredActive = (int32)Clamp((impostorCount * densityScale), 0, impostorCount);
 
     int32 activeCount = 0;
     for (size_t i = 0; i < aDistantCarImpostors.size(); i++)
@@ -966,7 +951,11 @@ void CMovingThings::UpdateDistantCarImpostors()
 
 void CMovingThings::RenderDistantCarImpostors()
 {
+    if (nNumDistantCarImpostors <= 0 || aDistantCarImpostors.empty())
+        return;
+
     CVector camPos = TheCamera->GetPosition();
+    auto maxDist = CTimeCycle::m_fCurrentFarClip;
 
     for (size_t i = 0; i < aDistantCarImpostors.size(); i++)
     {
@@ -974,7 +963,6 @@ void CMovingThings::RenderDistantCarImpostors()
         if (!impostor.m_bActive)
             continue;
 
-        auto maxDist = CTimeCycle::m_fCurrentFarClip;
         CVector toImpostor = impostor.m_vecPos - camPos;
         float distSqr = toImpostor.MagnitudeSqr2D();
         if (distSqr < SQR(140.0f) || distSqr > SQR(maxDist))

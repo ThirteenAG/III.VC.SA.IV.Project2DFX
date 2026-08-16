@@ -298,81 +298,6 @@ static void UpdateExtendedPathStreaming(const CVector& camPos, float farClip)
         camPos.y - farClip, camPos.y + farClip);
 }
 
-constexpr float PATH_WORLD_MIN = -3000.0f;
-constexpr float PATH_WORLD_SIZE = 6000.0f;
-constexpr int   PATH_GRID_W = 8;
-constexpr int   PATH_GRID_H = 8;
-constexpr float PATH_CELL_W = PATH_WORLD_SIZE / PATH_GRID_W;  // 750
-constexpr float PATH_CELL_H = PATH_WORLD_SIZE / PATH_GRID_H;  // 750
-
-static int  s_visibleAreas[NUM_PATH_MAP_AREAS];
-static bool s_visibleAreaMask[NUM_PATH_MAP_AREAS];
-static int  s_numVisibleAreas = 0;
-static int  s_loadedAreas[NUM_PATH_MAP_AREAS];
-static int  s_numLoadedAreas = 0;
-static void RebuildVisibleAreaCache(const CVector& camPos, float maxDist)
-{
-    s_numVisibleAreas = 0;
-    s_numLoadedAreas = 0;
-    for (int i = 0; i < NUM_PATH_MAP_AREAS; i++)
-        s_visibleAreaMask[i] = false;
-
-    // AABB of the area that the camera can see (circle approximated as square)
-    float camMinX = camPos.x - maxDist;
-    float camMaxX = camPos.x + maxDist;
-    float camMinY = camPos.y - maxDist;
-    float camMaxY = camPos.y + maxDist;
-
-    for (int i = 0; i < NUM_PATH_MAP_AREAS; i++)
-    {
-        if (!ThePaths->m_pPathNodes[i] || ThePaths->m_dwNumVehicleNodes[i] == 0)
-            continue;
-
-        s_loadedAreas[s_numLoadedAreas++] = i;
-
-        int   gridX = i % PATH_GRID_W;
-        int   gridY = i / PATH_GRID_W;
-        float cellMinX = PATH_WORLD_MIN + gridX * PATH_CELL_W;
-        float cellMinY = PATH_WORLD_MIN + gridY * PATH_CELL_H;
-        float cellMaxX = cellMinX + PATH_CELL_W;
-        float cellMaxY = cellMinY + PATH_CELL_H;
-
-        // AABB overlap test between camera view rect and cell rect
-        if (cellMaxX < camMinX || cellMinX > camMaxX) continue;
-        if (cellMaxY < camMinY || cellMinY > camMaxY) continue;
-
-        s_visibleAreas[s_numVisibleAreas++] = i;
-        s_visibleAreaMask[i] = true;
-    }
-
-    if (s_numVisibleAreas == 0)
-    {
-        for (int i = 0; i < s_numLoadedAreas; i++)
-        {
-            int idx = s_loadedAreas[i];
-            s_visibleAreas[s_numVisibleAreas++] = idx;
-            s_visibleAreaMask[idx] = true;
-        }
-    }
-}
-
-static int32 GetRandomLoadedCarArea()
-{
-    if (s_numLoadedAreas == 0) return -1;
-    return s_loadedAreas[CGeneral::GetRandomNumber() % s_numLoadedAreas];
-}
-
-static int32 GetRandomVisibleCarArea()
-{
-    if (s_numVisibleAreas == 0) return -1;
-    return s_visibleAreas[CGeneral::GetRandomNumber() % s_numVisibleAreas];
-}
-
-static bool IsImpostorInVisibleArea(const CMovingThings::CDistantCarImpostor& imp)
-{
-    return imp.m_nPrevArea < NUM_PATH_MAP_AREAS && s_visibleAreaMask[imp.m_nPrevArea];
-}
-
 static uint64 MakeLaneKey(uint8 prevArea, int16 prevNode, uint8 nextArea, int16 nextNode, uint8 laneSide, uint8 laneIndex)
 {
     return (uint64)prevArea |
@@ -541,7 +466,7 @@ static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& imposto
 
 void CMovingThings::EnsureDistantCarImpostorPoolSize()
 {
-    int32 desired = Clamp((int32)nNumDistantCarImpostors, 64, 10000);
+    int32 desired = Clamp((int32)nNumDistantCarImpostors, 0, 10000);
 
     size_t oldSize = aDistantCarImpostors.size();
     size_t newSize = static_cast<size_t>(desired);
@@ -554,6 +479,7 @@ void CMovingThings::EnsureDistantCarImpostorPoolSize()
             auto& imp = aDistantCarImpostors[i];
             if (imp.m_bActive) { imp.m_bActive = false; HideImpostorCorona(imp); }
         }
+        MarkLaneBucketsDirty();
     }
 
     aDistantCarImpostors.resize(newSize);
@@ -783,17 +709,18 @@ void CMovingThings::ShutdownDistantCarImpostors()
 
 void CMovingThings::UpdateDistantCarImpostors()
 {
-    float   dt = CTimer::GetTimeStepInSeconds();
-    CVector camPos = TheCamera->GetCoords();
-    float   maxDist = CTimeCycle::m_fCurrentFarClip;
-
-    UpdateExtendedPathStreaming(camPos, maxDist);
+    if (nNumDistantCarImpostors <= 0 || aDistantCarImpostors.empty())
+        return;
 
     int32 totalCarNodes = ThePaths->GetNumCarPathNodes();
     if (totalCarNodes <= 0)
         return;
 
-    RebuildVisibleAreaCache(camPos, maxDist);
+    float   dt = CTimer::GetTimeStepInSeconds();
+    CVector camPos = TheCamera->GetCoords();
+    float   maxDist = CTimeCycle::m_fCurrentFarClip;
+
+    UpdateExtendedPathStreaming(camPos, maxDist);
 
     for (auto& imp : aDistantCarImpostors)
     {
@@ -819,7 +746,7 @@ void CMovingThings::UpdateDistantCarImpostors()
 
     float densityScale = ComputeDynamicImpostorDensityScale(camTravelSpeed);
     int32 impostorCount = (int32)aDistantCarImpostors.size();
-    int32 desiredActive = (int32)Clamp(impostorCount * densityScale, 64.0f, (float)impostorCount);
+    int32 desiredActive = (int32)Clamp(impostorCount * densityScale, 0.0f, (float)impostorCount);
 
     int32 activeCount = 0;
     for (const auto& imp : aDistantCarImpostors)
@@ -1089,13 +1016,16 @@ void CMovingThings::UpdateDistantCarImpostors()
 
 void CMovingThings::RenderDistantCarImpostors()
 {
+    if (nNumDistantCarImpostors <= 0 || aDistantCarImpostors.empty())
+        return;
+
     CVector camPos = TheCamera->GetCoords();
+    float   maxDist = CTimeCycle::m_fCurrentFarClip;
 
     for (auto& impostor : aDistantCarImpostors)
     {
         if (!impostor.m_bActive) continue;
 
-        float   maxDist = CTimeCycle::m_fCurrentFarClip;
         float   distSqr = (impostor.m_vecPos - camPos).MagnitudeSqr2D();
         if (distSqr < SQR(140.0f) || distSqr > SQR(maxDist)) continue;
 
