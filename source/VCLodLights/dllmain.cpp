@@ -247,7 +247,7 @@ void ApplyMemoryPatches()
         CMovingThings::InitDistantCarImpostors();
     });
 
-    pattern = hook::pattern("8D 14 C0 8D 14 52 01 C2 89 C8");
+    pattern = hook::pattern("31 FF 31 ED BE ? ? ? ? 90");
     static auto CMovingThingsUpdateHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
         CLODLights::RegisterLODLights();
