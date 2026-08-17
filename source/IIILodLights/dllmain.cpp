@@ -82,22 +82,45 @@ static bool IsModelSwappedOut(int nModelID)
     return false;
 }
 
-// Install per-model corona predicates for every swap pair: a model stays
-// visible only while the game has not swapped it out. Called once before
-// LoadDatFile, when model info is already available.
+// Model is currently the active replacement of a swapped building.
+static bool IsActiveReplacement(int nModelID)
+{
+    for (int i = 0; i < MAX_NUM_BUILDING_SWAPS; i++)
+    {
+        if (BuildingSwapArray[i].pBuilding && BuildingSwapArray[i].nNewModel == nModelID)
+            return true;
+    }
+    return false;
+}
+
+// Install per-model corona predicates for every swap pair:
+// - swapped out right now  -> hidden
+// - active replacement     -> visible
+// - no swap for this pair  -> only the default (first) variant is visible
+// Called once before LoadDatFile, when model info is already available.
 void SetupSwapCoronaPredicates()
 {
     for (const auto& pair : aModelSwaps)
     {
+        bool bIsDefaultVariant = true;
+
         for (const char* szName : { pair.first, pair.second })
         {
             int nID = -1;
             CModelInfo::GetModelInfo(szName, &nID);
 
-            CCoronaVisibility::SetModelPredicate((std::string("%") + szName).c_str(), [nID]() -> bool
+            CCoronaVisibility::SetModelPredicate((std::string("%") + szName).c_str(), [nID, bIsDefaultVariant]() -> bool
             {
-                return nID < 0 || !IsModelSwappedOut(nID);
+                if (nID < 0)
+                    return true;
+                if (IsModelSwappedOut(nID))
+                    return false;
+                if (IsActiveReplacement(nID))
+                    return true;
+                return bIsDefaultVariant;
             });
+
+            bIsDefaultVariant = false;
         }
     }
 }
