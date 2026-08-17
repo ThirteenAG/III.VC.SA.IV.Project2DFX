@@ -1,6 +1,9 @@
 module;
 
 #include <stdafx.h>
+#include <functional>
+#include <string>
+#include <unordered_map>
 
 export module LamppostInfo;
 
@@ -20,6 +23,39 @@ export enum BlinkTypes
     T_6S_ON_4S_OFF
 };
 
+// ---------------------------------------------------------------------------
+// Per-object corona visibility predicates.
+//
+// Game code installs a predicate per model name before LoadDatFile() is
+// called. The name must match the dat-file section name exactly, including
+// the leading '%' (e.g. "%nbbridgfk2"). Every corona formed for that model
+// carries the predicate for its lifetime, and the render loop checks it each
+// frame. Models without a predicate cost a single null check.
+// ---------------------------------------------------------------------------
+export using CoronaPredicate = std::function<bool()>;
+
+export class CCoronaVisibility
+{
+public:
+    static inline std::unordered_map<std::string, CoronaPredicate> ModelPredicates;
+
+    // p == nullptr removes a previously installed predicate.
+    static void SetModelPredicate(const char* szModelName, CoronaPredicate p)
+    {
+        if (p)
+            ModelPredicates.emplace(szModelName, p);
+        else
+            ModelPredicates.erase(szModelName);
+    }
+
+    // Predicate installed for a model, or nullptr if none.
+    static CoronaPredicate GetModelPredicate(const char* szModelName)
+    {
+        auto it = ModelPredicates.find(szModelName);
+        return it != ModelPredicates.end() ? it->second : nullptr;
+    }
+};
+
 export class CLamppostInfo
 {
 public:
@@ -32,9 +68,10 @@ public:
     int nDrawSearchlight;
     float fHeading;
     float fObjectDrawDistance;
+    CoronaPredicate pPredicate;
 
-    CLamppostInfo(const CVector& pos, const CVector& localpos, const CRGBA& col, float fCustomMult, int CoronaShowMode, int nNoDistance, int nDrawSearchlight, float heading, float ObjectDrawDistance = 0.0f)
-        : vecPos(pos), vecLocalPos(localpos), colour(col), fCustomSizeMult(fCustomMult), nCoronaShowMode(CoronaShowMode), nNoDistance(nNoDistance), nDrawSearchlight(nDrawSearchlight), fHeading(heading), fObjectDrawDistance(ObjectDrawDistance)
+    CLamppostInfo(const CVector& pos, const CVector& localpos, const CRGBA& col, float fCustomMult, int CoronaShowMode, int nNoDistance, int nDrawSearchlight, float heading, float ObjectDrawDistance = 0.0f, CoronaPredicate pPred = nullptr)
+        : vecPos(pos), vecLocalPos(localpos), colour(col), fCustomSizeMult(fCustomMult), nCoronaShowMode(CoronaShowMode), nNoDistance(nNoDistance), nDrawSearchlight(nDrawSearchlight), fHeading(heading), fObjectDrawDistance(ObjectDrawDistance), pPredicate(pPred)
     {
     }
 };
@@ -110,6 +147,7 @@ export void LoadDatFile()
     if (FILE* hFile = CFileMgr::OpenFile(DataFilePath.string().c_str(), "r"))
     {
         unsigned short nModel = 0xFFFF, nCurIndexForModel = 0;
+        CoronaPredicate pCurPredicate = nullptr;
 
         while (const char* pLine = CFileMgr::LoadLine(hFile))
         {
@@ -118,6 +156,7 @@ export void LoadDatFile()
                 if (pLine[0] == '%')
                 {
                     nCurIndexForModel = 0;
+                    pCurPredicate = CCoronaVisibility::GetModelPredicate(pLine);
                     if (strcmp(pLine, "%additional_coronas") != 0)
                     {
                         int nID = 0;
@@ -140,7 +179,9 @@ export void LoadDatFile()
                     int				nCoronaShowMode = 0;
                     if (sscanf(pLine, "%3d %3d %3d %3d %f %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &fDrawDistance, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight) != 12)
                         sscanf(pLine, "%3d %3d %3d %3d %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight);
-                    FileContent.insert(std::make_pair(PackKey(nModel, nCurIndexForModel++), CLamppostInfo(CVector(0.0f, 0.0f, 0.0f), CVector(fOffsetX, fOffsetY, fOffsetZ), CRGBA(static_cast<unsigned char>(nRed), static_cast<unsigned char>(nGreen), static_cast<unsigned char>(nBlue), static_cast<unsigned char>(nAlpha)), fCustomSize, nCoronaShowMode, nNoDistance, nDrawSearchlight, 0.0f, fDrawDistance)));
+                    CLamppostInfo info(CVector(0.0f, 0.0f, 0.0f), CVector(fOffsetX, fOffsetY, fOffsetZ), CRGBA(static_cast<unsigned char>(nRed), static_cast<unsigned char>(nGreen), static_cast<unsigned char>(nBlue), static_cast<unsigned char>(nAlpha)), fCustomSize, nCoronaShowMode, nNoDistance, nDrawSearchlight, 0.0f, fDrawDistance);
+                    info.pPredicate = pCurPredicate;
+                    FileContent.insert(std::make_pair(PackKey(nModel, nCurIndexForModel++), info));
                 }
             }
         }

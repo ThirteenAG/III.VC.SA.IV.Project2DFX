@@ -27,7 +27,7 @@ void RegisterCustomCoronas()
     unsigned short nModelID = 65534;
     auto itEnd = FileContent.upper_bound(PackKey(nModelID, 0xFFFF));
     for (auto it = FileContent.lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
-        m_Lampposts.push_back(CLamppostInfo(it->second.vecLocalPos, { 0.0f, 0.0f, 0.0f }, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
+        m_Lampposts.push_back(CLamppostInfo(it->second.vecLocalPos, { 0.0f, 0.0f, 0.0f }, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f, 0.0f, it->second.pPredicate));
 }
 
 void RegisterLamppost(CEntity* pObj)
@@ -72,7 +72,8 @@ void RegisterLamppost(CEntity* pObj)
             data.nNoDistance,
             data.nDrawSearchlight ? static_cast<int>(objectHeight) : 0,
             pObj->GetTransform().m_heading,
-            std::min(data.fObjectDrawDistance, modelInfo->m_fDrawDistance)
+            std::min(data.fObjectDrawDistance, modelInfo->m_fDrawDistance),
+            data.pPredicate
         ));
     }
 }

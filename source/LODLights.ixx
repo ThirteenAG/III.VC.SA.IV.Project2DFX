@@ -46,6 +46,7 @@ public:
     uint8_t        WhiteCore : 1;          // This corona rendered with a small white core.
     uint8_t        bIsAttachedToEntity : 1;
     CEntity* pEntityAttachedTo;
+    CoronaPredicate pPredicate = nullptr;
 
 public:
     CRegisteredCorona()
@@ -129,7 +130,7 @@ public:
     static float& ScreenMult;
 
 public:
-    static void RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, unsigned char flareType, unsigned char reflectionType, unsigned char LOSCheck, unsigned char unused, float normalAngle, bool bNeonFade, float PullTowardsCam, bool bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool bWhiteCore)
+    static void RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, unsigned char flareType, unsigned char reflectionType, unsigned char LOSCheck, unsigned char unused, float normalAngle, bool bNeonFade, float PullTowardsCam, bool bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool bWhiteCore, CoronaPredicate pPredicate = nullptr)
     {
         UNREFERENCED_PARAMETER(unused);
         UNREFERENCED_PARAMETER(bFadeIntensity);
@@ -262,6 +263,8 @@ public:
 
         pSuitableSlot->bIsAttachedToEntity = false;
         pSuitableSlot->pEntityAttachedTo = nullptr;
+
+        pSuitableSlot->pPredicate = pPredicate;
     }
 
     static void TouchCorona(unsigned int nID)
@@ -271,9 +274,9 @@ public:
             it->second->GetFrom()->RegisteredThisFrame = CurrentFrameStamp;
     }
 
-    static void RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, int coronaType, unsigned char flareType, bool enableReflection, bool checkObstacles, int unused, float normalAngle, bool longDistance, float nearClip, unsigned char bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool reflectionDelay)
+    static void RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, int coronaType, unsigned char flareType, bool enableReflection, bool checkObstacles, int unused, float normalAngle, bool longDistance, float nearClip, unsigned char bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool reflectionDelay, CoronaPredicate pPredicate = nullptr)
     {
-        RegisterCorona(nID, pAttachTo, R, G, B, A, Position, Size, Range, gpCoronaTexture[coronaType], flareType, enableReflection, checkObstacles, unused, normalAngle, longDistance, nearClip, bFadeIntensity, FadeSpeed, bOnlyFromBelow, reflectionDelay);
+        RegisterCorona(nID, pAttachTo, R, G, B, A, Position, Size, Range, gpCoronaTexture[coronaType], flareType, enableReflection, checkObstacles, unused, normalAngle, longDistance, nearClip, bFadeIntensity, FadeSpeed, bOnlyFromBelow, reflectionDelay, pPredicate);
     }
 
     static void Update()
@@ -367,6 +370,11 @@ public:
         {
             auto& corona = *pNode->GetFrom();
             if (!corona.Identifier || corona.Intensity == 0)
+                continue;
+
+            // Predicate installed per model when the corona was formed. Most
+            // coronas have none, so this is a single null check for them.
+            if (corona.pPredicate && !corona.pPredicate())
                 continue;
 
             const float worldX = corona.Coordinates.x;
@@ -628,10 +636,11 @@ public:
                     it->colour.r, it->colour.g, it->colour.b, alpha,
                     it->vecPos,
                     finalRadius,
-                    fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false
+                    fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false,
+                    it->pPredicate
                 );
 
-                if (it->nNoDistance > 1)
+                if (it->nNoDistance > 1 && (!it->pPredicate || it->pPredicate()))
                 {
                     constexpr float MAX_POINTLIGHT_DIST = 22.0f;
 
@@ -672,7 +681,7 @@ public:
                 {
                     RegisterLampCorona(fNormalizedAlpha);
 
-                    if (bRenderStaticShadowsForLODs)
+                    if (bRenderStaticShadowsForLODs && (!it->pPredicate || it->pPredicate()))
                         CShadows::StoreStaticShadow(
                             reinterpret_cast<unsigned int>(&*it), SSHADT_INTENSIVE,
                             *CShadows::gpShadowExplosionTex, (CVector*)&it->vecPos,

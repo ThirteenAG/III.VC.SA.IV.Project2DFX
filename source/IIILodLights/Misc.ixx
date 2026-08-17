@@ -243,3 +243,8 @@ export namespace CGeneral
         return low + (high - low) * (CGeneral::GetRandomNumber() / float(MYRAND_MAX + 1));
     }
 }
+
+export namespace CStats
+{
+    GameRef<int> IndustrialPassed;
+}

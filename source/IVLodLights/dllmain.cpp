@@ -98,7 +98,7 @@ void RegisterCustomCoronas()
 
     for (auto& it : foundElements)
     {
-        m_Lampposts.push_back(CLamppostInfo(it.second.vecLocalPos, { 0.0f, 0.0f, 0.0f }, it.second.colour, it.second.fCustomSizeMult, it.second.nCoronaShowMode, it.second.nNoDistance, it.second.nDrawSearchlight, 0.0f));
+        m_Lampposts.push_back(CLamppostInfo(it.second.vecLocalPos, { 0.0f, 0.0f, 0.0f }, it.second.colour, it.second.fCustomSizeMult, it.second.nCoronaShowMode, it.second.nNoDistance, it.second.nDrawSearchlight, 0.0f, 0.0f, it.second.pPredicate));
     }
 }
 
@@ -150,7 +150,7 @@ void RegisterLamppost(WplInstance* pObj)
     float heading = atan2(dummyMatrix.GetUp().y, -dummyMatrix.GetUp().x);
     for (auto& it : foundElements)
     {
-        m_Lampposts.push_back(CLamppostInfo(dummyMatrix * it.second.vecLocalPos, it.second.vecLocalPos, it.second.colour, it.second.fCustomSizeMult, it.second.nCoronaShowMode, it.second.nNoDistance, it.second.nDrawSearchlight, heading, it.second.fObjectDrawDistance));
+        m_Lampposts.push_back(CLamppostInfo(dummyMatrix * it.second.vecLocalPos, it.second.vecLocalPos, it.second.colour, it.second.fCustomSizeMult, it.second.nCoronaShowMode, it.second.nNoDistance, it.second.nDrawSearchlight, heading, it.second.fObjectDrawDistance, it.second.pPredicate));
     }
 }
 
@@ -171,6 +171,7 @@ void LoadDatFileIV()
     if (FILE* hFile = CFileMgr::OpenFile(DataFilePath.string().c_str(), "r"))
     {
         unsigned int nModelIV = 0xFFFFFFFF;
+        CoronaPredicate pCurPredicate = nullptr;
 
         while (const char* pLine = CFileMgr::LoadLine(hFile))
         {
@@ -178,6 +179,7 @@ void LoadDatFileIV()
             {
                 if (pLine[0] == '%')
                 {
+                    pCurPredicate = CCoronaVisibility::GetModelPredicate(pLine);
                     if (strcmp(pLine, "%additional_coronas") != 0)
                         nModelIV = hashStringLowercaseFromSeed((char*)(pLine + 1), 0);
                     else
@@ -194,7 +196,9 @@ void LoadDatFileIV()
                     int				nCoronaShowMode = 0;
                     if (sscanf(pLine, "%3d %3d %3d %3d %f %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &fDrawDistance, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight) != 12)
                         sscanf(pLine, "%3d %3d %3d %3d %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight);
-                    FileContentMMap.insert(std::make_pair(nModelIV, CLamppostInfo(CVector(0.0f, 0.0f, 0.0f), CVector(fOffsetX, fOffsetY, fOffsetZ), CRGBA(static_cast<unsigned char>(nRed), static_cast<unsigned char>(nGreen), static_cast<unsigned char>(nBlue), static_cast<unsigned char>(nAlpha)), fCustomSize, nCoronaShowMode, nNoDistance, nDrawSearchlight, 0.0f, fDrawDistance)));
+                    CLamppostInfo info(CVector(0.0f, 0.0f, 0.0f), CVector(fOffsetX, fOffsetY, fOffsetZ), CRGBA(static_cast<unsigned char>(nRed), static_cast<unsigned char>(nGreen), static_cast<unsigned char>(nBlue), static_cast<unsigned char>(nAlpha)), fCustomSize, nCoronaShowMode, nNoDistance, nDrawSearchlight, 0.0f, fDrawDistance);
+                    info.pPredicate = pCurPredicate;
+                    FileContentMMap.insert(std::make_pair(nModelIV, info));
                 }
             }
         }

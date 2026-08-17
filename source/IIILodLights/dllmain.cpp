@@ -2,6 +2,8 @@
 #include "stdafx.h"
 #include <ranges>
 #include <deque>
+#include <iterator>
+#include <string>
 
 import ComVars;
 import LamppostInfo;
@@ -28,13 +30,110 @@ void RegisterCustomCoronas()
     unsigned short nModelID = 65534;
     auto itEnd = FileContent.upper_bound(PackKey(nModelID, 0xFFFF));
     for (auto it = FileContent.lower_bound(PackKey(nModelID, 0)); it != itEnd; it++)
-        m_Lampposts.push_back(CLamppostInfo(it->second.vecLocalPos, { 0.0f, 0.0f, 0.0f }, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f));
+        m_Lampposts.push_back(CLamppostInfo(it->second.vecLocalPos, { 0.0f, 0.0f, 0.0f }, it->second.colour, it->second.fCustomSizeMult, it->second.nCoronaShowMode, it->second.nNoDistance, it->second.nDrawSearchlight, 0.0f, 0.0f, it->second.pPredicate));
 }
 
-void RegisterLamppost(CEntity* pObj)
+// --------------------------------------------------------------------------
+// Model swaps (03B6 COMMAND_SWAP_NEAREST_BUILDING_MODEL). Swapped models 
+// never reach the lamppost collection. Each entry is a unique pair of models 
+// that swap each other:
+// for an entity of either model we additionally insert lampposts using the
+// other model's 2dfx data. Both sets coexist in m_Lampposts and predicates
+// decide which one is visible.
+// --------------------------------------------------------------------------
+static const std::pair<const char*, const char*> aModelSwaps[] =
 {
-    unsigned short nModelID = pObj->GetModelIndex();
+    { "indhelix_barrier", "lod_land014" },
+    { "nbbridgcabls01", "nbbridgfk2" },
+    { "nbbridgerdb", "damgbridgerdb" },
+    { "nbbridgerda", "damgbbridgerda" },
+    { "lodridgcabls01", "lodridgfk2" },
+    { "lodridgerdb", "lodgbridgerdb" },
+    { "lodridgerda", "lodgbbrridgerda" },
+    { "fishfctory", "fshfctry_dstryd" },
+    { "rustship_structure", "lod_land014" },
+    { "boatramp1", "lod_land014" },
+    { "police_celhole", "police_cell_wall" },
+    { "convstore01", "convstre_dmge01" },
+};
 
+// --------------------------------------------------------------------------
+// CTheScripts::BuildingSwapArray — ground truth for which models are
+// currently swapped.
+// --------------------------------------------------------------------------
+struct CBuildingSwap
+{
+    CEntity* pBuilding;
+    int32_t nNewModel;
+    int32_t nOldModel;
+};
+
+static CBuildingSwap* BuildingSwapArray = nullptr; // address set in GetMemoryAddresses()
+static constexpr int MAX_NUM_BUILDING_SWAPS = 25;
+
+// Model is currently swapped out (replaced by another model) right now.
+static bool IsModelSwappedOut(int nModelID)
+{
+    for (int i = 0; i < MAX_NUM_BUILDING_SWAPS; i++)
+    {
+        if (BuildingSwapArray[i].pBuilding && BuildingSwapArray[i].nOldModel == nModelID)
+            return true;
+    }
+    return false;
+}
+
+// Install per-model corona predicates for every swap pair: a model stays
+// visible only while the game has not swapped it out. Called once before
+// LoadDatFile, when model info is already available.
+void SetupSwapCoronaPredicates()
+{
+    for (const auto& pair : aModelSwaps)
+    {
+        for (const char* szName : { pair.first, pair.second })
+        {
+            int nID = -1;
+            CModelInfo::GetModelInfo(szName, &nID);
+
+            CCoronaVisibility::SetModelPredicate((std::string("%") + szName).c_str(), [nID]() -> bool
+            {
+                return nID < 0 || !IsModelSwappedOut(nID);
+            });
+        }
+    }
+}
+
+static int anModelSwapIDs[std::size(aModelSwaps)][2];
+
+void ResolveModelSwapIDs()
+{
+    static bool bResolved = false;
+    if (bResolved)
+        return;
+    bResolved = true;
+
+    for (size_t i = 0; i < std::size(aModelSwaps); i++)
+    {
+        int nFrom = -1, nTo = -1;
+        CModelInfo::GetModelInfo(aModelSwaps[i].first, &nFrom);
+        CModelInfo::GetModelInfo(aModelSwaps[i].second, &nTo);
+        anModelSwapIDs[i][0] = nFrom;
+        anModelSwapIDs[i][1] = nTo;
+    }
+}
+
+bool IsModelASwapSource(unsigned short nModelID)
+{
+    ResolveModelSwapIDs();
+    for (auto& pair : anModelSwapIDs)
+    {
+        if ((pair[0] == nModelID && pair[1] >= 0) || (pair[1] == nModelID && pair[0] >= 0))
+            return true;
+    }
+    return false;
+}
+
+void InsertLamppostsForModel(CEntity* pObj, unsigned short nModelID)
+{
     auto foundElements = FileContent | std::views::filter([minKey = PackKey(nModelID, 0), maxKey = PackKey(nModelID, 0xFFFF)](const auto& kv)
     {
         return kv.first >= minKey && kv.first <= maxKey;
@@ -64,14 +163,34 @@ void RegisterLamppost(CEntity* pObj)
             data.nNoDistance,
             data.nDrawSearchlight ? static_cast<int>(objectHeight) : 0,
             heading,
-            std::min(data.fObjectDrawDistance, modelInfo->m_lodDistances[2])
+            std::min(data.fObjectDrawDistance, modelInfo->m_lodDistances[2]),
+            data.pPredicate
         ));
+    }
+}
+
+void RegisterLamppost(CEntity* pObj)
+{
+    // Regular lampposts for the entity's own model
+    InsertLamppostsForModel(pObj, pObj->GetModelIndex());
+
+    // Each swap pair swaps with each other, so for either side of a pair we
+    // also insert the other side's 2dfx data. Predicates pick which side is
+    // visible at any given time.
+    ResolveModelSwapIDs();
+    unsigned short nModelID = pObj->GetModelIndex();
+    for (auto& pair : anModelSwapIDs)
+    {
+        if (pair[0] == nModelID && pair[1] >= 0 && pair[1] <= 0xFFFF)
+            InsertLamppostsForModel(pObj, static_cast<unsigned short>(pair[1]));
+        else if (pair[1] == nModelID && pair[0] >= 0 && pair[0] <= 0xFFFF)
+            InsertLamppostsForModel(pObj, static_cast<unsigned short>(pair[0]));
     }
 }
 
 CEntity* PossiblyAddThisEntity(CEntity* pEntity)
 {
-    if (pEntity && m_bCatchLamppostsNow && IsModelALamppost(pEntity->GetModelIndex()))
+    if (pEntity && m_bCatchLamppostsNow && (IsModelALamppost(pEntity->GetModelIndex()) || IsModelASwapSource(pEntity->GetModelIndex())))
         RegisterLamppost(pEntity);
     return pEntity;
 }
@@ -93,6 +212,12 @@ namespace CWorld
 
         if (!bOnce)
         {
+            // Install per-model corona predicates here, before LoadDatFile.
+            // Both swapped model variants are inserted into the lamppost
+            // array; the game's BuildingSwapArray decides which side is
+            // actually present, so each predicate hides the model that is
+            // currently swapped out.
+            SetupSwapCoronaPredicates();
             LoadDatFile();
             if (!m_bCatchLamppostsNow)
             {
@@ -452,6 +577,10 @@ void GetMemoryAddresses()
     AddParticle = (decltype(AddParticle))0x50D140;
 
     CTheZones::GetZoneInfoForTimeOfDay = (decltype(CTheZones::GetZoneInfoForTimeOfDay))0x4B6FB0;
+
+    CStats::IndustrialPassed.SetAddress(0x8E2A68);
+
+    BuildingSwapArray = reinterpret_cast<CBuildingSwap*>(0x880E30);
 }
 
 void Init()
