@@ -277,14 +277,24 @@ private:
 std::vector<CMovingThings::CDistantCarImpostor> CMovingThings::aDistantCarImpostors;
 
 static uint32 ImpostorCoronaId(int32 i) { return 0x7F000000 + i; }
+static uint32 ImpostorPortSideCoronaId(int32 i) { return 0x7E000000 + i; }
+static uint32 ImpostorStarboardSideCoronaId(int32 i) { return 0x7D000000 + i; }
 
 static void HideImpostorCorona(CMovingThings::CDistantCarImpostor& impostor)
 {
-    CLODLights::RegisterCorona(impostor.m_nCoronaId, nullptr,
-        0, 0, 0, 0,
-        CVector(0.0f, 0.0f, 0.0f),
-        0.0f, 0.0f,
-        1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+    uint32 base = impostor.m_nCoronaId - 0x7F000000u;
+    auto hide = [](uint32 id)
+    {
+        CLODLights::RegisterCorona(id, nullptr,
+            0, 0, 0, 0,
+            CVector(0.0f, 0.0f, 0.0f),
+            0.0f, 0.0f,
+            1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+    };
+
+    hide(impostor.m_nCoronaId);
+    hide(ImpostorPortSideCoronaId((int32)base));
+    hide(ImpostorStarboardSideCoronaId((int32)base));
 }
 
 export bool bExtendImpostorPathStreaming = true;
@@ -535,6 +545,13 @@ bool CMovingThings::PickNextNodeForImpostor(const CDistantCarImpostor& impostor,
 
         if (!ThePaths->IsAreaLoaded(candArea)) continue;
 
+        bool bCandWater = (bool)ThePaths->m_pPathNodes[candArea][candidate].m_bWaterNode;
+        if (!bDistantMaritimeTraffic && bCandWater)
+            continue;
+        // Keep road impostors on roads and boat impostors on water.
+        if (bCandWater != impostor.m_bWaterNode)
+            continue;
+
         CCarPathLink candidateLink;
         if (!FindLaneLinkForSegment(curArea, impostor.m_nNextNode, candArea, candidate, candidateLink)) continue;
         if (!CanTraverseSegmentDirection(curArea, impostor.m_nNextNode, candArea, candidate, candidateLink)) continue;
@@ -598,6 +615,18 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         int16 toNode = (int16)connAddr.m_nNodeId;
 
         if (!ThePaths->IsAreaLoaded(toArea)) continue;
+
+        bool bFromWater = (bool)node.m_bWaterNode;
+        bool bToWater = (bool)ThePaths->m_pPathNodes[toArea][toNode].m_bWaterNode;
+        if (bFromWater || bToWater)
+        {
+            // Maritime traffic gate: boats can be disabled entirely and are
+            // kept sparse relative to road traffic.
+            if (!bDistantMaritimeTraffic)
+                continue;
+            if ((CGeneral::GetRandomNumber() & 3) != 0)
+                continue;
+        }
 
         CCarPathLink laneLink;
         if (!FindLaneLinkForSegment(fromArea, fromNode, toArea, toNode, laneLink)) continue;
@@ -670,7 +699,9 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         impostor.m_nPrevNode = fromNode;
         impostor.m_nNextNode = toNode;
         impostor.m_fProgress = Clamp(spawnProgress, 0.0f, 1.0f);
-        impostor.m_fDesiredSpeed = 9.0f + (float)(CGeneral::GetRandomNumber() % 18);
+        impostor.m_fDesiredSpeed = (bFromWater || bToWater)
+            ? 3.5f + 0.5f * (float)(CGeneral::GetRandomNumber() % 12)  // boats: ~7-17 knots
+            : 9.0f + (float)(CGeneral::GetRandomNumber() % 18);
         impostor.m_fSpeed = impostor.m_fDesiredSpeed;
         impostor.m_nLaneSide = laneSide;
         impostor.m_nLaneCount = (uint8)laneCount;
@@ -679,7 +710,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
             fromArea, fromNode,
             toArea, toNode,
             laneSide, laneCount, lane, laneLink);
-        impostor.m_bWaterNode = (bool)node.m_bWaterNode;
+        impostor.m_bWaterNode = bFromWater || bToWater;
         impostor.m_vecPos = node.GetPosition();
         impostor.m_vecDir = CVector(1.0f, 0.0f, 0.0f);
         impostor.m_nStuckFrames = 0;
@@ -733,6 +764,21 @@ void CMovingThings::UpdateDistantCarImpostors()
             imp.m_bActive = false;
             HideImpostorCorona(imp);
             MarkLaneBucketsDirty();
+        }
+    }
+
+    // Hot-reload support: when maritime traffic is switched off, retire any
+    // boats that are already on the water.
+    if (!bDistantMaritimeTraffic)
+    {
+        for (auto& imp : aDistantCarImpostors)
+        {
+            if (imp.m_bActive && imp.m_bWaterNode)
+            {
+                imp.m_bActive = false;
+                HideImpostorCorona(imp);
+                MarkLaneBucketsDirty();
+            }
         }
     }
 
@@ -926,7 +972,8 @@ void CMovingThings::UpdateDistantCarImpostors()
                 targetPrevArea, targetPrevNode,
                 targetNextArea, targetNextNode,
                 laneSide, laneCount, laneIndex, nextLink);
-            impostor.m_bWaterNode = (bool)ThePaths->m_pPathNodes[targetPrevArea][targetPrevNode].m_bWaterNode;
+            impostor.m_bWaterNode = (bool)ThePaths->m_pPathNodes[targetPrevArea][targetPrevNode].m_bWaterNode
+                || (bool)ThePaths->m_pPathNodes[targetNextArea][targetNextNode].m_bWaterNode;
             impostor.m_nStuckFrames = 0;
             MarkLaneBucketsDirty();
         }
@@ -935,7 +982,6 @@ void CMovingThings::UpdateDistantCarImpostors()
         if (!ComputeImpostorTransform(impostor)) continue;
     }
 
-    const float desiredHeadway = 18.0f;
     static std::vector<int32> sortedIdx;
     sortedIdx.clear();
     sortedIdx.reserve(aDistantCarImpostors.size());
@@ -991,6 +1037,8 @@ void CMovingThings::UpdateDistantCarImpostors()
 
             if (segLen < 0.001f) continue;
 
+            // Boats need much more room than cars.
+            float desiredHeadway = (curr.m_bWaterNode || prev.m_bWaterNode) ? 90.0f : 18.0f;
             float minGap = Min(0.35f, desiredHeadway / segLen);
             float gap = prev.m_fProgress - curr.m_fProgress;
             float gapMeters = gap * segLen;
@@ -1026,6 +1074,9 @@ void CMovingThings::RenderDistantCarImpostors()
     {
         if (!impostor.m_bActive) continue;
 
+        if (impostor.m_bWaterNode && !bDistantMaritimeTraffic)
+            continue;
+
         float   distSqr = (impostor.m_vecPos - camPos).MagnitudeSqr2D();
         if (distSqr < SQR(140.0f) || distSqr > SQR(maxDist)) continue;
 
@@ -1037,10 +1088,10 @@ void CMovingThings::RenderDistantCarImpostors()
         uint8 red, green, blue;
         if (impostor.m_bWaterNode)
         {
-            // Maritime nav lights: green starboard (approaching), white stern (receding)
-            red = approaching ? 0 : 220;
-            green = approaching ? 200 : 220;
-            blue = approaching ? 80 : 220;
+            // Boats show an all-round white masthead/stern light (warm white).
+            red = 255;
+            green = 242;
+            blue = 218;
         }
         else
         {
@@ -1051,14 +1102,81 @@ void CMovingThings::RenderDistantCarImpostors()
         }
         float fade = Clamp((maxDist - dist) / 250.0f, 0.0f, 1.0f)
             * Clamp((dist - 140.0f) / 120.0f, 0.0f, 1.0f);
-        uint8 alpha = (uint8)(150 * fade);
-        if (alpha == 0) continue;
 
-        CLODLights::RegisterCorona(impostor.m_nCoronaId, nullptr,
-            red, green, blue, alpha,
-            impostor.m_vecPos,
-            4.0f * fDistantCarsRadiusMultiplier,
-            maxDist,
-            1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+        float size = 4.0f * fDistantCarsRadiusMultiplier;
+        uint8 alpha = (uint8)(150 * fade);
+
+        // Boat navigation lights: compute the camera bearing relative to the
+        // boat heading (fwd = cos, cross > 0 -> camera on the port side).
+        uint8 sideAlpha = 0;
+        float boatCross = 0.0f, sectorBlend = 0.0f;
+        CVector portPos, stbdPos;
+        if (impostor.m_bWaterNode)
+        {
+            float toCamX = camPos.x - impostor.m_vecPos.x;
+            float toCamY = camPos.y - impostor.m_vecPos.y;
+            float toCamLen = Sqrt(toCamX * toCamX + toCamY * toCamY);
+            if (toCamLen > 0.001f)
+            {
+                float fwd = (impostor.m_vecDir.x * toCamX + impostor.m_vecDir.y * toCamY) / toCamLen;
+                boatCross = impostor.m_vecDir.x * toCamY - impostor.m_vecDir.y * toCamX;
+
+                // Sidelights cover from dead ahead to 22.5° abaft the beam.
+                constexpr float SECTOR_EDGE = -0.38f; // cos(112.5°)
+                constexpr float EDGE_RAMP = 0.15f;
+                sectorBlend = Clamp((fwd - SECTOR_EDGE) / EDGE_RAMP, 0.0f, 1.0f);
+
+                // White light: bright masthead in the forward arc, dimmer
+                // stern light astern.
+                size = 2.6f * fDistantCarsRadiusMultiplier;
+                alpha = (uint8)((70.0f + 40.0f * sectorBlend) * fade);
+                sideAlpha = (uint8)(180.0f * fade * sectorBlend);
+
+                // Port/starboard light positions, offset to each side of the
+                // bow so red and green are clearly separated and never wash
+                // out against the white masthead light.
+                const float beamHalf = 2.0f;
+                portPos = impostor.m_vecPos + CVector(-impostor.m_vecDir.y * beamHalf, impostor.m_vecDir.x * beamHalf, 0.0f);
+                stbdPos = impostor.m_vecPos + CVector(impostor.m_vecDir.y * beamHalf, -impostor.m_vecDir.x * beamHalf, 0.0f);
+            }
+        }
+        if (alpha == 0 && sideAlpha == 0) continue;
+
+        if (alpha)
+        {
+            CLODLights::RegisterCorona(impostor.m_nCoronaId, nullptr,
+                red, green, blue, alpha,
+                impostor.m_vecPos,
+                size,
+                maxDist,
+                1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+        }
+
+        if (impostor.m_bWaterNode && sideAlpha)
+        {
+            uint32 baseId = impostor.m_nCoronaId - 0x7F000000u;
+
+            // Red port light — camera anywhere on the port side of the bow.
+            if (boatCross >= 0.0f)
+            {
+                CLODLights::RegisterCorona(ImpostorPortSideCoronaId((int32)baseId), nullptr,
+                    255, 30, 30, sideAlpha,
+                    portPos,
+                    2.4f * fDistantCarsRadiusMultiplier,
+                    maxDist,
+                    1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+            }
+
+            // Green starboard light.
+            if (boatCross <= 0.0f)
+            {
+                CLODLights::RegisterCorona(ImpostorStarboardSideCoronaId((int32)baseId), nullptr,
+                    30, 255, 60, sideAlpha,
+                    stbdPos,
+                    2.4f * fDistantCarsRadiusMultiplier,
+                    maxDist,
+                    1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+            }
+        }
     }
 }

@@ -45,6 +45,7 @@ export
 
     int nNumDistantCarImpostors = 2000;
     float fDistantCarsRadiusMultiplier = 1.0f;
+    bool bDistantMaritimeTraffic = true;
 
     void ReadIniSettings()
     {
@@ -65,6 +66,7 @@ export
         fCoronaAlphaFarBoostMax = iniReader.ReadFloat("LodLights", "CoronaAlphaFarBoostMax", 4.0f);
         nNumDistantCarImpostors = iniReader.ReadInteger("LodLights", "MaxNumberOfDistantCars", 2000);
         fDistantCarsRadiusMultiplier = iniReader.ReadFloat("LodLights", "DistantCarsRadiusMultiplier", 1.0f);
+        bDistantMaritimeTraffic = iniReader.ReadInteger("LodLights", "MaritimeTraffic", 1) != 0;
 
         // StaticShadows section
         bRenderStaticShadowsForLODs = iniReader.ReadInteger("StaticShadows", "RenderStaticShadowsForLODs", 0) != 0;
