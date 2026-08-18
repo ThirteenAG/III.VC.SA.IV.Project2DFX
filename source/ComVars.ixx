@@ -33,7 +33,6 @@ export
     float fStaticSunSize;
 
     float fFarClipMultiplier = 1.0f;
-    float fFarClipStaticMultiplier;
     float fFarClipHeightFactor;
     float fFarClipMinMultiplier;
     float fFarClipMaxMultiplier;
@@ -84,7 +83,7 @@ export
         fSearchlightEffectVisibilityFactor = iniReader.ReadFloat("SearchLights", "SearchlightEffectVisibilityFactor", 0.4f);
 
         // FarClip section
-        fFarClipStaticMultiplier = iniReader.ReadFloat("FarClip", "FarClipMultiplier", 1.0f);
+        fFarClipMultiplier = iniReader.ReadFloat("FarClip", "FarClipMultiplier", 1.0f);
         fFarClipHeightFactor = iniReader.ReadFloat("FarClip", "HeightFactor", 0.05f);
         fFarClipMinMultiplier = iniReader.ReadFloat("FarClip", "MinMultiplier", 1.0f);
         fFarClipMaxMultiplier = iniReader.ReadFloat("FarClip", "MaxMultiplier", 30.0f);

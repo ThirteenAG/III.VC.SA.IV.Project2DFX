@@ -98,9 +98,17 @@ float fSunSizeMult1 = 2.7335f;
 float fSunSizeMult2 = 6.0f;
 void DrawDistanceChanger()
 {
-    if (fFarClipStaticMultiplier != 0.0f)
+    // FarClipMultiplier > 10.0 = static farclip value.
+    if (fFarClipMultiplier > 10.0f)
     {
-        fFarClipMultiplier = fFarClipStaticMultiplier;
+        fSunSizeMult1 = 2.7335f;
+        fSunSizeMult2 = 6.0f;
+        return;
+    }
+
+    // FarClipMultiplier != 0.0 = fixed multiplier, already stored in fFarClipMultiplier.
+    if (fFarClipMultiplier != 0.0f)
+    {
         fSunSizeMult1 = 2.7335f * fFarClipMultiplier;
         fSunSizeMult2 = 6.0f * fFarClipMultiplier;
         return;
@@ -193,7 +201,12 @@ void ApplyMemoryPatches()
     static auto FarClipHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
         if (CGame::currArea == 0)
-            CTimeCycle::m_fCurrentFarClip *= fFarClipMultiplier;
+        {
+            if (fFarClipMultiplier > 10.0f)
+                CTimeCycle::m_fCurrentFarClip = fFarClipMultiplier;
+            else
+                CTimeCycle::m_fCurrentFarClip *= fFarClipMultiplier;
+        }
     });
 
     pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? 8B 0D ? ? ? ? 51 E8 ? ? ? ? 8B 15 ? ? ? ? 52 E8 ? ? ? ? 83 C4 ? 83 C4");
