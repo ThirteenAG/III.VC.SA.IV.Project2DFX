@@ -42,15 +42,15 @@ Project2DFX is a set of plugins for GTA III, Vice City, San Andreas, GTA IV: The
 
 ## Grand Theft Auto San Andreas - [Download Link](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/tag/gtasa)
 
-![Grand Theft Auto San Andreas Project2DFX](https://cloud.githubusercontent.com/assets/4904157/17226168/b49f1ea4-5510-11e6-897c-99e108d6bc44.jpg)
+![Grand Theft Auto San Andreas Project2DFX](https://github.com/user-attachments/assets/2597905a-089e-457d-a9c0-e80e77d1e955)
 
 ## Grand Theft Auto Vice City - [Download Link](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/tag/gtavc)
 
-![Grand Theft Auto Vice City Project2DFX](https://cloud.githubusercontent.com/assets/4904157/17225750/e30b9c38-550e-11e6-834a-3af320a0c1ed.png)
+![Grand Theft Auto Vice City Project2DFX](https://github.com/user-attachments/assets/4e4a6f2a-259c-4908-96d3-f54ab72de903)
 
 ## Grand Theft Auto III - [Download Link](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/tag/gta3)
 
-![Grand Theft Auto III Project2DFX](https://user-images.githubusercontent.com/4904157/61407248-fac98a00-a8e5-11e9-8efc-053301b1efd6.png)
+![Grand Theft Auto III Project2DFX](https://github.com/user-attachments/assets/21b2d22e-7bb7-46db-8469-ab8749a548ab)
 
 #
 
