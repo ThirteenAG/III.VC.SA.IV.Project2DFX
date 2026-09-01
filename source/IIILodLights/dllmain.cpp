@@ -322,12 +322,13 @@ enum eExplosionType
 SafetyHookInline shAddExplosion = {};
 bool __cdecl AddExplosion(CEntity* explodingEntity, CEntity* culprit, eExplosionType type, const CVector* pos, uint32_t lifetime)
 {
+    //1,3,4,5 - barrel crash
     static const eExplosionType allTypes[] = {
         EXPLOSION_GRENADE,
         //EXPLOSION_MOLOTOV,
-        EXPLOSION_ROCKET,
-        EXPLOSION_CAR,
-        EXPLOSION_CAR_QUICK,
+        //EXPLOSION_ROCKET,
+        //EXPLOSION_CAR,
+        //EXPLOSION_CAR_QUICK,
         //EXPLOSION_HELI,
         EXPLOSION_MINE,
         EXPLOSION_BARREL,
