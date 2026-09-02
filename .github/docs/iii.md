@@ -39,13 +39,11 @@
 
 **LOD Coronas** - thousands of distant lamppost and streetlight glows
 
-<video width="100%" controls autoplay muted loop playsinline src="https://github.com/user-attachments/assets/REPLACE_III_LOD_CORONAS_1_VIDEO_ID"></video>
-
-<video width="100%" controls autoplay muted loop playsinline src="https://github.com/user-attachments/assets/REPLACE_III_LOD_CORONAS_2_VIDEO_ID"></video>
+<img src="https://raw.githubusercontent.com/ThirteenAG/III.VC.SA.IV.Project2DFX/refs/heads/master/.github/docs/videos/iii_demo.webp" alt="LOD coronas">
 
 **Volumetric Light Cones** - volumetric light beams at night
 
-<video width="100%" controls autoplay muted loop playsinline src="https://github.com/user-attachments/assets/REPLACE_III_SEARCHLIGHTS_VIDEO_ID"></video>
+<img src="https://raw.githubusercontent.com/ThirteenAG/III.VC.SA.IV.Project2DFX/refs/heads/master/.github/docs/videos/iii_vol_lights.webp" alt="Volumetric lights">
 
 </div>
 
@@ -66,9 +64,11 @@
 
 ## Installation
 
+Game version 1.0 US is required.
+
 1. Download and install [GTA III Widescreen Fix](http://thirteenag.github.io/wfp#gta3) - it includes the required [ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader).
 2. Download [III.Project2DFX](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/download/gta3/III.Project2DFX.zip).
-3. Put the `.asi` and `.ini` files into the `scripts` folder.
+3. Put the `.asi`, `.ini` and `.dat` files into the `scripts` folder.
 4. Launch the game.
 
 <details>
