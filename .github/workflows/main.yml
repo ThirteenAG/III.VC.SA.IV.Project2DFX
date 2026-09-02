@@ -117,7 +117,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         allowUpdates: true
         name: ${{ steps.release_info.outputs.name }}
-        body: ".github/docs/gta3.md"
+        bodyFile: ".github/docs/gta3.md"
         tag: ${{ steps.release_info.outputs.tag_name }}
         artifacts: data/III.Project2DFX.zip
 
@@ -132,7 +132,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         allowUpdates: true
         name: ${{ steps.release_info.outputs.name }}
-        body: ".github/docs/gtavc.md"
+        bodyFile: ".github/docs/gtavc.md"
         tag: ${{ steps.release_info.outputs.tag_name }}
         artifacts: data/VC.Project2DFX.zip
 
@@ -147,7 +147,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         allowUpdates: true
         name: ${{ steps.release_info.outputs.name }}
-        body: ".github/docs/gtasa.md"
+        bodyFile: ".github/docs/gtasa.md"
         tag: ${{ steps.release_info.outputs.tag_name }}
         artifacts: data/SA.Project2DFX.zip
 
@@ -162,6 +162,6 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         allowUpdates: true
         name: ${{ steps.release_info.outputs.name }}
-        body: ".github/docs/gtaiv.md"
+        bodyFile: ".github/docs/gtaiv.md"
         tag: ${{ steps.release_info.outputs.tag_name }}
         artifacts: data/IV.Project2DFX.zip
