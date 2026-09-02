@@ -972,7 +972,8 @@ int _tmain(int argc, _TCHAR* argv[])
                     if (line2.find("lamppost1") != std::string::npos || line2.find("lamppost2") != std::string::npos ||
                         line2.find("lamppost3") != std::string::npos || line2.find("sub_floodlite") != std::string::npos ||
                         line2.find("mlamppost") != std::string::npos || line2.find("doublestreetlght1") != std::string::npos ||
-                        line2.find("bollardlight") != std::string::npos || line2.find("lampost_coast") != std::string::npos)
+                        line2.find("bollardlight") != std::string::npos || line2.find("lampost_coast") != std::string::npos ||
+                        line2.find("doc_floodlite") != std::string::npos)
                     {
                         nDrawSearchlight = 1;
                     }
@@ -1024,7 +1025,8 @@ int _tmain(int argc, _TCHAR* argv[])
                     if (line2.find("lamppost1") != std::string::npos || line2.find("lamppost2") != std::string::npos ||
                         line2.find("lamppost3") != std::string::npos || line2.find("sub_floodlite") != std::string::npos ||
                         line2.find("mlamppost") != std::string::npos || line2.find("doublestreetlght1") != std::string::npos ||
-                        line2.find("bollardlight") != std::string::npos || line2.find("lampost_coast") != std::string::npos)
+                        line2.find("bollardlight") != std::string::npos || line2.find("lampost_coast") != std::string::npos ||
+                        line2.find("doc_floodlite") != std::string::npos)
                     {
                         nDrawSearchlight = 1;
                     }
