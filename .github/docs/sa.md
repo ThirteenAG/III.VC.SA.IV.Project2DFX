@@ -40,14 +40,10 @@
 <div align="center">
 
 **LOD Coronas** - thousands of distant lamppost and streetlight glows
-
-<video width="100%" controls autoplay muted loop playsinline src="https://github.com/user-attachments/assets/REPLACE_SA_LOD_CORONAS_1_VIDEO_ID"></video>
-
-<video width="100%" controls autoplay muted loop playsinline src="https://github.com/user-attachments/assets/REPLACE_SA_LOD_CORONAS_2_VIDEO_ID"></video>
+<img src="https://raw.githubusercontent.com/ThirteenAG/III.VC.SA.IV.Project2DFX/refs/heads/master/.github/docs/videos/sa_demo.webp" alt="LOD coronas">
 
 **Volumetric Light Cones** - volumetric light beams at night
-
-<video width="100%" controls autoplay muted loop playsinline src="https://github.com/user-attachments/assets/REPLACE_SA_SEARCHLIGHTS_VIDEO_ID"></video>
+<img src="https://raw.githubusercontent.com/ThirteenAG/III.VC.SA.IV.Project2DFX/refs/heads/master/.github/docs/videos/sa_vol_lights.webp" alt="Volumetric lights">
 
 </div>
 
@@ -79,6 +75,8 @@
 ---
 
 ## Installation
+
+Game version 1.0 US is required.
 
 1. Download and install [GTASA Widescreen Fix](http://thirteenag.github.io/wfp#gtasa) - it includes the required [ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader).
 2. Download [SA.Project2DFX](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/download/gtasa/SA.Project2DFX.zip).
