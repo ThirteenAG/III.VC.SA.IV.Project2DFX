@@ -144,7 +144,7 @@ void DrawDistanceChanger()
 
 void ApplyMemoryPatches()
 {
-    auto pattern = hook::pattern("E8 ? ? ? ? 6A ? 68 ? ? ? ? E8 ? ? ? ? 68 ? ? ? ? E8");
+    auto pattern = hook::pattern("68 ? ? ? ? E8 ? ? ? ? 68 ? ? ? ? E8 ? ? ? ? E8");
     static auto CFileLoaderLoadLevelHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
         LoadDatFile();
@@ -154,6 +154,7 @@ void ApplyMemoryPatches()
             bRenderSearchlightEffects = 0;
         }
     });
+
 
     pattern = hook::pattern("E8 ? ? ? ? 8B F0 8A 44 24");
     CFileLoader::shLoadObjectInstance = safetyhook::create_inline(injector::GetBranchDestination(pattern.get_first()).as_int(), CFileLoader::LoadObjectInstance);
