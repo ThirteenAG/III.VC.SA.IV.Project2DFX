@@ -256,3 +256,14 @@ export namespace CGeneral
         return low + (high - low) * (CGeneral::GetRandomNumber() / float(MYRAND_MAX + 1));
     }
 }
+
+export namespace CEntryExitManager
+{
+    GameRef<int> ms_exitEnterState([]() -> int*
+    {
+        auto pattern = hook::pattern("A1 ? ? ? ? 85 C0 75 ? 33 C0 8A 46");
+        if (!pattern.empty())
+            return *pattern.get_first<int*>(1);
+        return nullptr;
+    });
+}

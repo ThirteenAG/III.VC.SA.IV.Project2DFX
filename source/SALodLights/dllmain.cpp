@@ -201,7 +201,10 @@ void ApplyMemoryPatches()
     pattern = hook::pattern("DB 05 ? ? ? ? D8 15 ? ? ? ? DF E0 F6 C4 05 7A");
     static auto FarClipHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
-        if (CGame::currArea == 0)
+        const int state = CEntryExitManager::ms_exitEnterState;
+        const bool inTransition = (state == 1 || state == 2);
+
+        if (CGame::currArea == 0 || !inTransition)
         {
             if (fFarClipMultiplier > 10.0f)
                 CTimeCycle::m_fCurrentFarClip = fFarClipMultiplier;
