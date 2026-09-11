@@ -701,7 +701,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         impostor.m_fProgress = Clamp(spawnProgress, 0.0f, 1.0f);
         impostor.m_fDesiredSpeed = (bFromWater || bToWater)
             ? 3.5f + 0.5f * (float)(CGeneral::GetRandomNumber() % 12)  // boats: ~7-17 knots
-            : 9.0f + (float)(CGeneral::GetRandomNumber() % 18);
+            : (9.0f + (float)(CGeneral::GetRandomNumber() % 18)) * 0.75f;  // cars: 25% slower
         impostor.m_fSpeed = impostor.m_fDesiredSpeed;
         impostor.m_nLaneSide = laneSide;
         impostor.m_nLaneCount = (uint8)laneCount;

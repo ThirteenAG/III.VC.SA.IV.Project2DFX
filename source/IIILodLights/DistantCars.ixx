@@ -635,7 +635,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         impostor.m_nPrevNode = fromNode;
         impostor.m_nNextNode = toNode;
         impostor.m_fProgress = Clamp(spawnProgress, 0.0f, 1.0f);
-        impostor.m_fDesiredSpeed = 9.0f + (CGeneral::GetRandomNumber() % 18);
+        impostor.m_fDesiredSpeed = (9.0f + (CGeneral::GetRandomNumber() % 18)) * 0.75f;  // 25% slower
         impostor.m_fSpeed = impostor.m_fDesiredSpeed;
         impostor.m_nLaneSide = laneSide;
         impostor.m_nLaneCount = laneCount;
