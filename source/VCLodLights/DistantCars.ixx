@@ -616,11 +616,11 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
 
     // Pin each slot to a proportional window of the node array so the pool
     // stays evenly distributed across the map regardless of farclip.
-    int32 totalNodes  = ThePaths->m_numCarPathNodes;
-    int32 poolSize    = Max(1, (int32)aDistantCarImpostors.size());
-    int32 slotIndex   = (int32)(coronaId - 0x7F000000u);
-    int32 rangeStart  = (int32)((int64_t)slotIndex       * totalNodes / poolSize);
-    int32 rangeEnd    = (int32)((int64_t)(slotIndex + 1) * totalNodes / poolSize);
+    int32 totalNodes = ThePaths->m_numCarPathNodes;
+    int32 poolSize = Max(1, (int32)aDistantCarImpostors.size());
+    int32 slotIndex = (int32)(coronaId - 0x7F000000u);
+    int32 rangeStart = (int32)((int64_t)slotIndex * totalNodes / poolSize);
+    int32 rangeEnd = (int32)((int64_t)(slotIndex + 1) * totalNodes / poolSize);
     if (rangeEnd <= rangeStart) rangeEnd = rangeStart + 1;
 
     for (int32 attempts = 0; attempts < 128; attempts++)
@@ -631,13 +631,6 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
             continue;
 
         int16 toNode = ThePaths->ConnectedNode(node.firstLink + CGeneral::GetRandomNumber() % node.numLinks);
-        CCarPathLink laneLink;
-        if (!FindLaneLinkForSegment(fromNode, toNode, laneLink))
-            continue;
-        if (!CanTraverseSegmentDirection(fromNode, toNode, laneLink))
-            continue;
-        if (IsPathSegmentExcludedForImpostor(fromNode, toNode))
-            continue;
 
         bool bFromWater = (bool)node.bWaterPath;
         bool bToWater = (bool)ThePaths->m_pathNodes[toNode].bWaterPath;
@@ -650,6 +643,14 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
             if ((CGeneral::GetRandomNumber() & 3) != 0)
                 continue;
         }
+
+        CCarPathLink laneLink;
+        if (!FindLaneLinkForSegment(fromNode, toNode, laneLink))
+            continue;
+        if (!CanTraverseSegmentDirection(fromNode, toNode, laneLink))
+            continue;
+        if (IsPathSegmentExcludedForImpostor(fromNode, toNode))
+            continue;
 
         int8 leftLanes = Max((int8)1, laneLink.numLeftLanes);
         int8 rightLanes = Max((int8)1, laneLink.numRightLanes);
