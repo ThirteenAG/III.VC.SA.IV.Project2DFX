@@ -384,14 +384,14 @@ public:
         void* oldSrcBlend = nullptr;
         void* oldDstBlend = nullptr;
         void* oldZTest = nullptr;
-        void* oldRaster = nullptr;
+        //void* oldRaster = nullptr;
 
         RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &oldZWrite);
         RwRenderStateGet(rwRENDERSTATEVERTEXALPHAENABLE, &oldVertexAlpha);
         RwRenderStateGet(rwRENDERSTATESRCBLEND, &oldSrcBlend);
         RwRenderStateGet(rwRENDERSTATEDESTBLEND, &oldDstBlend);
         RwRenderStateGet(rwRENDERSTATEZTESTENABLE, &oldZTest);
-        RwRenderStateGet(rwRENDERSTATETEXTURERASTER, &oldRaster);
+        //RwRenderStateGet(rwRENDERSTATETEXTURERASTER, &oldRaster);
 
         RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, FALSE);
         RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
@@ -519,7 +519,7 @@ public:
 
         CSprite::FlushSpriteBuffer();
 
-        RwRenderStateSet(rwRENDERSTATETEXTURERASTER, oldRaster);
+        //RwRenderStateSet(rwRENDERSTATETEXTURERASTER, oldRaster);
         RwRenderStateSet(rwRENDERSTATEZTESTENABLE, oldZTest);
         RwRenderStateSet(rwRENDERSTATEDESTBLEND, oldDstBlend);
         RwRenderStateSet(rwRENDERSTATESRCBLEND, oldSrcBlend);
