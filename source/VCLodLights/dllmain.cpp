@@ -442,6 +442,7 @@ void ApplyMemoryPatches()
     static auto CMovingThingsShutdownHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
         CMovingThings::ShutdownDistantCarImpostors();
+        CLODLights::Shutdown();
     });
 
     if (fTrafficLightsShadowsDrawDistance)

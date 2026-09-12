@@ -23,7 +23,7 @@ export class CRegisteredCorona
 public:
     CVector        Coordinates;            // Where is it exactly.
     uint32_t       Identifier;             // Should be unique for each corona. Address or something (0 = empty)
-    RwTexture* pTex;                   // Pointer to the actual texture to be rendered
+    uint8_t        nTexType;               // Corona sprite index into gpCoronaTexture[], resolved at render time
     float          Size;                   // How big is this fellow
     float          NormalAngle;            // Is corona normal (if relevant) facing the camera?
     float          Range;                  // How far away is this guy still visible
@@ -50,7 +50,7 @@ public:
 
 public:
     CRegisteredCorona()
-        : Identifier(0), pEntityAttachedTo(nullptr)
+        : Identifier(0), nTexType(0), pEntityAttachedTo(nullptr)
     {
     }
 
@@ -130,11 +130,17 @@ public:
     static float& ScreenMult;
 
 public:
-    static void RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, RwTexture* pTex, unsigned char flareType, unsigned char reflectionType, unsigned char LOSCheck, unsigned char unused, float normalAngle, bool bNeonFade, float PullTowardsCam, bool bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool bWhiteCore, CoronaPredicate pPredicate = nullptr)
+    static void RegisterCoronaInternal(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, int coronaType, unsigned char flareType, unsigned char reflectionType, unsigned char LOSCheck, unsigned char unused, float normalAngle, bool bNeonFade, float PullTowardsCam, bool bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool bWhiteCore, CoronaPredicate pPredicate = nullptr)
     {
         UNREFERENCED_PARAMETER(unused);
         UNREFERENCED_PARAMETER(bFadeIntensity);
         UNREFERENCED_PARAMETER(pAttachTo);
+
+        // The game destroys and recreates gpCoronaTexture[] when a game is
+        // restarted (CCoronas::Shutdown/Init), so only the type index is kept
+        // here; the texture itself is resolved every frame in RenderBuffered.
+        if (coronaType < 0 || coronaType >= 9)
+            return;
 
         const CVector* pCamPos = GetCamPos();
         const float dx = pCamPos->x - Position.x;
@@ -249,7 +255,7 @@ public:
         pSuitableSlot->Size = Size;
         pSuitableSlot->NormalAngle = normalAngle;
         pSuitableSlot->Range = Range;
-        pSuitableSlot->pTex = pTex;
+        pSuitableSlot->nTexType = static_cast<uint8_t>(coronaType);
         pSuitableSlot->FlareType = flareType;
         pSuitableSlot->ReflectionType = reflectionType;
         pSuitableSlot->LOSCheck = LOSCheck;
@@ -276,7 +282,7 @@ public:
 
     static void RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, int coronaType, unsigned char flareType, bool enableReflection, bool checkObstacles, int unused, float normalAngle, bool longDistance, float nearClip, unsigned char bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool reflectionDelay, CoronaPredicate pPredicate = nullptr)
     {
-        RegisterCorona(nID, pAttachTo, R, G, B, A, Position, Size, Range, gpCoronaTexture[coronaType], flareType, enableReflection, checkObstacles, unused, normalAngle, longDistance, nearClip, bFadeIntensity, FadeSpeed, bOnlyFromBelow, reflectionDelay, pPredicate);
+        RegisterCoronaInternal(nID, pAttachTo, R, G, B, A, Position, Size, Range, coronaType, flareType, enableReflection, checkObstacles, unused, normalAngle, longDistance, nearClip, bFadeIntensity, FadeSpeed, bOnlyFromBelow, reflectionDelay, pPredicate);
     }
 
     static void Update()
@@ -324,6 +330,33 @@ public:
                 aLinkedList[i].Add(&FreeList);
                 aLinkedList[i].SetEntry(&aCoronas[i]);
             }
+        }
+    }
+
+    static void Shutdown()
+    {
+        // Drop every registered corona. The game runs CCoronas::Shutdown
+        // (which destroys gpCoronaTexture[]) shortly after this when a game
+        // is restarted, so nothing stale may be left behind to render.
+        UsedMap.clear();
+        FreeList.Init();
+        UsedList.Init();
+        pFarthestNode = nullptr;
+        fFarthestDistSq = 0.0f;
+
+        for (size_t i = 0; i < aLinkedList.size(); i++)
+        {
+            aLinkedList[i].Init();
+            aLinkedList[i].Add(&FreeList);
+            aLinkedList[i].SetEntry(&aCoronas[i]);
+        }
+
+        for (auto& corona : aCoronas)
+        {
+            corona.Identifier = 0;
+            corona.Intensity = 0;
+            corona.JustCreated = 0;
+            corona.RegisteredThisFrame = 0;
         }
     }
 
@@ -406,7 +439,11 @@ public:
             const float fadeFactor = vecTransformedCoords.z > halfRange ? 1.0f - (vecTransformedCoords.z - halfRange) / halfRange : 1.0f;
             const short fadeIntensity = static_cast<short>(corona.Intensity * fadeFactor);
 
-            if (!corona.pTex)
+            // Resolve the sprite texture every frame. The game destroys and
+            // recreates gpCoronaTexture[] on restart (CCoronas::Shutdown/Init),
+            // so a cached RwTexture* would dangle across a new game.
+            RwTexture* pTex = corona.nTexType < 9 ? gpCoronaTexture[corona.nTexType] : nullptr;
+            if (!pTex)
                 continue;
 
             const bool zTestEnable = !corona.LOSCheck;
@@ -417,7 +454,7 @@ public:
                 RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)bLastZTestEnable);
             }
 
-            const RwRaster* pRaster = RwTextureGetRaster(corona.pTex);
+            const RwRaster* pRaster = RwTextureGetRaster(pTex);
             if (pLastRaster != pRaster)
             {
                 pLastRaster = const_cast<RwRaster*>(pRaster);

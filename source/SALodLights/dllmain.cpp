@@ -196,6 +196,7 @@ void ApplyMemoryPatches()
     static auto CMovingThingsShutdownHook = safetyhook::create_mid(pattern.count(2).get(1).get<void*>(), [](SafetyHookContext& regs)
     {
         CMovingThings::ShutdownDistantCarImpostors();
+        CLODLights::Shutdown();
     });
 
     pattern = hook::pattern("DB 05 ? ? ? ? D8 15 ? ? ? ? DF E0 F6 C4 05 7A");
