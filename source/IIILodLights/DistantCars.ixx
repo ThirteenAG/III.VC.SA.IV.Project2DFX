@@ -400,6 +400,11 @@ static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& imposto
     CVector pos = fromPos + segment * impostor.m_fProgress + right * impostor.m_fLaneOffset;
     pos.z += 0.55f;
 
+    // Interior path nodes live high in the sky; reject impostors above the world so they
+    // don't get rendered in the air.
+    if (pos.z > 500.0f)
+        return false;
+
     impostor.m_vecPos = pos;
     impostor.m_vecDir = travelDir;
     return true;
@@ -531,8 +536,12 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         CPathNode& node = ThePaths->m_pathNodes[fromNode];
         if (node.numLinks == 0)
             continue;
+        if (node.GetPosition().z > 500.0f)
+            continue;
 
         int16 toNode = ThePaths->ConnectedNode(node.firstLink + CGeneral::GetRandomNumber() % node.numLinks);
+        if (ThePaths->m_pathNodes[toNode].GetPosition().z > 500.0f)
+            continue;
         CCarPathLink laneLink;
         if (!FindLaneLinkForSegment(fromNode, toNode, laneLink))
             continue;

@@ -469,6 +469,11 @@ static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& imposto
     CVector pos = fromPos + segment * impostor.m_fProgress + right * impostor.m_fLaneOffset;
     pos.z += 0.55f;
 
+    // Interior path nodes live high in the sky; reject impostors above the world so they
+    // don't get rendered in the air.
+    if (pos.z > 500.0f)
+        return false;
+
     impostor.m_vecPos = pos;
     impostor.m_vecDir = dir;
     return true;
@@ -608,6 +613,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         int16 fromNode = (int16)(CGeneral::GetRandomNumber() % numNodes);
         CPathNode& node = ThePaths->m_pPathNodes[fromArea][fromNode];
         if (node.m_nNumLinks == 0) continue;
+        if (node.GetPosition().z > 500.0f) continue;
 
         CNodeAddress connAddr = ThePaths->GetConnectedAddress(fromArea,
             node.m_wBaseLinkId + CGeneral::GetRandomNumber() % node.m_nNumLinks);
@@ -615,6 +621,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         int16 toNode = (int16)connAddr.m_nNodeId;
 
         if (!ThePaths->IsAreaLoaded(toArea)) continue;
+        if (ThePaths->m_pPathNodes[toArea][toNode].GetPosition().z > 500.0f) continue;
 
         bool bFromWater = (bool)node.m_bWaterNode;
         bool bToWater = (bool)ThePaths->m_pPathNodes[toArea][toNode].m_bWaterNode;
