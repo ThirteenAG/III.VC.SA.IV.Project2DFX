@@ -498,7 +498,7 @@ void GetMemoryAddresses()
     RwIm3DTransform = (decltype(RwIm3DTransform))0x7EF450;
     RwIm3DRenderIndexedPrimitive = (decltype(RwIm3DRenderIndexedPrimitive))0x7EF550;
     RwIm3DEnd = (decltype(RwIm3DEnd))0x7EF520;
-
+     
     CGame::currArea.SetAddress((int*)0xB72914);
 
     CWorld::FindGroundZFor3DCoordCRGO = (decltype(CWorld::FindGroundZFor3DCoordCRGO))0x5696C0;

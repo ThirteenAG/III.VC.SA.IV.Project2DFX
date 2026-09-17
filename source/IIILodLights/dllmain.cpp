@@ -386,6 +386,17 @@ void DrawDistanceFMUL(SafetyHookContext& ctx)
     _asm {fmul dword ptr[f]}
 }
 
+#define BUFFERED_SPRITES_LIMIT 2048
+
+__declspec (naked) void CmpSpriteBufferIndexHook()
+{
+    __asm
+    {
+		cmp ds : [0x649A80] , BUFFERED_SPRITES_LIMIT
+        ret
+    }
+}
+
 void ApplyMemoryPatches()
 {
     auto pattern = hook::pattern("E8 ? ? ? ? 59 53 E8 ? ? ? ? 59 81 C4 ? ? ? ? 5D");
@@ -553,6 +564,31 @@ void ApplyMemoryPatches()
         pattern = hook::pattern("E8 ? ? ? ? 83 BC 24 ? ? ? ? ? 59 59 74 ? E8");
         shAddTrace = safetyhook::create_inline(injector::GetBranchDestination(pattern.get_first()).as_int(), AddTrace);
     }
+
+    static std::byte SpriteBufferVerts[0x1C * BUFFERED_SPRITES_LIMIT * 6];
+
+	//injector::WriteMemory(0x51C548 + 1, SpriteBufferVerts, true);
+	//injector::WriteMemory(0x51C56F + 1, SpriteBufferVerts, true);
+	//injector::WriteMemory(0x51C782 + 2, SpriteBufferVerts, true);
+	//injector::WriteMemory(0x51CF42 + 2, SpriteBufferVerts, true);
+	//injector::WriteMemory(0x51D810 + 2, SpriteBufferVerts, true);
+	//injector::WriteMemory(0x51DC60 + 2, SpriteBufferVerts, true);
+	//injector::WriteMemory(0x51E464 + 1, SpriteBufferVerts, true);
+	//injector::WriteMemory(0x51E5C7 + 1, SpriteBufferVerts, true);
+    //
+    //injector::MakeNOP(0x51C933, 7);
+    //injector::MakeNOP(0x51D0E4, 7);
+    //injector::MakeNOP(0x51D9B2, 7);
+    //injector::MakeNOP(0x51E392, 7);
+    //injector::MakeNOP(0x51E478, 7);
+    //injector::MakeNOP(0x51E5DB, 7);
+    //
+    //injector::MakeCALL(0x51C933, CmpSpriteBufferIndexHook);
+    //injector::MakeCALL(0x51D0E4, CmpSpriteBufferIndexHook);
+    //injector::MakeCALL(0x51D9B2, CmpSpriteBufferIndexHook);
+    //injector::MakeCALL(0x51E392, CmpSpriteBufferIndexHook);
+    //injector::MakeCALL(0x51E478, CmpSpriteBufferIndexHook);
+    //injector::MakeCALL(0x51E5DB, CmpSpriteBufferIndexHook);
 }
 
 void GetMemoryAddresses()
@@ -570,6 +606,13 @@ void GetMemoryAddresses()
     CSprite::FlushSpriteBuffer = (decltype(CSprite::FlushSpriteBuffer))0x51C520;
     CSprite::RenderOneXLUSprite_Rotate_Aspect = (decltype(CSprite::RenderOneXLUSprite_Rotate_Aspect))0x51D110;
     CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect = (decltype(CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect))0x51CCD0;
+
+
+    CDraw::ms_fNearClipZ.SetAddress((float*)0x8E2DC4);
+    CDraw::ms_fFarClipZ.SetAddress((float*)0x9434F0);
+
+    CSprite::m_f2DNearScreenZ.SetAddress((float*)0x8F1ABC);
+    CSprite::m_f2DFarScreenZ.SetAddress((float*)0x8F2C94);
 
     Scene.SetAddress((CScene*)0x726768);
     RwEngineInstance.SetAddress((RwGlobals**)0x661228);
@@ -600,6 +643,7 @@ void GetMemoryAddresses()
 
     RwRenderStateSet = (decltype(RwRenderStateSet))0x5A43C0;
     RwRenderStateGet = (decltype(RwRenderStateGet))0x5A4410;
+    RwIm2DRenderIndexedPrimitive = (decltype(RwIm2DRenderIndexedPrimitive))0x5A4440;
 
     pHelis = (CHeli**)0x72CF50;
     pNumRandomHelis = (int16_t*)0x95CCAA;
