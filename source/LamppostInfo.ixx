@@ -144,6 +144,9 @@ export void LoadDatFile()
     auto DataFilePath = iniReader.GetIniPath();
     DataFilePath.replace_extension(".dat");
 
+    m_Lampposts.clear();
+    FileContent.clear();
+
     if (FILE* hFile = CFileMgr::OpenFile(DataFilePath.string().c_str(), "r"))
     {
         unsigned short nModel = 0xFFFF, nCurIndexForModel = 0;
