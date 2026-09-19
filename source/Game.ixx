@@ -29,4 +29,5 @@ export namespace CWorld
 
 export RxObjSpace3dVertex* (__cdecl* RwIm3DTransform)(RxObjSpace3dVertex* pVerts, unsigned int numVerts, RwMatrix* ltm, unsigned int flags) = nullptr;
 export int(__cdecl* RwIm3DRenderIndexedPrimitive)(int primType, short* indices, int numIndices) = nullptr;
+export int(__cdecl* RwIm2DRenderPrimitive)(int primType, void* vertices, int numVertices) = nullptr;
 export int(__cdecl* RwIm3DEnd)() = nullptr;

@@ -644,6 +644,7 @@ void GetMemoryAddresses()
     RwRenderStateSet = (decltype(RwRenderStateSet))0x5A43C0;
     RwRenderStateGet = (decltype(RwRenderStateGet))0x5A4410;
     RwIm2DRenderIndexedPrimitive = (decltype(RwIm2DRenderIndexedPrimitive))0x5A4440;
+    RwIm2DRenderPrimitive = (decltype(RwIm2DRenderPrimitive))0x5A4430;
 
     pHelis = (CHeli**)0x72CF50;
     pNumRandomHelis = (int16_t*)0x95CCAA;

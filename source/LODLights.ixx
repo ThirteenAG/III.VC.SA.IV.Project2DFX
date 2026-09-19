@@ -128,13 +128,17 @@ private:
 
 	struct RenderBatch
 	{
-		static inline std::vector<RwIm2DVertex> ms_aVertices = {};
-
 		RwRaster* m_pRaster;
-		std::vector<uint16_t> m_aIndices;
+		std::vector<RwIm2DVertex> m_aVertices;
 
-		RenderBatch(RwRaster* raster) : m_pRaster(raster) { m_aIndices.reserve(6 * 1024); }
+		RenderBatch(RwRaster* raster) : m_pRaster(raster) { m_aVertices.reserve(6 * 1024); }
 		RenderBatch() : m_pRaster(nullptr) {}
+
+		void Clear()
+		{
+			m_aVertices.clear();
+			m_pRaster = nullptr;
+		}
 
 		void AddOneXLUSpriteToBuffer_Rotate_Aspect(float x, float y, float z, float w, float h, uint8_t r, uint8_t g, uint8_t b, int16_t intens, float recipz, float rotation, uint8_t a)
 		{
@@ -179,42 +183,36 @@ private:
 			uint8_t cg = g * intens >> 8;
 			uint8_t cb = b * intens >> 8;
 
-			size_t base = ms_aVertices.size();
-			ms_aVertices.resize(base + 4);
+			static constexpr int order[6] = { 0, 1, 2, 1, 3, 2 };
 
-			uint16_t order[6] = { base, base + 1, base + 2, base + 1, base + 3, base + 2 };
+			const size_t base = m_aVertices.size();
+			m_aVertices.resize(base + 6);
 
-			for (i = 0; i < 4; i++)
+			for (i = 0; i < 6; i++)
 			{
-				auto& vert = ms_aVertices[base + i];
-				vert.x = xs[i];
-				vert.y = ys[i];
+				auto& vert = m_aVertices[base + i];
+				vert.x = xs[order[i]];
+				vert.y = ys[order[i]];
 				vert.z = screenz;
 				vert.rhw = recipz;
 				vert.r = cr;
 				vert.g = cg;
 				vert.b = cb;
 				vert.a = a;
-				vert.u = us[i];
-				vert.v = vs[i];
+				vert.u = us[order[i]];
+				vert.v = vs[order[i]];
 			}
-
-			m_aIndices.insert(m_aIndices.end(), std::begin(order), std::end(order));
 		}
 
 		void Render()
 		{
-			if (m_aIndices.empty() || m_pRaster == nullptr)
+			if (m_aVertices.empty() || m_pRaster == nullptr)
 				return;
 
 			RwRenderStateSet(rwRENDERSTATETEXTURERASTER, m_pRaster);
-			RwIm2DRenderIndexedPrimitive(
-				rwPRIMTYPETRILIST,
-				ms_aVertices.data(), ms_aVertices.size(),
-				m_aIndices.data(), m_aIndices.size()
-			);
+			RwIm2DRenderPrimitive(rwPRIMTYPETRILIST, m_aVertices.data(), m_aVertices.size());
 
-			m_aIndices.clear();
+			m_aVertices.clear();
 		}
 	};
 
@@ -426,8 +424,6 @@ public:
 				aLinkedList[i].SetEntry(&aCoronas[i]);
 			}
 		}
-
-		RenderBatch::ms_aVertices.reserve(4 * 1024);
 	}
 
 	static void Shutdown()
@@ -482,36 +478,49 @@ public:
 		void* oldSrcBlend = nullptr;
 		void* oldDstBlend = nullptr;
 		void* oldZTest = nullptr;
-		void* oldAlphaTestFunc = nullptr;
 		void* oldCullMode = nullptr;
-		void* oldStencil = nullptr;
-		//void* oldRaster = nullptr;
+		void* oldAlphaTestFunc = nullptr;
+		void* oldAlphaTestRef = nullptr;
+		//void* oldTextureRaster = nullptr;
+
+		//RwRenderStateGet(rwRENDERSTATETEXTURERASTER, &oldTextureRaster);
 
 		RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &oldZWrite);
 		RwRenderStateGet(rwRENDERSTATEVERTEXALPHAENABLE, &oldVertexAlpha);
 		RwRenderStateGet(rwRENDERSTATESRCBLEND, &oldSrcBlend);
 		RwRenderStateGet(rwRENDERSTATEDESTBLEND, &oldDstBlend);
 		RwRenderStateGet(rwRENDERSTATEZTESTENABLE, &oldZTest);
-		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &oldAlphaTestFunc);
 		RwRenderStateGet(rwRENDERSTATECULLMODE, &oldCullMode);
-		RwRenderStateGet(rwRENDERSTATESTENCILENABLE, &oldStencil);
-		//RwRenderStateGet(rwRENDERSTATETEXTURERASTER, &oldRaster);
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &oldAlphaTestFunc);
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &oldAlphaTestRef);
 
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, FALSE);
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
 		RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)7);
-		RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)1);
-		RwRenderStateSet(rwRENDERSTATESTENCILENABLE, (void*)0);
+		RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)1); // rwCULLMODECULLNONE
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)7); // rwALPHATESTFUNCTIONGREATEREQUAL
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)0);
 
-		RenderBatch::ms_aVertices.clear();
+		for (auto& batch : m_RenderBatches)
+			batch.Clear();
 
-		for (auto& batch : m_RenderBatches) {
-			batch.m_aIndices.clear();
-			batch.m_pRaster = nullptr;
-		}
+		auto SelectBatch = [](RwRaster* pRaster) -> RenderBatch*
+		{
+			for (auto& batch : m_RenderBatches)
+				if (batch.m_pRaster == pRaster)
+					return &batch;
+
+			for (auto& batch : m_RenderBatches)
+				if (batch.m_pRaster == nullptr)
+				{
+					batch.m_pRaster = pRaster;
+					return &batch;
+				}
+
+			return &m_RenderBatches.emplace_back(pRaster);
+		};
 
 		for (auto pNode = UsedList.First(); pNode && pNode != &UsedList; pNode = pNode->GetNextNode())
 		{
@@ -519,8 +528,6 @@ public:
 			if (!corona.Identifier || corona.Intensity == 0)
 				continue;
 
-			// Predicate installed per model when the corona was formed. Most
-			// coronas have none, so this is a single null check for them.
 			if (corona.pPredicate && !corona.pPredicate())
 				continue;
 
@@ -553,44 +560,15 @@ public:
 			const float fadeFactor = vecTransformedCoords.z > halfRange ? 1.0f - (vecTransformedCoords.z - halfRange) / halfRange : 1.0f;
 			const short fadeIntensity = static_cast<short>(corona.Intensity * fadeFactor);
 
-			// Resolve the sprite texture every frame. The game destroys and
-			// recreates gpCoronaTexture[] on restart (CCoronas::Shutdown/Init),
-			// so a cached RwTexture* would dangle across a new game.
 			RwTexture* pTex = corona.nTexType < 9 ? gpCoronaTexture[corona.nTexType] : nullptr;
 			if (!pTex)
 				continue;
-
-/*			const bool zTestEnable = !corona.LOSCheck;
-			if (bLastZTestEnable != zTestEnable)
-			{
-				bLastZTestEnable = zTestEnable;
-				//CSprite::FlushSpriteBuffer();
-				RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)bLastZTestEnable);
-			}*/
 
 			RwRaster* pRaster = RwTextureGetRaster(pTex);
 			if (pLastRaster != pRaster)
 			{
 				pLastRaster = pRaster;
-
-				for (size_t bIdx = 0; bIdx < m_RenderBatches.size(); ++bIdx) {
-					if (m_RenderBatches[bIdx].m_pRaster == pRaster) {
-						pCurRenderBatch = &m_RenderBatches[bIdx];
-						break;
-					}
-				}
-
-				if (!pCurRenderBatch) {
-					for (size_t bIdx = 0; bIdx < m_RenderBatches.size(); ++bIdx) {
-						if (m_RenderBatches[bIdx].m_pRaster == nullptr) {
-							pCurRenderBatch = &m_RenderBatches[bIdx];
-							pCurRenderBatch->m_pRaster = pRaster;
-							break;
-						}
-					}
-					if (!pCurRenderBatch)
-						pCurRenderBatch = &m_RenderBatches.emplace_back(std::move(RenderBatch(pRaster)));
-				}
+				pCurRenderBatch = SelectBatch(pRaster);
 			}
 
 			const float fColourFogMult = std::min(40.0f, vecTransformedCoords.z) * fogyness * 0.025f + 1.0f;
@@ -652,16 +630,17 @@ public:
 			batch.Render();
 		}
 
-		//RwRenderStateSet(rwRENDERSTATETEXTURERASTER, oldRaster);
+		//RwRenderStateSet(rwRENDERSTATETEXTURERASTER, oldTextureRaster);
 		RwRenderStateSet(rwRENDERSTATEZTESTENABLE, oldZTest);
 		RwRenderStateSet(rwRENDERSTATEDESTBLEND, oldDstBlend);
 		RwRenderStateSet(rwRENDERSTATESRCBLEND, oldSrcBlend);
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, oldVertexAlpha);
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, oldZWrite);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, oldAlphaTestFunc);
 		RwRenderStateSet(rwRENDERSTATECULLMODE, oldCullMode);
-		RwRenderStateSet(rwRENDERSTATESTENCILENABLE, oldStencil);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, oldAlphaTestFunc);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, oldAlphaTestRef);
 	}
+
 
 	static void RegisterLODLights()
 	{
