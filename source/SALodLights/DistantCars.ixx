@@ -364,6 +364,13 @@ static const std::vector<int32>* GetLaneBucket(uint8 prevArea, int16 prevNode, u
     return &it->second;
 }
 
+static bool IsVehiclePathNodeAccessible(uint8 area, int16 node)
+{
+    return ThePaths->IsAreaLoaded(area) &&
+        node >= 0 &&
+        static_cast<uint32>(node) < ThePaths->m_dwNumVehicleNodes[area];
+}
+
 static bool IsPathSegmentExcludedForImpostor(uint8 fromArea, int16 fromNode, uint8 toArea, int16 toNode)
 {
     if (!ThePaths->IsAreaLoaded(fromArea) || !ThePaths->IsAreaLoaded(toArea))
@@ -842,12 +849,8 @@ void CMovingThings::UpdateDistantCarImpostors()
         }
 
         // Validate current nodes are still accessible
-        bool prevOk = ThePaths->IsAreaLoaded(impostor.m_nPrevArea) &&
-            impostor.m_nPrevNode >= 0 &&
-            impostor.m_nPrevNode < (int16)ThePaths->m_dwNumVehicleNodes[impostor.m_nPrevArea];
-        bool nextOk = ThePaths->IsAreaLoaded(impostor.m_nNextArea) &&
-            impostor.m_nNextNode >= 0 &&
-            impostor.m_nNextNode < (int16)ThePaths->m_dwNumVehicleNodes[impostor.m_nNextArea];
+        bool prevOk = IsVehiclePathNodeAccessible(impostor.m_nPrevArea, impostor.m_nPrevNode);
+        bool nextOk = IsVehiclePathNodeAccessible(impostor.m_nNextArea, impostor.m_nNextNode);
 
         if (!prevOk || !nextOk)
         {
@@ -1036,9 +1039,21 @@ void CMovingThings::UpdateDistantCarImpostors()
             }
             else
             {
-                CVector fp = ThePaths->m_pPathNodes[curr.m_nPrevArea][curr.m_nPrevNode].GetPosition();
-                CVector tp = ThePaths->m_pPathNodes[curr.m_nNextArea][curr.m_nNextNode].GetPosition();
-                segLen = (tp - fp).Magnitude2D();
+                // Validate current nodes are still accessible
+                bool prevOk = IsVehiclePathNodeAccessible(curr.m_nPrevArea, curr.m_nPrevNode);
+                bool nextOk = IsVehiclePathNodeAccessible(curr.m_nNextArea, curr.m_nNextNode);
+
+                if (!prevOk || !nextOk)
+                {
+                    segLen = 0.0f;
+                }
+                else
+                {
+                    CVector fp = ThePaths->m_pPathNodes[curr.m_nPrevArea][curr.m_nPrevNode].GetPosition();
+                    CVector tp = ThePaths->m_pPathNodes[curr.m_nNextArea][curr.m_nNextNode].GetPosition();
+                    segLen = (tp - fp).Magnitude2D();
+                }
+
                 s_segmentLenCache.emplace(segKey, segLen);
             }
 
