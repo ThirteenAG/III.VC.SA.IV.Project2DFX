@@ -198,13 +198,13 @@ export void RenderAllSearchLights()
         if (CClock::GetIsTimeInRange(20, 7) && CGame::currArea == 0)
         {
             Pre_SearchLightCone();
+            const CVector camPos = TheCamera->GetCoords();
 
             for (const auto& lamp : m_Lampposts)
             {
                 if (!lamp.nDrawSearchlight)
                     continue;
 
-                const CVector camPos = TheCamera->GetCoords();
                 const float fDistSqr = (camPos - lamp.vecPos).MagnitudeSqr();
 
                 // Rendering range with smooth fade zones

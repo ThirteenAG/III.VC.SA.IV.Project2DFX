@@ -118,7 +118,37 @@ public:
 export class CLODLights
 {
 private:
-    static inline std::unordered_map<unsigned int, CLODLightsLinkedListNode*> UsedMap;
+    using CoronaMap = std::unordered_map<unsigned int, CLODLightsLinkedListNode*>;
+    static inline CoronaMap UsedMap;
+    static inline std::vector<CoronaMap::node_type> FreeMapNodes;
+
+    static void RecycleMapEntry(CoronaMap::iterator it)
+    {
+        if (it != UsedMap.end())
+            FreeMapNodes.push_back(UsedMap.extract(it));
+    }
+    static void RecycleMapEntry(unsigned int id) { RecycleMapEntry(UsedMap.find(id)); }
+    static void InsertMapEntry(unsigned int id, CLODLightsLinkedListNode* entry)
+    {
+        auto node = std::move(FreeMapNodes.back());
+        FreeMapNodes.pop_back();
+        node.key() = id;
+        node.mapped() = entry;
+        UsedMap.insert(std::move(node));
+    }
+    static void InitMap(size_t capacity)
+    {
+        UsedMap.clear();
+        FreeMapNodes.clear();
+        UsedMap.reserve(capacity);
+        FreeMapNodes.reserve(capacity);
+        // Retain actual map nodes: some standard memory pools return empty
+        // chunks to the heap, which would reintroduce per-frame allocations.
+        for (size_t i = 0; i < capacity; ++i)
+            UsedMap.emplace(static_cast<unsigned int>(i), nullptr);
+        while (!UsedMap.empty())
+            RecycleMapEntry(UsedMap.begin());
+    }
     static inline CLODLightsLinkedListNode FreeList, UsedList;
     static inline std::vector<CLODLightsLinkedListNode> aLinkedList;
     static inline std::vector<CRegisteredCorona> aCoronas;
@@ -132,7 +162,7 @@ private:
         std::vector<RwIm2DVertex> m_aVertices;
 
         RenderBatch(RwRaster* raster) : m_pRaster(raster) { m_aVertices.reserve(6 * 1024); }
-        RenderBatch() : m_pRaster(nullptr) {}
+        RenderBatch() : RenderBatch(nullptr) {}
 
         void Clear()
         {
@@ -142,8 +172,8 @@ private:
 
         void AddOneXLUSpriteToBuffer_Rotate_Aspect(float x, float y, float z, float w, float h, uint8_t r, uint8_t g, uint8_t b, int16_t intens, float recipz, float rotation, uint8_t a)
         {
-            float c = cos(rotation);
-            float s = sin(rotation);
+            float c = rotation == 0.0f ? 1.0f : cos(rotation);
+            float s = rotation == 0.0f ? 0.0f : sin(rotation);
 
             float xs[4], ys[4], us[4], vs[4];
             int i;
@@ -185,6 +215,10 @@ private:
 
             static constexpr int order[6] = { 0, 1, 2, 1, 3, 2 };
 
+            // Bound each draw and retain its storage even at the corona limit.
+            // All batches use additive blending with depth writes disabled.
+            if (m_aVertices.size() == 6 * 1024)
+                Render();
             const size_t base = m_aVertices.size();
             m_aVertices.resize(base + 6);
 
@@ -266,7 +300,7 @@ public:
             {
                 pSuitableSlot->Identifier = 0;
                 it->second->Add(&FreeList);
-                UsedMap.erase(it);
+                RecycleMapEntry(it);
                 return;
             }
         }
@@ -319,7 +353,7 @@ public:
                 {
                     const unsigned int evictId = pFarthestNode->GetFrom()->Identifier;
                     pFarthestNode->GetFrom()->Identifier = 0;
-                    UsedMap.erase(evictId);
+                    RecycleMapEntry(evictId);
                     pFarthestNode->Add(&FreeList);
                     pFarthestNode = nullptr;  // Invalidate cache after eviction
                     fFarthestDistSq = 0.0f;
@@ -332,7 +366,7 @@ public:
 
             pSuitableSlot = pNewEntry->GetFrom();
             pNewEntry->Add(&UsedList);
-            UsedMap.emplace(nID, pNewEntry);
+            InsertMapEntry(nID, pNewEntry);
 
             pSuitableSlot->FadedIntensity = A;
             pSuitableSlot->OffScreen = true;
@@ -366,6 +400,24 @@ public:
         pSuitableSlot->pPredicate = pPredicate;
     }
 
+    // Explicit removal must work regardless of camera position/range. Registering
+    // a zero-radius corona at the origin is rejected by the distance check.
+    static void UnregisterCorona(unsigned int nID)
+    {
+        auto it = UsedMap.find(nID);
+        if (it == UsedMap.end()) return;
+        auto node = it->second;
+        if (pFarthestNode == node)
+        {
+            pFarthestNode = nullptr;
+            fFarthestDistSq = 0.0f;
+        }
+        node->GetFrom()->Identifier = 0;
+        node->GetFrom()->Intensity = 0;
+        node->Add(&FreeList);
+        RecycleMapEntry(it);
+    }
+
     static void TouchCorona(unsigned int nID)
     {
         auto it = UsedMap.find(nID);
@@ -395,7 +447,7 @@ public:
                 {
                     // Remove from used list
                     pNode->Add(&FreeList);
-                    UsedMap.erase(nIndex);
+                    RecycleMapEntry(nIndex);
                 }
 
                 pNode = pNext;
@@ -409,8 +461,13 @@ public:
         {
             aLinkedList.resize(numCoronas);
             aCoronas.resize(numCoronas);
-            UsedMap.clear();
-            UsedMap.reserve(numCoronas);
+            InitMap(numCoronas);
+            if (m_RenderBatches.empty())
+            {
+                m_RenderBatches.reserve(9);
+                for (int i = 0; i < 9; ++i)
+                    m_RenderBatches.emplace_back();
+            }
 
             // Initialise the lists
             FreeList.Init();
@@ -431,7 +488,8 @@ public:
         // Drop every registered corona. The game runs CCoronas::Shutdown
         // (which destroys gpCoronaTexture[]) shortly after this when a game
         // is restarted, so nothing stale may be left behind to render.
-        UsedMap.clear();
+        while (!UsedMap.empty())
+            RecycleMapEntry(UsedMap.begin());
         FreeList.Init();
         UsedList.Init();
         pFarthestNode = nullptr;
@@ -453,7 +511,7 @@ public:
         }
     }
 
-    static void RenderBuffered()
+    static void RenderBuffered(bool bOnlyModelLamps = false)
     {
         const int nWidth = Scene->m_pRwCamera->frameBuffer->width;
         const int nHeight = Scene->m_pRwCamera->frameBuffer->height;
@@ -481,9 +539,12 @@ public:
         void* oldCullMode = nullptr;
         void* oldAlphaTestFunc = nullptr;
         void* oldAlphaTestRef = nullptr;
-        //void* oldTextureRaster = nullptr;
+        void* oldTextureRaster = nullptr;
+        void* oldFogEnable = nullptr;
 
-        //RwRenderStateGet(rwRENDERSTATETEXTURERASTER, &oldTextureRaster);
+        RwRenderStateGet(rwRENDERSTATETEXTURERASTER, &oldTextureRaster);
+        RwRenderStateGet(rwRENDERSTATEFOGENABLE, &oldFogEnable);
+        if (bOnlyModelLamps) RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
 
         RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &oldZWrite);
         RwRenderStateGet(rwRENDERSTATEVERTEXALPHAENABLE, &oldVertexAlpha);
@@ -528,6 +589,11 @@ public:
             if (!corona.Identifier || corona.Intensity == 0)
                 continue;
 
+            // Model lamps draw beside their meshes, before subsequent clouds/fog.
+            const bool modelLamp = (corona.Identifier & 0xFFFF0000u) == 0x7C000000u;
+            if (modelLamp != bOnlyModelLamps)
+                continue;
+
             if (corona.pPredicate && !corona.pPredicate())
                 continue;
 
@@ -557,7 +623,9 @@ public:
 
             const float invFarClip = 1.0f / vecTransformedCoords.z;
             const float halfRange = corona.Range * 0.5f;
-            const float fadeFactor = vecTransformedCoords.z > halfRange ? 1.0f - (vecTransformedCoords.z - halfRange) / halfRange : 1.0f;
+            // 0x7C00xxxx is reserved for lamps attached to distant vehicle meshes.
+            // Their opacity already includes the model's distance/envelope/fog fade.
+            const float fadeFactor = !modelLamp && vecTransformedCoords.z > halfRange ? 1.0f - (vecTransformedCoords.z - halfRange) / halfRange : 1.0f;
             const short fadeIntensity = static_cast<short>(corona.Intensity * fadeFactor);
 
             RwTexture* pTex = corona.nTexType < 9 ? gpCoronaTexture[corona.nTexType] : nullptr;
@@ -631,7 +699,8 @@ public:
             batch.Render();
         }
 
-        //RwRenderStateSet(rwRENDERSTATETEXTURERASTER, oldTextureRaster);
+        RwRenderStateSet(rwRENDERSTATETEXTURERASTER, oldTextureRaster);
+        RwRenderStateSet(rwRENDERSTATEFOGENABLE, oldFogEnable);
         RwRenderStateSet(rwRENDERSTATEZTESTENABLE, oldZTest);
         RwRenderStateSet(rwRENDERSTATEDESTBLEND, oldDstBlend);
         RwRenderStateSet(rwRENDERSTATESRCBLEND, oldSrcBlend);

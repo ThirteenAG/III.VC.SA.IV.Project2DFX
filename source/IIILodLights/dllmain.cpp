@@ -22,6 +22,7 @@ import ModelInfo;
 import Heli;
 import PointLights;
 import DistantCars;
+import DistantCarRenderer;
 
 using RwV3D = RwV3d;
 
@@ -421,11 +422,20 @@ void ApplyMemoryPatches()
         CMovingThings::UpdateDistantCarImpostors();
     });
 
+    pattern = hook::pattern("E8 ? ? ? ? 59 59 E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? C3");
+    static auto distantCarsSceneHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext&)
+    {
+        if (bRenderLodLights)
+            CMovingThings::RenderDistantCarImpostors();
+    });
+
     pattern = hook::pattern("BE B0 F6 62 00");
     static auto CMovingThingsRenderHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
         if (bRenderLodLights)
+        {
             CLODLights::RenderBuffered();
+        }
 
         if (bRenderSearchlightEffects)
         {
@@ -454,9 +464,6 @@ void ApplyMemoryPatches()
                 }
             }
         }
-
-        if (bRenderLodLights)
-            CMovingThings::RenderDistantCarImpostors();
     });
 
     pattern = hook::pattern("C6 05 ? ? ? ? ? C6 05 ? ? ? ? ? C6 04 C5");
@@ -592,6 +599,8 @@ void GetMemoryAddresses()
     Scene.SetAddress((CScene*)0x726768);
     RwEngineInstance.SetAddress((RwGlobals**)0x661228);
 
+    DistantCarRenderer::bLegacyIm3D = true;
+    DistantCarRenderer::fNightAmbient = .38f;
     RwIm3DTransform = (decltype(RwIm3DTransform))0x5B6720;
     RwIm3DRenderIndexedPrimitive = (decltype(RwIm3DRenderIndexedPrimitive))0x5B6820;
     RwIm3DEnd = (decltype(RwIm3DEnd))0x5B67F0;

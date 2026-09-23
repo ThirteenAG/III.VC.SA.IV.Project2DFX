@@ -2,6 +2,8 @@ module;
 
 #include <FileWatch.hpp>
 #include <filesystem>
+#include <algorithm>
+#include <cmath>
 #include "IniReader.h"
 
 export module ComVars;
@@ -134,9 +136,13 @@ export
     float fCoronaAlphaBoostStartAt = 700.0f;
     float fCoronaAlphaFarBoostMax = 4.0f;
 
-    int nNumDistantCarImpostors = 2000;
+    int nNumDistantCarImpostors = 1000;
     float fDistantCarsRadiusMultiplier = 1.0f;
     bool bDistantMaritimeTraffic = true;
+    bool bDistantCars3D = false;
+    bool bDistantBoats3D = true;
+    bool bDistantCars3DLights = true;
+    float fDistantCarsGroundOffset = 0.0f;
 
     void ReadIniSettings()
     {
@@ -155,9 +161,15 @@ export
         fCoronaAlphaReachOneAt = iniReader.ReadFloat("LodLights", "CoronaAlphaReachOneAt", 350.0f);
         fCoronaAlphaBoostStartAt = iniReader.ReadFloat("LodLights", "CoronaAlphaBoostStartAt", 700.0f);
         fCoronaAlphaFarBoostMax = iniReader.ReadFloat("LodLights", "CoronaAlphaFarBoostMax", 4.0f);
-        nNumDistantCarImpostors = iniReader.ReadInteger("LodLights", "MaxNumberOfDistantCars", 2000);
+        nNumDistantCarImpostors = iniReader.ReadInteger("LodLights", "MaxNumberOfDistantCars", 1000);
         fDistantCarsRadiusMultiplier = iniReader.ReadFloat("LodLights", "DistantCarsRadiusMultiplier", 1.0f);
         bDistantMaritimeTraffic = iniReader.ReadInteger("LodLights", "MaritimeTraffic", 1) != 0;
+        bDistantCars3D = iniReader.ReadInteger("LodLights", "DistantCars3D", 0) != 0;
+        bDistantBoats3D = iniReader.ReadInteger("LodLights", "DistantBoats3D", 1) != 0;
+        bDistantCars3DLights = iniReader.ReadInteger("LodLights", "DistantCars3DLights", 1) != 0;
+        fDistantCarsGroundOffset = iniReader.ReadFloat("LodLights", "DistantCarsGroundOffset", 0.0f);
+        if (!std::isfinite(fDistantCarsGroundOffset)) fDistantCarsGroundOffset = 0.0f;
+        fDistantCarsGroundOffset = (std::clamp)(fDistantCarsGroundOffset, -2.0f, 2.0f);
 
         // StaticShadows section
         bRenderStaticShadowsForLODs = iniReader.ReadInteger("StaticShadows", "RenderStaticShadowsForLODs", 0) != 0;

@@ -1,6 +1,7 @@
 module;
 
 #include <stdafx.h>
+#include "../DistantTraffic.hpp"
 
 export module DistantCars;
 
@@ -11,6 +12,7 @@ import Camera;
 import Clock;
 import Timecycle;
 import LODLights;
+import DistantCarRenderer;
 
 using uint32 = uint32_t;
 using int32 = int32_t;
@@ -24,6 +26,7 @@ using int8 = int8_t;
 #define Clamp(v, low, high) ((v) < (low) ? (low) : (v) > (high) ? (high) : \
                                                                   (v))
 constexpr auto SQR = [](auto x) { return x * x; };
+
 
 enum
 {
@@ -295,798 +298,135 @@ namespace CCarCtrl
     });
 }
 
-export class CMovingThings
+struct TrafficGraph
 {
-public:
-    struct CDistantCarImpostor
+    using Node = DistantTraffic::Node;
+    using Edge = DistantTraffic::Edge;
+    static bool NodeValid(Node id)
     {
-        bool m_bActive;
-        int16_t m_nPrevNode;
-        int16_t m_nNextNode;
-        float m_fProgress;
-        float m_fSpeed;
-        float m_fDesiredSpeed;
-        float m_fLaneOffset;
-        uint8_t m_nLaneSide;
-        uint8_t m_nLaneCount;
-        uint8_t m_nLaneIndex;
-        bool    m_bWaterNode;  // cached at spawn/transition — zero-cost read in render
-        CVector m_vecPos;
-        CVector m_vecDir;
-        uint16_t m_nStuckFrames;
-        uint32_t m_nCoronaId;
-    };
-
-    static std::vector<CDistantCarImpostor> aDistantCarImpostors;
-
-    static void InitDistantCarImpostors();
-    static void ShutdownDistantCarImpostors();
-    static void UpdateDistantCarImpostors();
-    static void RenderDistantCarImpostors();
-
-private:
-    static bool InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32_t coronaId);
-    static bool PickNextNodeForImpostor(const CDistantCarImpostor& impostor, int16_t& nextNode, CCarPathLink& laneLink);
-    static bool FindLaneLinkForSegment(int16_t fromNode, int16_t toNode, CCarPathLink& laneLink);
-    static void EnsureDistantCarImpostorPoolSize();
+        auto&& paths = *ThePaths.get_ptr();
+        return id < static_cast<unsigned>(paths.m_numCarPathNodes) && !paths.m_pathNodes[id].bDisabled && paths.m_pathNodes[id].GetPosition().z < 500.0f;
+    }
+    static bool Valid(const Edge& edge) { return NodeValid(edge.from) && NodeValid(edge.to); }
+    static unsigned Degree(Node id)
+    {
+        auto&& paths = *ThePaths.get_ptr();
+        return NodeValid(id) ? paths.m_pathNodes[id].numLinks : 0;
+    }
+    static Node RandomNode(uint32_t random)
+    {
+        auto&& paths = *ThePaths.get_ptr();
+        int count = paths.m_numCarPathNodes;
+        return count > 0 ? random % count : DistantTraffic::InvalidNode;
+    }
+    static size_t Outgoing(Node from, std::array<Edge, 16>& result)
+    {
+        if (!NodeValid(from))
+            return 0;
+        auto&& paths = *ThePaths.get_ptr();
+        auto& a = paths.m_pathNodes[from];
+        size_t count = 0;
+        for (int i = 0; i < a.numLinks && count < result.size(); ++i)
+        {
+            int connection = a.firstLink + i;
+            if (connection < 0 || connection >= paths.m_numConnections)
+                continue;
+            Node to = (paths.m_connections[connection] & 0x3FFF);
+            if (!NodeValid(to) || to == from)
+                continue;
+            int linkIndex = paths.m_carPathConnections[connection];
+            if (linkIndex < 0 || linkIndex >= paths.m_numCarPathLinks)
+                continue;
+            auto& link = paths.m_carPathLinks[linkIndex];
+            // CarCtrl::GenerateOneRandomCar uses the attached endpoint, not a
+            // dot product, to choose which lane count permits this traversal.
+            int lanes = link.pathNodeIndex == to ? link.numLeftLanes : link.numRightLanes;
+            if (lanes <= 0)
+                continue;
+            auto& b = paths.m_pathNodes[to];
+            if (a.bWaterPath != b.bWaterPath || (a.bWaterPath && !bDistantMaritimeTraffic))
+                continue;
+            CVector start = a.GetPosition(), end = b.GetPosition(), segment = end - start;
+            float length = segment.Magnitude2D();
+            if (length < 1.0f)
+                continue;
+            CVector2D linkPosition = link.GetPosition(), linkDirection = link.GetDirection();
+            // re3/reVC CarCtrl's m_nNextDirection convention.
+            float sign = from >= to ? 1.0f : -1.0f;
+            CVector direction(linkDirection.x * sign, linkDirection.y * sign, segment.z / length);
+            direction.Normalise();
+            float t = (std::clamp)(((linkPosition.x - start.x) * segment.x + (linkPosition.y - start.y) * segment.y) / (length * length), 0.0f, 1.0f);
+            Edge edge;
+            edge.from = from;
+            edge.to = to;
+            edge.lanes = static_cast<unsigned>(lanes);
+            edge.position = {linkPosition.x, linkPosition.y, start.z + segment.z * t};
+            edge.direction = direction;
+            edge.laneOffset = link.OneWayLaneOffset();
+            edge.water = (a.bWaterPath || b.bWaterPath);
+            edge.speed = edge.water ? 8.0f : 16.0f;
+            result[count++] = edge;
+        }
+        return count;
+    }
+    static bool SpawnAllowed(const Edge& edge)
+    {
+        if (edge.water)
+            return bDistantMaritimeTraffic;
+        if (!CTheZones::GetZoneInfoForTimeOfDay)
+            return true;
+        CVector position = edge.position;
+        CZoneInfo info{};
+        CTheZones::GetZoneInfoForTimeOfDay(&position, &info);
+        return info.carDensity > 0;
+    }
+    static void Hide(uint32_t id)
+    {
+        DistantCarRenderer::HideLights(id);
+        CLODLights::UnregisterCorona(id);
+        CLODLights::UnregisterCorona(0x7E000000u + (id - 0x7F000000u));
+        CLODLights::UnregisterCorona(0x7D000000u + (id - 0x7F000000u));
+    }
 };
 
-std::vector<CMovingThings::CDistantCarImpostor> CMovingThings::aDistantCarImpostors;
-
-static uint32 ImpostorCoronaId(int32 i)
+using TrafficSimulation = DistantTraffic::Simulation<TrafficGraph, DistantCarRenderer::State>;
+static TrafficSimulation traffic;
+export class CMovingThings
 {
-    return 0x7F000000 + i;
-}
-
+  public:
+    using CDistantCarImpostor = DistantTraffic::Car<DistantCarRenderer::State>;
+    static std::vector<CDistantCarImpostor>& aDistantCarImpostors;
+    static void InitDistantCarImpostors()
+    {
+        traffic.Clear();
+        traffic.Reserve(static_cast<size_t>((std::clamp)(nNumDistantCarImpostors, 0, 10000)));
+    }
+    static void ShutdownDistantCarImpostors() { traffic.Clear(); }
+    static void UpdateDistantCarImpostors();
+    static void RenderDistantCarImpostors();
+};
+std::vector<CMovingThings::CDistantCarImpostor>& CMovingThings::aDistantCarImpostors = traffic.cars;
 static uint32 ImpostorPortSideCoronaId(int32 i)
 {
-    return 0x7E000000 + i;
+    return 0x7E000000u + i;
 }
-
 static uint32 ImpostorStarboardSideCoronaId(int32 i)
 {
-    return 0x7D000000 + i;
-}
-
-static void HideImpostorCorona(CMovingThings::CDistantCarImpostor& impostor)
-{
-    uint32 base = impostor.m_nCoronaId - 0x7F000000u;
-    auto hide = [](uint32 id)
-    {
-        CLODLights::RegisterCorona(id, nullptr,
-            0, 0, 0, 0,
-            CVector(0.0f, 0.0f, 0.0f),
-            0.0f,
-            0.0f,
-            1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
-    };
-
-    hide(impostor.m_nCoronaId);
-    hide(ImpostorPortSideCoronaId((int32)base));
-    hide(ImpostorStarboardSideCoronaId((int32)base));
-}
-
-static bool IsPathSegmentExcludedForImpostor(int16 fromNode, int16 toNode)
-{
-    //static const int16 excludedSegments[][2] = {
-    //    // Optional manual exclusions:
-    //    // { fromNode, toNode },
-    //    // { 123, 456 },
-    //    { -1, -1 },
-    //};
-    //
-    //for (int32 i = 0; i < (sizeof(excludedSegments) / sizeof(excludedSegments[0])); i++)
-    //{
-    //    if ((excludedSegments[i][0] == fromNode && excludedSegments[i][1] == toNode) ||
-    //        (excludedSegments[i][0] == toNode && excludedSegments[i][1] == fromNode))
-    //        return true;
-    //}
-
-    CPathNode& fromPathNode = ThePaths->m_pathNodes[fromNode];
-    CPathNode& toPathNode = ThePaths->m_pathNodes[toNode];
-
-    if (fromPathNode.bDisabled || toPathNode.bDisabled)
-        return true;
-
-    CVector fromPos = fromPathNode.GetPosition();
-    CVector toPos = toPathNode.GetPosition();
-    CVector midPos = (fromPos + toPos) * 0.5f;
-
-    CZoneInfo zoneFrom;
-    CZoneInfo zoneMid;
-    CZoneInfo zoneTo;
-    CTheZones::GetZoneInfoForTimeOfDay(&fromPos, &zoneFrom);
-    CTheZones::GetZoneInfoForTimeOfDay(&midPos, &zoneMid);
-    CTheZones::GetZoneInfoForTimeOfDay(&toPos, &zoneTo);
-
-    if (zoneFrom.carDensity <= 0 || zoneMid.carDensity <= 0 || zoneTo.carDensity <= 0)
-        return true;
-
-    return false;
-}
-
-static float ComputeDynamicImpostorDensityScale(float camTravelSpeed)
-{
-    float density = Clamp(CCarCtrl::CarDensityMultiplier, 0.25f, 1.4f);
-
-    int32 hour = CClock::ms_nGameClockHours;
-    if (hour <= 5)
-        density *= 0.65f;
-    else if (hour >= 7 && hour <= 9)
-        density *= 1.12f;
-    else if (hour >= 16 && hour <= 18)
-        density *= 1.10f;
-
-    density *= (1.0f - 0.22f * CWeather::Rain);
-    density *= (1.0f - 0.16f * CWeather::Foggyness);
-    density *= Clamp(0.9f + camTravelSpeed * 0.02f, 0.9f, 1.2f);
-
-    return Clamp(density, 0.2f, 1.25f);
-}
-
-static float ComputeLaneOffset(bool useRightSide, int32 laneCount, int32 laneIndex, CCarPathLink link)
-{
-    laneCount = Max(1, laneCount);
-    laneIndex = Clamp(laneIndex, 0, laneCount - 1);
-
-    const float laneWidth = 5.0f;
-    float sideSign = useRightSide ? -1.0f : 1.0f;
-    return sideSign * (laneIndex + link.OneWayLaneOffset()) * laneWidth;
-}
-
-static bool IsTraversalAlongLinkDir(int16 fromNode, int16 toNode, CCarPathLink& link)
-{
-    CVector fromPos = ThePaths->m_pathNodes[fromNode].GetPosition();
-    CVector toPos = ThePaths->m_pathNodes[toNode].GetPosition();
-    CVector2D segDir = CVector2D(toPos.x - fromPos.x, toPos.y - fromPos.y);
-    CVector2D linkDir = link.GetDirection();
-    return DotProduct2D(segDir, linkDir) >= 0.0f;
-}
-
-static bool CanTraverseSegmentDirection(int16 fromNode, int16 toNode, CCarPathLink& link)
-{
-    bool alongLinkDir = IsTraversalAlongLinkDir(fromNode, toNode, link);
-    return alongLinkDir ? (link.numRightLanes > 0) : (link.numLeftLanes > 0);
-}
-
-static bool UseRightLaneGroupForTraversal(int16 fromNode, int16 toNode, CCarPathLink& link)
-{
-    return IsTraversalAlongLinkDir(fromNode, toNode, link);
-}
-
-static bool ShouldKeepImpostorAliveNearCamera(const CMovingThings::CDistantCarImpostor& impostor, const CVector& camPos)
-{
-    return (impostor.m_vecPos - camPos).MagnitudeSqr2D() < SQR(380.0f);
-}
-
-static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& impostor)
-{
-    if (impostor.m_nPrevNode < 0 || impostor.m_nNextNode < 0 ||
-        impostor.m_nPrevNode >= ThePaths->m_numCarPathNodes || impostor.m_nNextNode >= ThePaths->m_numCarPathNodes)
-        return false;
-
-    CVector fromPos = ThePaths->m_pathNodes[impostor.m_nPrevNode].GetPosition();
-    CVector toPos = ThePaths->m_pathNodes[impostor.m_nNextNode].GetPosition();
-    CVector segment = toPos - fromPos;
-    float segmentLen = segment.Magnitude2D();
-    if (segmentLen < 0.001f)
-        return false;
-
-    CVector dir = segment / segmentLen;
-    CVector travelDir = dir;
-    CVector right(-dir.y, dir.x, 0.0f);
-
-    {
-        CPathNode& node = ThePaths->m_pathNodes[impostor.m_nPrevNode];
-        for (int32 li = 0; li < (int32)node.numLinks; li++)
-        {
-            int32 conn = node.firstLink + li;
-            if (ThePaths->ConnectedNode(conn) != impostor.m_nNextNode) continue;
-            CCarPathLink link = ThePaths->m_carPathLinks[ThePaths->m_carPathConnections[conn]];
-            impostor.m_fLaneOffset = ComputeLaneOffset(true, impostor.m_nLaneCount, impostor.m_nLaneIndex, link);
-            break;
-        }
-    }
-
-    CVector pos = fromPos + segment * impostor.m_fProgress + right * impostor.m_fLaneOffset;
-    pos.z += 0.55f;
-
-    // Interior path nodes live high in the sky; reject impostors above the world so they
-    // don't get rendered in the air.
-    if (pos.z > 500.0f)
-        return false;
-
-    impostor.m_vecPos = pos;
-    impostor.m_vecDir = travelDir;
-    return true;
-}
-
-void CMovingThings::EnsureDistantCarImpostorPoolSize()
-{
-    int32 desired = Clamp(nNumDistantCarImpostors, 0, 10000);
-
-    size_t oldSize = aDistantCarImpostors.size();
-    size_t newSize = static_cast<size_t>(desired);
-
-    if (newSize == oldSize)
-        return;
-
-    if (newSize < oldSize)
-    {
-        for (size_t i = newSize; i < oldSize; ++i)
-        {
-            auto& impostor = aDistantCarImpostors[i];
-            if (impostor.m_bActive)
-            {
-                impostor.m_bActive = false;
-                HideImpostorCorona(impostor);
-            }
-        }
-    }
-
-    aDistantCarImpostors.resize(newSize);
-
-    if (newSize > oldSize)
-    {
-        for (size_t i = oldSize; i < newSize; ++i)
-            InitDistantCarImpostor(aDistantCarImpostors[i], ImpostorCoronaId(static_cast<int32>(i)));
-    }
-}
-
-bool CMovingThings::FindLaneLinkForSegment(int16 fromNode, int16 toNode, CCarPathLink& laneLink)
-{
-    if (fromNode < 0 || toNode < 0 || fromNode >= ThePaths->m_numCarPathNodes || toNode >= ThePaths->m_numCarPathNodes)
-        return false;
-
-    CPathNode& node = ThePaths->m_pathNodes[fromNode];
-    for (int32 i = 0; i < node.numLinks; i++)
-    {
-        int32 connection = node.firstLink + i;
-        if (ThePaths->ConnectedNode(connection) != toNode)
-            continue;
-
-        laneLink = ThePaths->m_carPathLinks[ThePaths->m_carPathConnections[connection]];
-        return true;
-    }
-    return false;
-}
-
-bool CMovingThings::PickNextNodeForImpostor(const CDistantCarImpostor& impostor, int16& nextNode, CCarPathLink& laneLink)
-{
-    if (impostor.m_nNextNode < 0 || impostor.m_nNextNode >= ThePaths->m_numCarPathNodes)
-        return false;
-
-    CPathNode& node = ThePaths->m_pathNodes[impostor.m_nNextNode];
-    if (node.numLinks == 0)
-        return false;
-
-    int16 nodeChoices[16];
-    CCarPathLink linkChoices[16];
-    int32 numChoices = 0;
-
-    for (int32 i = 0; i < node.numLinks && numChoices < (sizeof(nodeChoices) / sizeof(nodeChoices[0])); i++)
-    {
-        int16 candidate = ThePaths->ConnectedNode(node.firstLink + i);
-        if (candidate == impostor.m_nPrevNode && node.numLinks > 1)
-            continue;
-
-        bool bCandWater = (bool)ThePaths->m_pathNodes[candidate].bWaterPath;
-        if (!bDistantMaritimeTraffic && bCandWater)
-            continue;
-        // Keep road impostors on roads and boat impostors on water.
-        if (bCandWater != impostor.m_bWaterNode)
-            continue;
-
-        CCarPathLink candidateLink;
-        if (!FindLaneLinkForSegment(impostor.m_nNextNode, candidate, candidateLink))
-            continue;
-        if (!CanTraverseSegmentDirection(impostor.m_nNextNode, candidate, candidateLink))
-            continue;
-        if (IsPathSegmentExcludedForImpostor(impostor.m_nNextNode, candidate))
-            continue;
-
-        nodeChoices[numChoices] = candidate;
-        linkChoices[numChoices] = candidateLink;
-        numChoices++;
-    }
-
-    if (numChoices == 0)
-    {
-        if (impostor.m_nPrevNode < 0)
-            return false;
-        if (!FindLaneLinkForSegment(impostor.m_nNextNode, impostor.m_nPrevNode, laneLink))
-            return false;
-        if (!CanTraverseSegmentDirection(impostor.m_nNextNode, impostor.m_nPrevNode, laneLink))
-            return false;
-        if (IsPathSegmentExcludedForImpostor(impostor.m_nNextNode, impostor.m_nPrevNode))
-            return false;
-
-        nextNode = impostor.m_nPrevNode;
-        return true;
-    }
-
-    int32 pick = CGeneral::GetRandomNumber() % numChoices;
-    nextNode = nodeChoices[pick];
-    laneLink = linkChoices[pick];
-    return true;
-}
-
-bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32 coronaId)
-{
-    impostor.m_bActive = false;
-    impostor.m_nCoronaId = coronaId;
-
-    if (ThePaths->m_numCarPathNodes <= 0)
-        return false;
-
-    // Pin each slot to a proportional window of the node array so the pool
-    // stays evenly distributed across the map regardless of farclip.
-    int32 totalNodes = ThePaths->m_numCarPathNodes;
-    int32 poolSize = Max(1, (int32)aDistantCarImpostors.size());
-    int32 slotIndex = (int32)(coronaId - 0x7F000000u);
-    int32 rangeStart = (int32)((int64_t)slotIndex * totalNodes / poolSize);
-    int32 rangeEnd = (int32)((int64_t)(slotIndex + 1) * totalNodes / poolSize);
-    if (rangeEnd <= rangeStart) rangeEnd = rangeStart + 1;
-
-    for (int32 attempts = 0; attempts < 128; attempts++)
-    {
-        int16 fromNode = (int16)(rangeStart + CGeneral::GetRandomNumber() % (rangeEnd - rangeStart));
-        CPathNode& node = ThePaths->m_pathNodes[fromNode];
-        if (node.numLinks == 0)
-            continue;
-        if (node.GetPosition().z > 500.0f)
-            continue;
-
-        int16 toNode = ThePaths->ConnectedNode(node.firstLink + CGeneral::GetRandomNumber() % node.numLinks);
-        if (ThePaths->m_pathNodes[toNode].GetPosition().z > 500.0f)
-            continue;
-
-        bool bFromWater = (bool)node.bWaterPath;
-        bool bToWater = (bool)ThePaths->m_pathNodes[toNode].bWaterPath;
-        if (bFromWater || bToWater)
-        {
-            // Maritime traffic gate: boats can be disabled entirely and are
-            // kept sparse relative to road traffic.
-            if (!bDistantMaritimeTraffic)
-                continue;
-            if ((CGeneral::GetRandomNumber() & 3) != 0)
-                continue;
-        }
-
-        CCarPathLink laneLink;
-        if (!FindLaneLinkForSegment(fromNode, toNode, laneLink))
-            continue;
-        if (!CanTraverseSegmentDirection(fromNode, toNode, laneLink))
-            continue;
-        if (IsPathSegmentExcludedForImpostor(fromNode, toNode))
-            continue;
-
-        int8 leftLanes = Max((int8)1, laneLink.numLeftLanes);
-        int8 rightLanes = Max((int8)1, laneLink.numRightLanes);
-        bool useRightLaneGroup = UseRightLaneGroupForTraversal(fromNode, toNode, laneLink);
-
-        int8 laneCount = useRightLaneGroup ? rightLanes : leftLanes;
-        int8 lane = CGeneral::GetRandomNumber() % laneCount;
-        uint8 laneSide = useRightLaneGroup ? 1 : 0;
-
-        // Compute a safe spawn progress that doesn't overlap any existing impostor on this lane.
-        // Collect progress values already occupied on this segment+lane, then find the largest gap.
-        static std::vector<float> occupied;
-        static std::vector<float> gapStart;
-        static std::vector<float> gapEnd;
-
-        occupied.clear();
-        occupied.reserve(aDistantCarImpostors.size());
-
-        CVector fromNodePos = node.GetPosition();
-        CVector toNodePos = ThePaths->m_pathNodes[toNode].GetPosition();
-        float segLen = (toNodePos - fromNodePos).Magnitude2D();
-        float minGap = (segLen > 0.001f) ? Min(0.35f, 16.0f / segLen) : 0.35f;
-
-        for (size_t k = 0; k < aDistantCarImpostors.size(); k++)
-        {
-            const CDistantCarImpostor& other = aDistantCarImpostors[k];
-            if (!other.m_bActive)
-                continue;
-            if (other.m_nPrevNode != fromNode || other.m_nNextNode != toNode)
-                continue;
-            if (other.m_nLaneSide != laneSide || other.m_nLaneIndex != lane)
-                continue;
-            occupied.push_back(other.m_fProgress);
-        }
-
-        int32 numOccupied = static_cast<int32>(occupied.size());
-
-        // Choose a random progress in [0,1] that is at least minGap from every occupied slot.
-        // Sort occupied list, then check each inter-gap for a slot wide enough.
-        // Simple insertion sort on the small occupied array.
-        for (int32 a = 1; a < numOccupied; a++)
-        {
-            float v = occupied[a];
-            int32 b = a - 1;
-            while (b >= 0 && occupied[b] > v) { occupied[b + 1] = occupied[b]; b--; }
-            occupied[b + 1] = v;
-        }
-
-        // Build candidate mid-points of each free gap, starting with a random offset.
-        float spawnProgress = -1.0f;
-        if (numOccupied == 0)
-        {
-            spawnProgress = (CGeneral::GetRandomNumber() & 0xFF) / 255.0f;
-        }
-        else
-        {
-            // Check gap before first, between each pair, and after last (wrapping is not needed
-            // because progress is clamped to [0,1] and nodes are recycled at boundary anyway).
-            int32 numGaps = numOccupied + 1;
-            gapStart.resize(numGaps);
-            gapEnd.resize(numGaps);
-            int32 numFree = 0;
-            float starts[2] = { 0.0f };
-            float ends[2] = { 0.0f };
-            // gap before first
-            starts[0] = 0.0f;  ends[0] = occupied[0] - minGap;
-            if (ends[0] > starts[0] + minGap) { gapStart[numFree] = starts[0]; gapEnd[numFree] = ends[0]; numFree++; }
-            // gaps between pairs
-            for (int32 g = 0; g < numOccupied - 1; g++)
-            {
-                float gs = occupied[g] + minGap;
-                float ge = occupied[g + 1] - minGap;
-                if (ge > gs) { gapStart[numFree] = gs; gapEnd[numFree] = ge; numFree++; }
-            }
-            // gap after last
-            {
-                float gs = occupied[numOccupied - 1] + minGap;
-                float ge = 1.0f;
-                if (ge > gs + minGap) { gapStart[numFree] = gs; gapEnd[numFree] = ge; numFree++; }
-            }
-            if (numFree > 0)
-            {
-                int32 pick2 = CGeneral::GetRandomNumber() % numFree;
-                float t = (CGeneral::GetRandomNumber() & 0xFF) / 255.0f;
-                spawnProgress = gapStart[pick2] + t * (gapEnd[pick2] - gapStart[pick2]);
-            }
-        }
-
-        if (spawnProgress < 0.0f)
-            continue; // no free slot on this segment+lane, try another
-
-        impostor.m_bActive = true;
-        impostor.m_nPrevNode = fromNode;
-        impostor.m_nNextNode = toNode;
-        impostor.m_fProgress = Clamp(spawnProgress, 0.0f, 1.0f);
-        impostor.m_fDesiredSpeed = (bFromWater || bToWater)
-            ? 3.5f + 0.5f * (CGeneral::GetRandomNumber() % 12)  // boats: ~7-17 knots
-            : (9.0f + (CGeneral::GetRandomNumber() % 18)) * 0.75f;  // cars: 25% slower
-        impostor.m_fSpeed = impostor.m_fDesiredSpeed;
-        impostor.m_nLaneSide = laneSide;
-        impostor.m_nLaneCount = laneCount;
-        impostor.m_nLaneIndex = lane;
-        impostor.m_fLaneOffset = 0.0f; // recomputed each frame in ComputeImpostorTransform
-        impostor.m_bWaterNode = bFromWater || bToWater;
-        impostor.m_vecPos = node.GetPosition();
-        impostor.m_vecDir = CVector(1.0f, 0.0f, 0.0f);
-        impostor.m_nStuckFrames = 0;
-        return true;
-    }
-
-    return false;
-}
-
-void CMovingThings::InitDistantCarImpostors()
-{
-    EnsureDistantCarImpostorPoolSize();
-    for (size_t i = 0; i < aDistantCarImpostors.size(); i++)
-        InitDistantCarImpostor(aDistantCarImpostors[i], ImpostorCoronaId(static_cast<int32>(i)));
-}
-
-void CMovingThings::ShutdownDistantCarImpostors()
-{
-    for (size_t i = 0; i < aDistantCarImpostors.size(); i++)
-    {
-        CDistantCarImpostor& impostor = aDistantCarImpostors[i];
-        impostor.m_bActive = false;
-        HideImpostorCorona(impostor);
-    }
+    return 0x7D000000u + i;
 }
 
 void CMovingThings::UpdateDistantCarImpostors()
 {
-    if (nNumDistantCarImpostors <= 0 || aDistantCarImpostors.empty())
-        return;
+    CVector camera = TheCamera->GetPosition();
+    float farClip = CTimeCycle::m_fCurrentFarClip;
 
-    if (ThePaths->m_numCarPathNodes <= 0)
-        return;
-
-    float dt = CTimer::GetTimeStepInSeconds();
-    CVector camPos = TheCamera->GetPosition();
-
-    // Hot-reload support: when maritime traffic is switched off, retire any
-    // boats that are already on the water.
-    if (!bDistantMaritimeTraffic)
-    {
-        for (auto& imp : aDistantCarImpostors)
-        {
-            if (imp.m_bActive && imp.m_bWaterNode)
-            {
-                imp.m_bActive = false;
-                HideImpostorCorona(imp);
-            }
-        }
-    }
-
-    static bool sHasPrevCamPos = false;
-    static CVector sPrevCamPos;
-    float camTravelSpeed = 0.0f;
-    if (sHasPrevCamPos && dt > 0.0001f)
-        camTravelSpeed = (camPos - sPrevCamPos).Magnitude2D() / dt;
-    sPrevCamPos = camPos;
-    sHasPrevCamPos = true;
-
-    float densityScale = ComputeDynamicImpostorDensityScale(camTravelSpeed);
-    int32 impostorCount = static_cast<int32>(aDistantCarImpostors.size());
-    int32 desiredActive = (int32)Clamp((impostorCount * densityScale), 0, impostorCount);
-
-    int32 activeCount = 0;
-    for (size_t i = 0; i < aDistantCarImpostors.size(); i++)
-    {
-        if (aDistantCarImpostors[i].m_bActive)
-            activeCount++;
-    }
-
-    int32 toDisable = Max(0, activeCount - desiredActive);
-    if (toDisable > 0 && camTravelSpeed < 8.0f)
-    {
-        int32 disableBudget = Min(8, toDisable);
-        for (size_t i = 0; i < aDistantCarImpostors.size() && disableBudget > 0; i++)
-        {
-            CDistantCarImpostor& impostor = aDistantCarImpostors[i];
-            if (!impostor.m_bActive)
-                continue;
-            if (ShouldKeepImpostorAliveNearCamera(impostor, camPos))
-                continue;
-            if ((impostor.m_vecPos - camPos).MagnitudeSqr2D() < SQR(700.0f))
-                continue;
-
-            impostor.m_bActive = false;
-            HideImpostorCorona(impostor);
-            disableBudget--;
-            activeCount--;
-        }
-    }
-
-    int32 spawnBudget = Min(12, Max(0, desiredActive - activeCount));
-
-    for (size_t i = 0; i < aDistantCarImpostors.size(); i++)
-    {
-        CDistantCarImpostor& impostor = aDistantCarImpostors[i];
-        if (!impostor.m_bActive)
-        {
-            if (spawnBudget <= 0)
-                continue;
-            if ((CGeneral::GetRandomNumber() & 3) != 0)
-                continue;
-
-            if (InitDistantCarImpostor(impostor, ImpostorCoronaId(i)))
-            {
-                activeCount++;
-                spawnBudget--;
-            }
-            continue;
-        }
-
-        if (impostor.m_nPrevNode < 0 || impostor.m_nNextNode < 0 ||
-            impostor.m_nPrevNode >= ThePaths->m_numCarPathNodes || impostor.m_nNextNode >= ThePaths->m_numCarPathNodes)
-        {
-            if (ShouldKeepImpostorAliveNearCamera(impostor, camPos) && impostor.m_nStuckFrames < 120)
-            {
-                impostor.m_nStuckFrames++;
-                continue;
-            }
-            InitDistantCarImpostor(impostor, impostor.m_nCoronaId);
-            continue;
-        }
-
-        if (IsPathSegmentExcludedForImpostor(impostor.m_nPrevNode, impostor.m_nNextNode))
-        {
-            if (!InitDistantCarImpostor(impostor, impostor.m_nCoronaId))
-            {
-                impostor.m_bActive = false;
-                HideImpostorCorona(impostor);
-            }
-            continue;
-        }
-
-        CVector fromPos = ThePaths->m_pathNodes[impostor.m_nPrevNode].GetPosition();
-        CVector toPos = ThePaths->m_pathNodes[impostor.m_nNextNode].GetPosition();
-        CVector segment = toPos - fromPos;
-        float segmentLen = segment.Magnitude2D();
-        if (segmentLen < 0.5f)
-        {
-            if (ShouldKeepImpostorAliveNearCamera(impostor, camPos) && impostor.m_nStuckFrames < 120)
-            {
-                impostor.m_nStuckFrames++;
-                continue;
-            }
-            InitDistantCarImpostor(impostor, impostor.m_nCoronaId);
-            continue;
-        }
-
-        float speedRecover = 3.0f * dt;
-        impostor.m_fSpeed += Clamp(impostor.m_fDesiredSpeed - impostor.m_fSpeed, -6.0f * dt, speedRecover);
-        impostor.m_fSpeed = Max(1.5f, impostor.m_fSpeed);
-
-        float advance = impostor.m_fSpeed * dt / segmentLen;
-        impostor.m_fProgress += advance;
-
-        while (impostor.m_fProgress >= 1.0f)
-        {
-            impostor.m_fProgress -= 1.0f;
-
-            CCarPathLink nextLink;
-            int16 nextNode;
-            if (!PickNextNodeForImpostor(impostor, nextNode, nextLink))
-            {
-                if (ShouldKeepImpostorAliveNearCamera(impostor, camPos) && impostor.m_nStuckFrames < 120)
-                {
-                    impostor.m_fProgress = 0.995f;
-                    impostor.m_fSpeed = 0.0f;
-                    impostor.m_nStuckFrames++;
-                    break;
-                }
-                InitDistantCarImpostor(impostor, impostor.m_nCoronaId);
-                break;
-            }
-
-            int16 targetPrevNode = impostor.m_nNextNode;
-            int16 targetNextNode = nextNode;
-
-            int8 leftLanes = Max((int8)1, nextLink.numLeftLanes);
-            int8 rightLanes = Max((int8)1, nextLink.numRightLanes);
-            bool useRightLaneGroup = UseRightLaneGroupForTraversal(targetPrevNode, targetNextNode, nextLink);
-
-            int8 laneCount = useRightLaneGroup ? rightLanes : leftLanes;
-            laneCount = Max((int8)1, laneCount);
-            uint8 laneSide = useRightLaneGroup ? 1 : 0;
-            uint8 laneIndex = Min((uint8)(laneCount - 1), impostor.m_nLaneIndex);
-
-            CVector targetFromPos = ThePaths->m_pathNodes[targetPrevNode].GetPosition();
-            CVector targetToPos = ThePaths->m_pathNodes[targetNextNode].GetPosition();
-            float targetSegLen = (targetToPos - targetFromPos).Magnitude2D();
-            float minEntryGap = (targetSegLen > 0.001f) ? Min(0.35f, 16.0f / targetSegLen) : 0.35f;
-
-            bool canEnter = true;
-            for (size_t k = 0; k < aDistantCarImpostors.size(); k++)
-            {
-                const CDistantCarImpostor& other = aDistantCarImpostors[k];
-                if (!other.m_bActive || &other == &impostor)
-                    continue;
-                if (other.m_nPrevNode != targetPrevNode || other.m_nNextNode != targetNextNode)
-                    continue;
-                if (other.m_nLaneSide != laneSide || other.m_nLaneIndex != laneIndex)
-                    continue;
-                if (other.m_fProgress < minEntryGap)
-                {
-                    canEnter = false;
-                    break;
-                }
-            }
-
-            if (!canEnter)
-            {
-                impostor.m_fProgress = 0.999f;
-                impostor.m_fSpeed = 0.0f;
-                if (impostor.m_nStuckFrames < 200)
-                    impostor.m_nStuckFrames++;
-
-                // If this impostor has been blocked for a long time away from camera, recycle it
-                // to avoid persistent artificial gridlock at awkward turns.
-                if (impostor.m_nStuckFrames > 120 && !ShouldKeepImpostorAliveNearCamera(impostor, camPos))
-                {
-                    if (!InitDistantCarImpostor(impostor, impostor.m_nCoronaId))
-                    {
-                        impostor.m_bActive = false;
-                        HideImpostorCorona(impostor);
-                    }
-                }
-                break;
-            }
-
-            impostor.m_nPrevNode = targetPrevNode;
-            impostor.m_nNextNode = targetNextNode;
-            impostor.m_nLaneSide = laneSide;
-            impostor.m_nLaneCount = laneCount;
-            impostor.m_nLaneIndex = laneIndex;
-            // m_fLaneOffset recomputed each frame in ComputeImpostorTransform
-            impostor.m_bWaterNode = (bool)ThePaths->m_pathNodes[targetPrevNode].bWaterPath
-                || (bool)ThePaths->m_pathNodes[targetNextNode].bWaterPath;
-            impostor.m_nStuckFrames = 0;
-        }
-
-        if (!impostor.m_bActive)
-            continue;
-
-        if (!ComputeImpostorTransform(impostor))
-            continue;
-    }
-
-    // Sort all active impostors by (prevNode, nextNode, laneSide, laneIndex) first, then by
-    // descending progress within each group.  A single linear sweep of adjacent pairs is then
-    // sufficient to guarantee zero collisions: every push cascades to the next car in the array
-    // because it is always the immediate neighbour in the same lane segment.
-    static std::vector<int32> sortedIdx;
-    sortedIdx.clear();
-    sortedIdx.reserve(aDistantCarImpostors.size());
-    for (size_t i = 0; i < aDistantCarImpostors.size(); i++)
-    {
-        if (aDistantCarImpostors[i].m_bActive)
-            sortedIdx.push_back(static_cast<int32>(i));
-    }
-    int32 sortedCount = static_cast<int32>(sortedIdx.size());
-
-    // Sort: primary key = (prevNode, nextNode, laneSide, laneIndex) ascending,
-    //       secondary key = progress descending (front of lane comes first).
-    std::sort(sortedIdx.begin(), sortedIdx.end(), [](int32 a, int32 b)
-    {
-        const CDistantCarImpostor& aImp = aDistantCarImpostors[a];
-        const CDistantCarImpostor& bImp = aDistantCarImpostors[b];
-
-        if (aImp.m_nPrevNode != bImp.m_nPrevNode)
-            return aImp.m_nPrevNode < bImp.m_nPrevNode;
-        if (aImp.m_nNextNode != bImp.m_nNextNode)
-            return aImp.m_nNextNode < bImp.m_nNextNode;
-        if (aImp.m_nLaneSide != bImp.m_nLaneSide)
-            return aImp.m_nLaneSide < bImp.m_nLaneSide;
-        if (aImp.m_nLaneIndex != bImp.m_nLaneIndex)
-            return aImp.m_nLaneIndex < bImp.m_nLaneIndex;
-        return aImp.m_fProgress > bImp.m_fProgress;
-    });
-
-    // Multi-pass linear sweep so corrections cascade fully through each lane stream.
-    // Also cap follower speed from actual available gap so faster cars never tunnel into slower ones.
-    for (int32 pass = 0; pass < 3; pass++)
-    {
-        for (int32 si = 1; si < sortedCount; si++)
-        {
-            CDistantCarImpostor& curr = aDistantCarImpostors[sortedIdx[si]];
-            CDistantCarImpostor& prev = aDistantCarImpostors[sortedIdx[si - 1]];
-
-            if (prev.m_nPrevNode != curr.m_nPrevNode || prev.m_nNextNode != curr.m_nNextNode)
-                continue;
-            if (prev.m_nLaneSide != curr.m_nLaneSide || prev.m_nLaneIndex != curr.m_nLaneIndex)
-                continue;
-
-            CVector fromPos = ThePaths->m_pathNodes[curr.m_nPrevNode].GetPosition();
-            CVector toPos = ThePaths->m_pathNodes[curr.m_nNextNode].GetPosition();
-            float segLen = (toPos - fromPos).Magnitude2D();
-            if (segLen < 0.001f)
-                continue;
-
-            // Boats need much more room than cars.
-            float desiredHeadway = (curr.m_bWaterNode || prev.m_bWaterNode) ? 90.0f : 18.0f;
-            float minGap = Min(0.35f, desiredHeadway / segLen);
-            float gap = prev.m_fProgress - curr.m_fProgress;
-            float gapMeters = gap * segLen;
-
-            if (gapMeters < desiredHeadway * 2.0f)
-            {
-                float followFactor = Clamp((gapMeters - 2.0f) / (desiredHeadway * 2.0f), 0.0f, 1.0f);
-                float followSpeed = prev.m_fSpeed * (0.2f + 0.8f * followFactor);
-                curr.m_fSpeed = Min(curr.m_fSpeed, followSpeed);
-            }
-
-            float maxGapProgressThisFrame = Max(0.0f, gap - minGap);
-            float maxSafeSpeed = (dt > 0.0001f) ? (maxGapProgressThisFrame * segLen / dt) : 0.0f;
-            curr.m_fSpeed = Min(curr.m_fSpeed, Max(0.0f, maxSafeSpeed));
-
-            if (gap < minGap)
-            {
-                curr.m_fProgress = Max(0.0f, prev.m_fProgress - minGap);
-                curr.m_fSpeed = Min(curr.m_fSpeed, prev.m_fSpeed);
-                ComputeImpostorTransform(curr);
-            }
-        }
-    }
+    float density = (std::clamp)(static_cast<float>(CCarCtrl::CarDensityMultiplier), 0.0f, 1.0f);
+    int hour = CClock::ms_nGameClockHours;
+    if (hour <= 5)
+        density *= .65f;
+    density *= 1.0f - .22f * static_cast<float>(CWeather::Rain);
+    density *= 1.0f - .16f * static_cast<float>(CWeather::Foggyness);
+    traffic.Update(CTimer::GetTimeStepInSeconds(), static_cast<size_t>((std::clamp)(nNumDistantCarImpostors, 0, 10000)), density, camera, farClip);
 }
 
 void CMovingThings::RenderDistantCarImpostors()
@@ -1096,6 +436,7 @@ void CMovingThings::RenderDistantCarImpostors()
 
     CVector camPos = TheCamera->GetPosition();
     auto maxDist = CTimeCycle::m_fCurrentFarClip;
+    DistantCarRenderer::Frame models(camPos, maxDist);
 
     for (size_t i = 0; i < aDistantCarImpostors.size(); i++)
     {
@@ -1106,7 +447,7 @@ void CMovingThings::RenderDistantCarImpostors()
         if (impostor.m_bWaterNode && !bDistantMaritimeTraffic)
             continue;
 
-        CVector toImpostor = impostor.m_vecPos - camPos;
+        CVector toImpostor = traffic.RenderPosition(impostor) - camPos;
         float distSqr = toImpostor.MagnitudeSqr2D();
         if (distSqr < SQR(140.0f) || distSqr > SQR(maxDist))
             continue;
@@ -1115,7 +456,7 @@ void CMovingThings::RenderDistantCarImpostors()
         if (dist < 0.001f)
             continue;
 
-        float dirDot = DotProduct(impostor.m_vecDir, camPos - impostor.m_vecPos);
+        float dirDot = DotProduct(traffic.RenderDirection(impostor), camPos - traffic.RenderPosition(impostor));
         bool approaching = dirDot > 0.0f;
 
         uint8 red, green, blue;
@@ -1138,7 +479,11 @@ void CMovingThings::RenderDistantCarImpostors()
         float fadeNear = Clamp((dist - 140.0f) / 120.0f, 0.0f, 1.0f);
         float fade = fadeFar * fadeNear;
 
+        if (models.Add(traffic.RenderPosition(impostor), traffic.RenderDirection(impostor), impostor.m_visual, impostor.m_nCoronaId, fade, impostor.m_bWaterNode))
+            continue;
+
         float size = 4.0f * fDistantCarsRadiusMultiplier;
+        fade *= impostor.m_visual.fade;
         uint8 alpha = (uint8)(150 * fade);
 
         // Boat navigation lights: compute the camera bearing relative to the
@@ -1148,13 +493,13 @@ void CMovingThings::RenderDistantCarImpostors()
         CVector portPos, stbdPos;
         if (impostor.m_bWaterNode)
         {
-            float toCamX = camPos.x - impostor.m_vecPos.x;
-            float toCamY = camPos.y - impostor.m_vecPos.y;
+            float toCamX = camPos.x - traffic.RenderPosition(impostor).x;
+            float toCamY = camPos.y - traffic.RenderPosition(impostor).y;
             float toCamLen = Sqrt(toCamX * toCamX + toCamY * toCamY);
             if (toCamLen > 0.001f)
             {
-                float fwd = (impostor.m_vecDir.x * toCamX + impostor.m_vecDir.y * toCamY) / toCamLen;
-                boatCross = impostor.m_vecDir.x * toCamY - impostor.m_vecDir.y * toCamX;
+                float fwd = (traffic.RenderDirection(impostor).x * toCamX + traffic.RenderDirection(impostor).y * toCamY) / toCamLen;
+                boatCross = traffic.RenderDirection(impostor).x * toCamY - traffic.RenderDirection(impostor).y * toCamX;
 
                 // Sidelights cover from dead ahead to 22.5° abaft the beam.
                 constexpr float SECTOR_EDGE = -0.38f; // cos(112.5°)
@@ -1171,8 +516,10 @@ void CMovingThings::RenderDistantCarImpostors()
                 // bow so red and green are clearly separated and never wash
                 // out against the white masthead light.
                 const float beamHalf = 2.0f;
-                portPos = impostor.m_vecPos + CVector(-impostor.m_vecDir.y * beamHalf, impostor.m_vecDir.x * beamHalf, 0.0f);
-                stbdPos = impostor.m_vecPos + CVector(impostor.m_vecDir.y * beamHalf, -impostor.m_vecDir.x * beamHalf, 0.0f);
+                portPos = traffic.RenderPosition(impostor) +
+                          CVector(-traffic.RenderDirection(impostor).y * beamHalf, traffic.RenderDirection(impostor).x * beamHalf, 0.0f);
+                stbdPos = traffic.RenderPosition(impostor) +
+                          CVector(traffic.RenderDirection(impostor).y * beamHalf, -traffic.RenderDirection(impostor).x * beamHalf, 0.0f);
             }
         }
         if (alpha == 0 && sideAlpha == 0)
@@ -1180,12 +527,8 @@ void CMovingThings::RenderDistantCarImpostors()
 
         if (alpha)
         {
-            CLODLights::RegisterCorona(impostor.m_nCoronaId, nullptr,
-                red, green, blue, alpha,
-                impostor.m_vecPos,
-                size,
-                maxDist,
-                1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+            CLODLights::RegisterCorona(impostor.m_nCoronaId, nullptr, red, green, blue, alpha, traffic.RenderPosition(impostor), size, maxDist, 1, 0, false,
+                                       false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
         }
 
         if (impostor.m_bWaterNode && sideAlpha)
@@ -1195,24 +538,17 @@ void CMovingThings::RenderDistantCarImpostors()
             // Red port light — camera anywhere on the port side of the bow.
             if (boatCross >= 0.0f)
             {
-                CLODLights::RegisterCorona(ImpostorPortSideCoronaId((int32)baseId), nullptr,
-                    255, 30, 30, sideAlpha,
-                    portPos,
-                    2.4f * fDistantCarsRadiusMultiplier,
-                    maxDist,
-                    1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+                CLODLights::RegisterCorona(ImpostorPortSideCoronaId((int32)baseId), nullptr, 255, 30, 30, sideAlpha, portPos,
+                                           2.4f * fDistantCarsRadiusMultiplier, maxDist, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
             }
 
             // Green starboard light.
             if (boatCross <= 0.0f)
             {
-                CLODLights::RegisterCorona(ImpostorStarboardSideCoronaId((int32)baseId), nullptr,
-                    30, 255, 60, sideAlpha,
-                    stbdPos,
-                    2.4f * fDistantCarsRadiusMultiplier,
-                    maxDist,
-                    1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+                CLODLights::RegisterCorona(ImpostorStarboardSideCoronaId((int32)baseId), nullptr, 30, 255, 60, sideAlpha, stbdPos,
+                                           2.4f * fDistantCarsRadiusMultiplier, maxDist, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
             }
         }
     }
+    models.Flush();
 }

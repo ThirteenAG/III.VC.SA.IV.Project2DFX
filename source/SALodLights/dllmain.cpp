@@ -19,6 +19,8 @@ import Timecycle;
 import ModelInfo;
 import PointLights;
 import DistantCars;
+import DistantCarRenderer;
+import WaterLevel;
 
 using RwV3D = RwV3d;
 
@@ -179,18 +181,26 @@ void ApplyMemoryPatches()
         CMovingThings::UpdateDistantCarImpostors();
     });
 
+    pattern = hook::pattern("6A ? 6A ? FF 51 ? 8B 15 ? ? ? ? 6A ? 6A ? FF 52 ? 83 C4 ? E8 ? ? ? ? E8 ? ? ? ? E9");
+    static auto distantCarsSceneHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext&)
+    {
+        if (bRenderLodLights)
+            CMovingThings::RenderDistantCarImpostors();
+    });
+
     pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? A1 ? ? ? ? 6A ? 50 B9");
     static auto CMovingThingsRenderHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
         if (bRenderLodLights)
+        {
             CLODLights::RenderBuffered();
+        }
 
         if (bRenderSearchlightEffects)
             RenderAllSearchLights();
 
-        if (bRenderLodLights)
-            CMovingThings::RenderDistantCarImpostors();
     });
+
 
     pattern = hook::pattern("BE ? ? ? ? 8D 4E ? E8 ? ? ? ? ? ? ? 81 C6 ? ? ? ? 81 FE ? ? ? ? 7C ? 5E C3");
     static auto CMovingThingsShutdownHook = safetyhook::create_mid(pattern.count(2).get(1).get<void*>(), [](SafetyHookContext& regs)
@@ -500,6 +510,8 @@ void GetMemoryAddresses()
 
     Scene.SetAddress((CScene*)0xC17038);
     RwEngineInstance.SetAddress((RwGlobals**)0xC97B24);
+
+    CWaterLevel::GetWaterLevelNoWaves = reinterpret_cast<decltype(CWaterLevel::GetWaterLevelNoWaves)>(0x6E8580);
 
     RwIm3DTransform = (decltype(RwIm3DTransform))0x7EF450;
     RwIm3DRenderIndexedPrimitive = (decltype(RwIm3DRenderIndexedPrimitive))0x7EF550;
