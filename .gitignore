@@ -349,4 +349,7 @@ ASALocalRun/
 # Local History for Visual Studio
 .localhistory/
 
+# the paths of this machine, read by premake5.lua
+.env
+
 #Excludes

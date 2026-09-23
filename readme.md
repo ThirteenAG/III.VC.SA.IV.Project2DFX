@@ -86,3 +86,14 @@
 3. Put the `.asi`, `.ini` and `.dat` files into the `scripts` folder (`plugins` folder for GTA IV).
 4. Launch the game and enjoy the view.
 
+## Building
+
+Run `premake5.bat` to generate the Visual Studio solution in `build`, then build it.
+
+To deploy to your game automatically after each build, create a `.env` file in the repository root pointing the key of each game at its folder, then run `premake5.bat` again, for example:
+
+    GTAIII_DIR=C:\Program Files (x86)\Rockstar Games\GTAIII
+    GTA_IV_DIR=C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto IV\GTAIV
+
+The keys are `GTAIII_DIR`, `GRAND_THEFT_AUTO_VICE_CITY_DIR`, `GTA_SAN_ANDREAS_DIR` and `GTA_IV_DIR`. The build then copies the built `.asi` into the `scripts` folder of that game (`plugins` for GTA IV) and debugging launches the game from there. The `.env` file is ignored by git, only a plugin that is already installed is replaced, and a game without a key is not deployed at all.
+
