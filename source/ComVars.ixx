@@ -8,6 +8,97 @@ export module ComVars;
 
 export
 {
+    struct RwIm2DVertex
+    {
+        float x, y, z, rhw;
+        uint8_t b, g, r, a;
+        float u, v;
+    };
+
+    enum RwPrimitiveType
+    {
+        rwPRIMTYPENAPRIMTYPE = 0,
+        rwPRIMTYPELINELIST = 1,
+        rwPRIMTYPEPOLYLINE = 2,
+        rwPRIMTYPETRILIST = 3,
+        rwPRIMTYPETRISTRIP = 4,
+        rwPRIMTYPETRIFAN = 5,
+        rwPRIMTYPEPOINTLIST = 6,
+    };
+
+    int (__cdecl*RwIm2DRenderIndexedPrimitive)(
+        RwPrimitiveType primType,
+        RwIm2DVertex* vertices,
+        unsigned int numVertices,
+        uint16_t* indices,
+        unsigned int numIndices) = nullptr;
+
+    enum RsInputDeviceType : int
+    {
+        rsKEYBOARD,
+        rsMOUSE,
+        rsPAD
+    };
+
+    enum RsEventStatus : int
+    {
+        rsEVENTERROR,
+        rsEVENTPROCESSED,
+        rsEVENTNOTPROCESSED
+    };
+
+    enum RsEvent : int
+    {
+        rsCAMERASIZE,
+        rsCOMMANDLINE,
+        rsFILELOAD,
+        rsINITDEBUG,
+        rsINPUTDEVICEATTACH,
+        rsLEFTBUTTONDOWN,
+        rsLEFTBUTTONUP,
+        rsMOUSEMOVE,
+        rsMOUSEWHEELMOVE,
+        rsPLUGINATTACH,
+        rsREGISTERIMAGELOADER,
+        rsRIGHTBUTTONDOWN,
+        rsRIGHTBUTTONUP,
+        _rs_13,
+        _rs_14,
+        _rs_15,
+        _rs_16,
+        _rs_17,
+        _rs_18,
+        _rs_19,
+        _rs_20,
+        rsRWINITIALIZE,
+        rsRWTERMINATE,
+        rsSELECTDEVICE,
+        rsINITIALIZE,
+        rsTERMINATE,
+        rsIDLE,
+        rsFRONTENDIDLE,
+        rsKEYDOWN,
+        rsKEYUP,
+        rsQUITAPP,
+        rsPADBUTTONDOWN,
+        rsPADBUTTONUP,
+        rsPADANALOGUELEFT,
+        rsPADANALOGUELEFTRESET,
+        rsPADANALOGUERIGHT,
+        rsPADANALOGUERIGHTRESET,
+        rsPREINITCOMMANDLINE,
+        rsACTIVATE,
+    };
+
+    using RsInputEventHandler = RsEventStatus(*)(RsEvent event, void* param);
+
+    struct RsInputDevice
+    {
+        RsInputDeviceType inputDeviceType;
+        bool              used;
+        RsInputEventHandler inputEventHandler;
+    };
+
     int numCoronas = 25000;
     bool bRenderLodLights;
     float fCoronaRadiusMultiplier;

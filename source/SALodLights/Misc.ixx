@@ -6,6 +6,7 @@ module;
 export module Misc;
 
 import Entity;
+import ComVars;
 
 using RwV3D = RwV3d;
 
@@ -194,6 +195,18 @@ export namespace CWeather
     GameRef<float> UnderWaterness;
 }
 
+export namespace CDraw
+{
+    GameRef<float> ms_fNearClipZ;
+    GameRef<float> ms_fFarClipZ;
+}
+
+export namespace CSprite
+{
+    GameRef<float> m_f2DNearScreenZ;
+    GameRef<float> m_f2DFarScreenZ;
+}
+
 export RwTexture** gpCoronaTexture;
 
 export GameRef<CScene> Scene;
@@ -209,6 +222,35 @@ export void RwRenderStateGet(RwRenderState nState, void* pParam)
 {
     RwEngineInstance->dOpenDevice.fpRenderStateGet(nState, pParam);
 }
+
+export struct RsGlobalType
+{
+    const char* appName;
+    union
+    {
+        int32_t maximumWidth;
+        int32_t width;
+    };
+    union
+    {
+        int32_t maximumHeight;
+        int32_t height;
+    };
+    int32_t maxFPS;
+    bool  quit;
+    void* ps;
+    RsInputDevice keyboard;
+    RsInputDevice mouse;
+    RsInputDevice pad;
+};
+
+export GameRef<RsGlobalType> RsGlobal([]() -> RsGlobalType*
+{
+    auto pattern = hook::pattern("A1 ? ? ? ? 51 2B 54 24");
+    if (!pattern.empty())
+        return *pattern.get_first<RsGlobalType*>(1);
+    return nullptr;
+});
 
 export namespace CRenderer
 {

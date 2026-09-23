@@ -392,7 +392,7 @@ __declspec (naked) void CmpSpriteBufferIndexHook()
 {
     __asm
     {
-		cmp ds : [0x649A80] , BUFFERED_SPRITES_LIMIT
+        cmp ds : [0x649A80] , BUFFERED_SPRITES_LIMIT
         ret
     }
 }
@@ -564,31 +564,6 @@ void ApplyMemoryPatches()
         pattern = hook::pattern("E8 ? ? ? ? 83 BC 24 ? ? ? ? ? 59 59 74 ? E8");
         shAddTrace = safetyhook::create_inline(injector::GetBranchDestination(pattern.get_first()).as_int(), AddTrace);
     }
-
-    static std::byte SpriteBufferVerts[0x1C * BUFFERED_SPRITES_LIMIT * 6];
-
-	//injector::WriteMemory(0x51C548 + 1, SpriteBufferVerts, true);
-	//injector::WriteMemory(0x51C56F + 1, SpriteBufferVerts, true);
-	//injector::WriteMemory(0x51C782 + 2, SpriteBufferVerts, true);
-	//injector::WriteMemory(0x51CF42 + 2, SpriteBufferVerts, true);
-	//injector::WriteMemory(0x51D810 + 2, SpriteBufferVerts, true);
-	//injector::WriteMemory(0x51DC60 + 2, SpriteBufferVerts, true);
-	//injector::WriteMemory(0x51E464 + 1, SpriteBufferVerts, true);
-	//injector::WriteMemory(0x51E5C7 + 1, SpriteBufferVerts, true);
-    //
-    //injector::MakeNOP(0x51C933, 7);
-    //injector::MakeNOP(0x51D0E4, 7);
-    //injector::MakeNOP(0x51D9B2, 7);
-    //injector::MakeNOP(0x51E392, 7);
-    //injector::MakeNOP(0x51E478, 7);
-    //injector::MakeNOP(0x51E5DB, 7);
-    //
-    //injector::MakeCALL(0x51C933, CmpSpriteBufferIndexHook);
-    //injector::MakeCALL(0x51D0E4, CmpSpriteBufferIndexHook);
-    //injector::MakeCALL(0x51D9B2, CmpSpriteBufferIndexHook);
-    //injector::MakeCALL(0x51E392, CmpSpriteBufferIndexHook);
-    //injector::MakeCALL(0x51E478, CmpSpriteBufferIndexHook);
-    //injector::MakeCALL(0x51E5DB, CmpSpriteBufferIndexHook);
 }
 
 void GetMemoryAddresses()

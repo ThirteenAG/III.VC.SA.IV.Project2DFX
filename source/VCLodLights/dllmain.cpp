@@ -547,6 +547,12 @@ void GetMemoryAddresses()
     CSprite::RenderOneXLUSprite_Rotate_Aspect = (decltype(CSprite::RenderOneXLUSprite_Rotate_Aspect))0x576FE0;
     CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect = (decltype(CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect))0x576B30;
 
+    CDraw::ms_fNearClipZ.SetAddress((float*)0x978534);
+    CDraw::ms_fFarClipZ.SetAddress((float*)0xA10678);
+
+    CSprite::m_f2DNearScreenZ.SetAddress((float*)0x97863C);
+    CSprite::m_f2DFarScreenZ.SetAddress((float*)0x97F33C);
+
     Scene.SetAddress((CScene*)0x8100B8);
     RwEngineInstance.SetAddress((RwGlobals**)0x7870C0);
 
@@ -575,6 +581,9 @@ void GetMemoryAddresses()
 
     RwRenderStateSet = (decltype(RwRenderStateSet))0x649BA0;
     RwRenderStateGet = (decltype(RwRenderStateGet))0x649BF0;
+
+    RwIm2DRenderIndexedPrimitive = (decltype(RwIm2DRenderIndexedPrimitive))0x649C20;
+    RwIm2DRenderPrimitive = (decltype(RwIm2DRenderPrimitive))0x649C10;
 
     pHelis = (CHeli**)0x813D10;
     pNumRandomHelis = (int16_t*)0xA10A6A;

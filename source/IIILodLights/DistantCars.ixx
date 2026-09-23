@@ -261,29 +261,29 @@ export GameRef<CPathFind> ThePaths([]() -> CPathFind*
 CPathFindFacade GetPaths()
 {
     static std::once_flag s_once;
-	std::call_once(s_once, []()
-		{
-            uintptr_t pathsAddress = (uintptr_t)ThePaths.get_ptr();
-            //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_pathNodes, pathsAddress);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_carPathLinks, injector::ReadMemory<uintptr_t>(0x454FCE) - pathsAddress);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_mapObjects, injector::ReadMemory<uintptr_t>(0x437044) - pathsAddress);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_objectFlags, injector::ReadMemory<uintptr_t>(0x437358) - pathsAddress);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_connections, injector::ReadMemory<uintptr_t>(0x42E2F6) - pathsAddress);
-            //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_anDistances, injector::ReadMemory<uintptr_t>(0x) - pathsAddress);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_connectionFlags, injector::ReadMemory<uintptr_t>(0x455210) - pathsAddress);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_carPathConnections, injector::ReadMemory<uintptr_t>(0x42E30F) - pathsAddress);
+    std::call_once(s_once, []()
+    {
+        uintptr_t pathsAddress = (uintptr_t)ThePaths.get_ptr();
+        //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_pathNodes, pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_carPathLinks, injector::ReadMemory<uintptr_t>(0x454FCE) - pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_mapObjects, injector::ReadMemory<uintptr_t>(0x437044) - pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_objectFlags, injector::ReadMemory<uintptr_t>(0x437358) - pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_connections, injector::ReadMemory<uintptr_t>(0x42E2F6) - pathsAddress);
+        //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_anDistances, injector::ReadMemory<uintptr_t>(0x) - pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_connectionFlags, injector::ReadMemory<uintptr_t>(0x455210) - pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_carPathConnections, injector::ReadMemory<uintptr_t>(0x42E30F) - pathsAddress);
 
-            uintptr_t numPathNodesAddress = injector::ReadMemory<uintptr_t>(0x4550B4) - pathsAddress;
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numPathNodes, numPathNodesAddress);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numCarPathNodes, numPathNodesAddress + 0x4);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numPedPathNodes, numPathNodesAddress + 0x8);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numMapObjects, numPathNodesAddress + 0xA);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numConnections, numPathNodesAddress + 0xC);
-            FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numCarPathLinks, numPathNodesAddress + 0x10);
-            //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, field_45BEC, numPathNodesAddress + 0x8 + 0x4 + 0x8);
-            //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_nNumGroups, numPathNodesAddress + 0x8 + 0x4 + 0xC);
-		});
-	return CPathFindFacade(ThePaths.get_ptr());
+        uintptr_t numPathNodesAddress = injector::ReadMemory<uintptr_t>(0x4550B4) - pathsAddress;
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numPathNodes, numPathNodesAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numCarPathNodes, numPathNodesAddress + 0x4);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numPedPathNodes, numPathNodesAddress + 0x8);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numMapObjects, numPathNodesAddress + 0xA);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numConnections, numPathNodesAddress + 0xC);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numCarPathLinks, numPathNodesAddress + 0x10);
+        //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, field_45BEC, numPathNodesAddress + 0x8 + 0x4 + 0x8);
+        //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_nNumGroups, numPathNodesAddress + 0x8 + 0x4 + 0xC);
+    });
+    return CPathFindFacade(ThePaths.get_ptr());
 }
 
 namespace CCarCtrl
@@ -597,11 +597,11 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
 
     // Pin each slot to a proportional window of the node array so the pool
     // stays evenly distributed across the map regardless of farclip.
-    int32 totalNodes  = GetPaths().m_numCarPathNodes;
-    int32 poolSize    = Max(1, (int32)aDistantCarImpostors.size());
-    int32 slotIndex   = (int32)(coronaId - 0x7F000000u);
-    int32 rangeStart  = (int32)((int64_t)slotIndex       * totalNodes / poolSize);
-    int32 rangeEnd    = (int32)((int64_t)(slotIndex + 1) * totalNodes / poolSize);
+    int32 totalNodes = GetPaths().m_numCarPathNodes;
+    int32 poolSize = Max(1, (int32)aDistantCarImpostors.size());
+    int32 slotIndex = (int32)(coronaId - 0x7F000000u);
+    int32 rangeStart = (int32)((int64_t)slotIndex * totalNodes / poolSize);
+    int32 rangeEnd = (int32)((int64_t)(slotIndex + 1) * totalNodes / poolSize);
     if (rangeEnd <= rangeStart) rangeEnd = rangeStart + 1;
 
     for (int32 attempts = 0; attempts < 128; attempts++)

@@ -6,26 +6,9 @@ module;
 export module Misc;
 
 import Entity;
+import ComVars;
 
 using RwV3D = RwV3d;
-
-export struct RwIm2DVertex
-{
-    float x, y, z, rhw;
-    uint8_t b, g, r, a;
-    float u, v;
-};
-
-export enum RwPrimitiveType
-{
-    rwPRIMTYPENAPRIMTYPE = 0,
-    rwPRIMTYPELINELIST = 1,
-    rwPRIMTYPEPOLYLINE = 2,
-    rwPRIMTYPETRILIST = 3,
-    rwPRIMTYPETRISTRIP = 4,
-    rwPRIMTYPETRIFAN = 5,
-    rwPRIMTYPEPOINTLIST = 6,
-};
 
 export enum SShadType
 {
@@ -224,14 +207,14 @@ export namespace CWeather
 
 export namespace CDraw
 {
-	GameRef<float> ms_fNearClipZ;
-	GameRef<float> ms_fFarClipZ;
+    GameRef<float> ms_fNearClipZ;
+    GameRef<float> ms_fFarClipZ;
 }
 
 export namespace CSprite
 {
-	GameRef<float> m_f2DNearScreenZ;
-	GameRef<float> m_f2DFarScreenZ;
+    GameRef<float> m_f2DNearScreenZ;
+    GameRef<float> m_f2DFarScreenZ;
 }
 
 export RwTexture** gpCoronaTexture;
@@ -242,79 +225,6 @@ export GameRef<RwGlobals*> RwEngineInstance;
 
 export bool(__cdecl* RwRenderStateGet)(RwRenderState nState, void* pParam) = nullptr;
 export bool(__cdecl* RwRenderStateSet)(RwRenderState nState, void* pParam) = nullptr;
-
-export int (__cdecl*RwIm2DRenderIndexedPrimitive)(
-    RwPrimitiveType primType,
-    RwIm2DVertex* vertices,
-    unsigned int numVertices,
-    uint16_t* indices,
-    unsigned int numIndices) = nullptr;
-
-enum RsInputDeviceType : int
-{
-    rsKEYBOARD,
-    rsMOUSE,
-    rsPAD
-};
-
-enum RsEventStatus : int
-{
-    rsEVENTERROR,
-    rsEVENTPROCESSED,
-    rsEVENTNOTPROCESSED
-};
-
-enum RsEvent : int
-{
-    rsCAMERASIZE,
-    rsCOMMANDLINE,
-    rsFILELOAD,
-    rsINITDEBUG,
-    rsINPUTDEVICEATTACH,
-    rsLEFTBUTTONDOWN,
-    rsLEFTBUTTONUP,
-    rsMOUSEMOVE,
-    rsMOUSEWHEELMOVE,
-    rsPLUGINATTACH,
-    rsREGISTERIMAGELOADER,
-    rsRIGHTBUTTONDOWN,
-    rsRIGHTBUTTONUP,
-    _rs_13,
-    _rs_14,
-    _rs_15,
-    _rs_16,
-    _rs_17,
-    _rs_18,
-    _rs_19,
-    _rs_20,
-    rsRWINITIALIZE,
-    rsRWTERMINATE,
-    rsSELECTDEVICE,
-    rsINITIALIZE,
-    rsTERMINATE,
-    rsIDLE,
-    rsFRONTENDIDLE,
-    rsKEYDOWN,
-    rsKEYUP,
-    rsQUITAPP,
-    rsPADBUTTONDOWN,
-    rsPADBUTTONUP,
-    rsPADANALOGUELEFT,
-    rsPADANALOGUELEFTRESET,
-    rsPADANALOGUERIGHT,
-    rsPADANALOGUERIGHTRESET,
-    rsPREINITCOMMANDLINE,
-    rsACTIVATE,
-};
-
-using RsInputEventHandler = RsEventStatus(*)(RsEvent event, void* param);
-
-struct RsInputDevice
-{
-    RsInputDeviceType inputDeviceType;
-    bool              used;
-    RsInputEventHandler inputEventHandler;
-};
 
 export struct RsGlobalType
 {
