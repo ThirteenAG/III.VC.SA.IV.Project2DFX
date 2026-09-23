@@ -492,12 +492,21 @@ void GetMemoryAddresses()
     CSprite::RenderOneXLUSprite_Rotate_Aspect = (decltype(CSprite::RenderOneXLUSprite_Rotate_Aspect))0x70D490;
     CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect = (decltype(CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect))0x70E780;
 
+    CDraw::ms_fNearClipZ.SetAddress((float*)0xC3EFA0);
+    CDraw::ms_fFarClipZ.SetAddress((float*)0xC3EF9C);
+
+    CSprite::m_f2DNearScreenZ.SetAddress((float*)0xC4B8D8);
+    CSprite::m_f2DFarScreenZ.SetAddress((float*)0xC4B8D4);
+
     Scene.SetAddress((CScene*)0xC17038);
     RwEngineInstance.SetAddress((RwGlobals**)0xC97B24);
 
     RwIm3DTransform = (decltype(RwIm3DTransform))0x7EF450;
     RwIm3DRenderIndexedPrimitive = (decltype(RwIm3DRenderIndexedPrimitive))0x7EF550;
     RwIm3DEnd = (decltype(RwIm3DEnd))0x7EF520;
+
+    RwIm2DRenderIndexedPrimitive = (decltype(RwIm2DRenderIndexedPrimitive))0x734EA0;
+    RwIm2DRenderPrimitive = (decltype(RwIm2DRenderPrimitive))0x734E90;
 
     CGame::currArea.SetAddress((int*)0xB72914);
 

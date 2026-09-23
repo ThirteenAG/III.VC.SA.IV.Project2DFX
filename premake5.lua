@@ -109,6 +109,7 @@ workspace "III.VC.SA.IV.Project2DFX"
    includedirs { "external/injector/include" }
    includedirs { "external/inireader" }
    includedirs { "external/filewatch" }
+   includedirs { "external/ModUtils" }
 
    vpaths {
       ["source"] = { "source/**.*" },

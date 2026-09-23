@@ -6,6 +6,7 @@ module;
 export module Misc;
 
 import Entity;
+import ComVars;
 
 using RwV3D = RwV3d;
 
@@ -204,6 +205,18 @@ export namespace CWeather
     GameRef<float> Foggyness;
 }
 
+export namespace CDraw
+{
+    GameRef<float> ms_fNearClipZ;
+    GameRef<float> ms_fFarClipZ;
+}
+
+export namespace CSprite
+{
+    GameRef<float> m_f2DNearScreenZ;
+    GameRef<float> m_f2DFarScreenZ;
+}
+
 export RwTexture** gpCoronaTexture;
 
 export GameRef<CScene> Scene;
@@ -212,6 +225,29 @@ export GameRef<RwGlobals*> RwEngineInstance;
 
 export bool(__cdecl* RwRenderStateGet)(RwRenderState nState, void* pParam) = nullptr;
 export bool(__cdecl* RwRenderStateSet)(RwRenderState nState, void* pParam) = nullptr;
+
+export struct RsGlobalType
+{
+    const char* appName;
+    std::int32_t  width;
+    std::int32_t  height;
+    std::int32_t  maximumWidth;
+    std::int32_t  maximumHeight;
+    std::int32_t  maxFPS;
+    bool          quit;
+    void* ps;
+    RsInputDevice keyboard;
+    RsInputDevice mouse;
+    RsInputDevice pad;
+};
+
+export GameRef<RsGlobalType> RsGlobal([]() -> RsGlobalType*
+    {
+        auto pattern = hook::pattern("8B 0D ? ? ? ? 6A ? 6A ? 52");
+        if (!pattern.empty())
+            return *pattern.get_first<RsGlobalType*>(2);
+        return nullptr;
+    });
 
 export namespace CRenderer
 {

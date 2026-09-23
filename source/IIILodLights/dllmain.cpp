@@ -386,6 +386,17 @@ void DrawDistanceFMUL(SafetyHookContext& ctx)
     _asm {fmul dword ptr[f]}
 }
 
+#define BUFFERED_SPRITES_LIMIT 2048
+
+__declspec (naked) void CmpSpriteBufferIndexHook()
+{
+    __asm
+    {
+        cmp ds : [0x649A80] , BUFFERED_SPRITES_LIMIT
+        ret
+    }
+}
+
 void ApplyMemoryPatches()
 {
     auto pattern = hook::pattern("E8 ? ? ? ? 59 53 E8 ? ? ? ? 59 81 C4 ? ? ? ? 5D");
@@ -571,6 +582,13 @@ void GetMemoryAddresses()
     CSprite::RenderOneXLUSprite_Rotate_Aspect = (decltype(CSprite::RenderOneXLUSprite_Rotate_Aspect))0x51D110;
     CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect = (decltype(CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect))0x51CCD0;
 
+
+    CDraw::ms_fNearClipZ.SetAddress((float*)0x8E2DC4);
+    CDraw::ms_fFarClipZ.SetAddress((float*)0x9434F0);
+
+    CSprite::m_f2DNearScreenZ.SetAddress((float*)0x8F1ABC);
+    CSprite::m_f2DFarScreenZ.SetAddress((float*)0x8F2C94);
+
     Scene.SetAddress((CScene*)0x726768);
     RwEngineInstance.SetAddress((RwGlobals**)0x661228);
 
@@ -600,6 +618,8 @@ void GetMemoryAddresses()
 
     RwRenderStateSet = (decltype(RwRenderStateSet))0x5A43C0;
     RwRenderStateGet = (decltype(RwRenderStateGet))0x5A4410;
+    RwIm2DRenderIndexedPrimitive = (decltype(RwIm2DRenderIndexedPrimitive))0x5A4440;
+    RwIm2DRenderPrimitive = (decltype(RwIm2DRenderPrimitive))0x5A4430;
 
     pHelis = (CHeli**)0x72CF50;
     pNumRandomHelis = (int16_t*)0x95CCAA;

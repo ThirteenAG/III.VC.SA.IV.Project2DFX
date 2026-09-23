@@ -2,6 +2,8 @@ module;
 
 #include <stdafx.h>
 
+#include <Facade.hpp>
+
 export module DistantCars;
 
 import ComVars;
@@ -204,6 +206,50 @@ public:
     void DisplayPathData(void);
 };
 
+class CPathFindFacade
+{
+public:
+    CPathFindFacade(CPathFind* obj)
+        : FACADE_INIT_MEMBER(obj, m_pathNodes)
+        , FACADE_INIT_MEMBER(obj, m_carPathLinks)
+        , FACADE_INIT_MEMBER(obj, m_mapObjects)
+        , FACADE_INIT_MEMBER(obj, m_objectFlags)
+        , FACADE_INIT_MEMBER(obj, m_connections)
+        //, FACADE_INIT_MEMBER(obj, m_anDistances)
+        , FACADE_INIT_MEMBER(obj, m_connectionFlags)
+        , FACADE_INIT_MEMBER(obj, m_carPathConnections)
+        , FACADE_INIT_MEMBER(obj, m_numPathNodes)
+        , FACADE_INIT_MEMBER(obj, m_numCarPathNodes)
+        , FACADE_INIT_MEMBER(obj, m_numPedPathNodes)
+        , FACADE_INIT_MEMBER(obj, m_numMapObjects)
+        , FACADE_INIT_MEMBER(obj, m_numConnections)
+        , FACADE_INIT_MEMBER(obj, m_numCarPathLinks)
+        //, FACADE_INIT_MEMBER(obj, field_45BEC)
+        //, FACADE_INIT_MEMBER(obj, m_nNumGroups)
+        //, FACADE_INIT_MEMBER(obj, m_aSearchNodes)
+    {
+    }
+
+public:
+    FACADE_STABLE_MEMBER(CPathNode[], m_pathNodes, 0x0);
+    FACADE_MEMBER(CCarPathLink[], m_carPathLinks);
+    FACADE_MEMBER(CTreadable* [], m_mapObjects);
+    FACADE_MEMBER(short[], m_objectFlags);
+    FACADE_MEMBER(short[], m_connections);
+    //FACADE_MEMBER(short[], m_anDistances);
+    FACADE_MEMBER(CConnectionFlags[], m_connectionFlags);
+    FACADE_MEMBER(short[], m_carPathConnections);
+    FACADE_MEMBER(int, m_numPathNodes);
+    FACADE_MEMBER(int, m_numCarPathNodes);
+    FACADE_MEMBER(int, m_numPedPathNodes);
+    FACADE_MEMBER(short, m_numMapObjects);
+    FACADE_MEMBER(short, m_numConnections);
+    FACADE_MEMBER(int, m_numCarPathLinks);
+    //FACADE_MEMBER(int, field_45BEC);
+    //FACADE_MEMBER(unsigned char[], m_nNumGroups);
+    //FACADE_MEMBER(CPathNode[], m_aSearchNodes);
+};
+
 export GameRef<CPathFind> ThePaths([]() -> CPathFind*
 {
     auto pattern = hook::pattern("B9 ? ? ? ? 83 C0 ? ? ? ? ? ? ? ? ? ? 6A");
@@ -211,6 +257,34 @@ export GameRef<CPathFind> ThePaths([]() -> CPathFind*
         return *pattern.get_first<CPathFind*>(1);
     return nullptr;
 });
+
+CPathFindFacade GetPaths()
+{
+    static std::once_flag s_once;
+    std::call_once(s_once, []()
+    {
+        uintptr_t pathsAddress = (uintptr_t)ThePaths.get_ptr();
+        //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_pathNodes, pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_carPathLinks, injector::ReadMemory<uintptr_t>(0x454FCE) - pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_mapObjects, injector::ReadMemory<uintptr_t>(0x437044) - pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_objectFlags, injector::ReadMemory<uintptr_t>(0x437358) - pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_connections, injector::ReadMemory<uintptr_t>(0x42E2F6) - pathsAddress);
+        //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_anDistances, injector::ReadMemory<uintptr_t>(0x) - pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_connectionFlags, injector::ReadMemory<uintptr_t>(0x455210) - pathsAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_carPathConnections, injector::ReadMemory<uintptr_t>(0x42E30F) - pathsAddress);
+
+        uintptr_t numPathNodesAddress = injector::ReadMemory<uintptr_t>(0x4550B4) - pathsAddress;
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numPathNodes, numPathNodesAddress);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numCarPathNodes, numPathNodesAddress + 0x4);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numPedPathNodes, numPathNodesAddress + 0x8);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numMapObjects, numPathNodesAddress + 0xA);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numConnections, numPathNodesAddress + 0xC);
+        FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_numCarPathLinks, numPathNodesAddress + 0x10);
+        //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, field_45BEC, numPathNodesAddress + 0x8 + 0x4 + 0x8);
+        //FACADE_SET_MEMBER_OFFSET(CPathFindFacade, m_nNumGroups, numPathNodesAddress + 0x8 + 0x4 + 0xC);
+    });
+    return CPathFindFacade(ThePaths.get_ptr());
+}
 
 namespace CCarCtrl
 {
@@ -291,8 +365,8 @@ static bool IsPathSegmentExcludedForImpostor(int16 fromNode, int16 toNode)
     //        return true;
     //}
 
-    CPathNode& fromPathNode = ThePaths->m_pathNodes[fromNode];
-    CPathNode& toPathNode = ThePaths->m_pathNodes[toNode];
+    CPathNode& fromPathNode = GetPaths().m_pathNodes[fromNode];
+    CPathNode& toPathNode = GetPaths().m_pathNodes[toNode];
 
     if (fromPathNode.bDisabled || toPathNode.bDisabled)
         return true;
@@ -345,8 +419,8 @@ static float ComputeLaneOffset(bool useRightSide, int32 laneCount, int32 laneInd
 
 static bool IsTraversalAlongLinkDir(int16 fromNode, int16 toNode, CCarPathLink& link)
 {
-    CVector fromPos = ThePaths->m_pathNodes[fromNode].GetPosition();
-    CVector toPos = ThePaths->m_pathNodes[toNode].GetPosition();
+    CVector fromPos = GetPaths().m_pathNodes[fromNode].GetPosition();
+    CVector toPos = GetPaths().m_pathNodes[toNode].GetPosition();
     CVector2D segDir = CVector2D(toPos.x - fromPos.x, toPos.y - fromPos.y);
     CVector2D linkDir = link.GetDirection();
     return DotProduct2D(segDir, linkDir) >= 0.0f;
@@ -371,11 +445,11 @@ static bool ShouldKeepImpostorAliveNearCamera(const CMovingThings::CDistantCarIm
 static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& impostor)
 {
     if (impostor.m_nPrevNode < 0 || impostor.m_nNextNode < 0 ||
-        impostor.m_nPrevNode >= ThePaths->m_numCarPathNodes || impostor.m_nNextNode >= ThePaths->m_numCarPathNodes)
+        impostor.m_nPrevNode >= GetPaths().m_numCarPathNodes || impostor.m_nNextNode >= GetPaths().m_numCarPathNodes)
         return false;
 
-    CVector fromPos = ThePaths->m_pathNodes[impostor.m_nPrevNode].GetPosition();
-    CVector toPos = ThePaths->m_pathNodes[impostor.m_nNextNode].GetPosition();
+    CVector fromPos = GetPaths().m_pathNodes[impostor.m_nPrevNode].GetPosition();
+    CVector toPos = GetPaths().m_pathNodes[impostor.m_nNextNode].GetPosition();
     CVector segment = toPos - fromPos;
     float segmentLen = segment.Magnitude2D();
     if (segmentLen < 0.001f)
@@ -386,12 +460,12 @@ static bool ComputeImpostorTransform(CMovingThings::CDistantCarImpostor& imposto
     CVector right(-dir.y, dir.x, 0.0f);
 
     {
-        CPathNode& node = ThePaths->m_pathNodes[impostor.m_nPrevNode];
+        CPathNode& node = GetPaths().m_pathNodes[impostor.m_nPrevNode];
         for (int32 li = 0; li < (int32)node.numLinks; li++)
         {
             int32 conn = node.firstLink + li;
-            if (ThePaths->ConnectedNode(conn) != impostor.m_nNextNode) continue;
-            CCarPathLink link = ThePaths->m_carPathLinks[ThePaths->m_carPathConnections[conn]];
+            if (GetPaths().m_connections[conn] != impostor.m_nNextNode) continue;
+            CCarPathLink link = GetPaths().m_carPathLinks[(short)GetPaths().m_carPathConnections[conn]];
             impostor.m_fLaneOffset = ComputeLaneOffset(true, impostor.m_nLaneCount, impostor.m_nLaneIndex, link);
             break;
         }
@@ -444,17 +518,17 @@ void CMovingThings::EnsureDistantCarImpostorPoolSize()
 
 bool CMovingThings::FindLaneLinkForSegment(int16 fromNode, int16 toNode, CCarPathLink& laneLink)
 {
-    if (fromNode < 0 || toNode < 0 || fromNode >= ThePaths->m_numCarPathNodes || toNode >= ThePaths->m_numCarPathNodes)
+    if (fromNode < 0 || toNode < 0 || fromNode >= GetPaths().m_numCarPathNodes || toNode >= GetPaths().m_numCarPathNodes)
         return false;
 
-    CPathNode& node = ThePaths->m_pathNodes[fromNode];
+    CPathNode& node = GetPaths().m_pathNodes[fromNode];
     for (int32 i = 0; i < node.numLinks; i++)
     {
         int32 connection = node.firstLink + i;
-        if (ThePaths->ConnectedNode(connection) != toNode)
+        if (GetPaths().m_connections[connection] != toNode)
             continue;
 
-        laneLink = ThePaths->m_carPathLinks[ThePaths->m_carPathConnections[connection]];
+        laneLink = GetPaths().m_carPathLinks[(short)GetPaths().m_carPathConnections[connection]];
         return true;
     }
     return false;
@@ -462,10 +536,10 @@ bool CMovingThings::FindLaneLinkForSegment(int16 fromNode, int16 toNode, CCarPat
 
 bool CMovingThings::PickNextNodeForImpostor(const CDistantCarImpostor& impostor, int16& nextNode, CCarPathLink& laneLink)
 {
-    if (impostor.m_nNextNode < 0 || impostor.m_nNextNode >= ThePaths->m_numCarPathNodes)
+    if (impostor.m_nNextNode < 0 || impostor.m_nNextNode >= GetPaths().m_numCarPathNodes)
         return false;
 
-    CPathNode& node = ThePaths->m_pathNodes[impostor.m_nNextNode];
+    CPathNode& node = GetPaths().m_pathNodes[impostor.m_nNextNode];
     if (node.numLinks == 0)
         return false;
 
@@ -475,7 +549,7 @@ bool CMovingThings::PickNextNodeForImpostor(const CDistantCarImpostor& impostor,
 
     for (int32 i = 0; i < node.numLinks && numChoices < (sizeof(nodeChoices) / sizeof(nodeChoices[0])); i++)
     {
-        int16 candidate = ThePaths->ConnectedNode(node.firstLink + i);
+        int16 candidate = GetPaths().m_connections[node.firstLink + i];
         if (candidate == impostor.m_nPrevNode && node.numLinks > 1)
             continue;
 
@@ -518,29 +592,29 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
     impostor.m_bActive = false;
     impostor.m_nCoronaId = coronaId;
 
-    if (ThePaths->m_numCarPathNodes <= 0)
+    if (GetPaths().m_numCarPathNodes <= 0)
         return false;
 
     // Pin each slot to a proportional window of the node array so the pool
     // stays evenly distributed across the map regardless of farclip.
-    int32 totalNodes  = ThePaths->m_numCarPathNodes;
-    int32 poolSize    = Max(1, (int32)aDistantCarImpostors.size());
-    int32 slotIndex   = (int32)(coronaId - 0x7F000000u);
-    int32 rangeStart  = (int32)((int64_t)slotIndex       * totalNodes / poolSize);
-    int32 rangeEnd    = (int32)((int64_t)(slotIndex + 1) * totalNodes / poolSize);
+    int32 totalNodes = GetPaths().m_numCarPathNodes;
+    int32 poolSize = Max(1, (int32)aDistantCarImpostors.size());
+    int32 slotIndex = (int32)(coronaId - 0x7F000000u);
+    int32 rangeStart = (int32)((int64_t)slotIndex * totalNodes / poolSize);
+    int32 rangeEnd = (int32)((int64_t)(slotIndex + 1) * totalNodes / poolSize);
     if (rangeEnd <= rangeStart) rangeEnd = rangeStart + 1;
 
     for (int32 attempts = 0; attempts < 128; attempts++)
     {
         int16 fromNode = (int16)(rangeStart + CGeneral::GetRandomNumber() % (rangeEnd - rangeStart));
-        CPathNode& node = ThePaths->m_pathNodes[fromNode];
+        CPathNode& node = GetPaths().m_pathNodes[fromNode];
         if (node.numLinks == 0)
             continue;
         if (node.GetPosition().z > 500.0f)
             continue;
 
-        int16 toNode = ThePaths->ConnectedNode(node.firstLink + CGeneral::GetRandomNumber() % node.numLinks);
-        if (ThePaths->m_pathNodes[toNode].GetPosition().z > 500.0f)
+        int16 toNode = GetPaths().m_connections[node.firstLink + CGeneral::GetRandomNumber() % node.numLinks];
+        if (GetPaths().m_pathNodes[toNode].GetPosition().z > 500.0f)
             continue;
         CCarPathLink laneLink;
         if (!FindLaneLinkForSegment(fromNode, toNode, laneLink))
@@ -568,7 +642,7 @@ bool CMovingThings::InitDistantCarImpostor(CDistantCarImpostor& impostor, uint32
         occupied.reserve(aDistantCarImpostors.size());
 
         CVector fromNodePos = node.GetPosition();
-        CVector toNodePos = ThePaths->m_pathNodes[toNode].GetPosition();
+        CVector toNodePos = GetPaths().m_pathNodes[toNode].GetPosition();
         float segLen = (toNodePos - fromNodePos).Magnitude2D();
         float minGap = (segLen > 0.001f) ? Min(0.35f, 16.0f / segLen) : 0.35f;
 
@@ -681,7 +755,7 @@ void CMovingThings::UpdateDistantCarImpostors()
     if (nNumDistantCarImpostors <= 0 || aDistantCarImpostors.empty())
         return;
 
-    if (ThePaths->m_numCarPathNodes <= 0)
+    if (GetPaths().m_numCarPathNodes <= 0)
         return;
 
     float dt = CTimer::GetTimeStepInSeconds();
@@ -748,7 +822,7 @@ void CMovingThings::UpdateDistantCarImpostors()
         }
 
         if (impostor.m_nPrevNode < 0 || impostor.m_nNextNode < 0 ||
-            impostor.m_nPrevNode >= ThePaths->m_numCarPathNodes || impostor.m_nNextNode >= ThePaths->m_numCarPathNodes)
+            impostor.m_nPrevNode >= GetPaths().m_numCarPathNodes || impostor.m_nNextNode >= GetPaths().m_numCarPathNodes)
         {
             if (ShouldKeepImpostorAliveNearCamera(impostor, camPos) && impostor.m_nStuckFrames < 120)
             {
@@ -769,8 +843,8 @@ void CMovingThings::UpdateDistantCarImpostors()
             continue;
         }
 
-        CVector fromPos = ThePaths->m_pathNodes[impostor.m_nPrevNode].GetPosition();
-        CVector toPos = ThePaths->m_pathNodes[impostor.m_nNextNode].GetPosition();
+        CVector fromPos = GetPaths().m_pathNodes[impostor.m_nPrevNode].GetPosition();
+        CVector toPos = GetPaths().m_pathNodes[impostor.m_nNextNode].GetPosition();
         CVector segment = toPos - fromPos;
         float segmentLen = segment.Magnitude2D();
         if (segmentLen < 0.5f)
@@ -822,8 +896,8 @@ void CMovingThings::UpdateDistantCarImpostors()
             uint8 laneSide = useRightLaneGroup ? 1 : 0;
             uint8 laneIndex = Min((uint8)(laneCount - 1), impostor.m_nLaneIndex);
 
-            CVector targetFromPos = ThePaths->m_pathNodes[targetPrevNode].GetPosition();
-            CVector targetToPos = ThePaths->m_pathNodes[targetNextNode].GetPosition();
+            CVector targetFromPos = GetPaths().m_pathNodes[targetPrevNode].GetPosition();
+            CVector targetToPos = GetPaths().m_pathNodes[targetNextNode].GetPosition();
             float targetSegLen = (targetToPos - targetFromPos).Magnitude2D();
             float minEntryGap = (targetSegLen > 0.001f) ? Min(0.35f, 16.0f / targetSegLen) : 0.35f;
 
@@ -927,8 +1001,8 @@ void CMovingThings::UpdateDistantCarImpostors()
             if (prev.m_nLaneSide != curr.m_nLaneSide || prev.m_nLaneIndex != curr.m_nLaneIndex)
                 continue;
 
-            CVector fromPos = ThePaths->m_pathNodes[curr.m_nPrevNode].GetPosition();
-            CVector toPos = ThePaths->m_pathNodes[curr.m_nNextNode].GetPosition();
+            CVector fromPos = GetPaths().m_pathNodes[curr.m_nPrevNode].GetPosition();
+            CVector toPos = GetPaths().m_pathNodes[curr.m_nNextNode].GetPosition();
             float segLen = (toPos - fromPos).Magnitude2D();
             if (segLen < 0.001f)
                 continue;
