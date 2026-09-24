@@ -390,7 +390,7 @@ struct TrafficGraph
     }
 };
 
-using TrafficSimulation = DistantTraffic::Simulation<TrafficGraph, DistantCarRenderer::State>;
+using TrafficSimulation = DistantTraffic::Simulation<TrafficGraph, DistantCarRenderer::State, true>;
 static TrafficSimulation traffic;
 export class CMovingThings
 {

@@ -145,12 +145,14 @@ namespace DistantTraffic
 
     // Graph supplies validated outgoing edges; no game-memory pointers survive a
     // frame. SA can unload a path area without invalidating a cached curve.
-    template <class Graph, class Visual> class Simulation
+    template <class Graph, class Visual, bool AvoidCongestion = false> class Simulation
     {
         using Vehicle = Car<Visual>;
         float accumulator = 0;
         std::vector<float> advances, speeds;
         std::vector<CVector> lookPositions, lookDirections, nextPositions, nextDirections;
+        std::vector<std::array<CVector, 6>> yieldPositions, yieldDirections;
+        std::vector<size_t> yieldCount;
         // Intrusive bucket chains reuse one link per pool slot. Exact cell keys
         // distinguish hash collisions without allocating a list for each cell.
         static constexpr size_t NoCar = size_t(-1);
@@ -204,7 +206,7 @@ namespace DistantTraffic
             car.m_vecPos = car.curve.Point(t) + CVector(0, 0, .55f);
             car.m_vecDir = car.curve.Direction(t);
         }
-        static bool Choose(Vehicle& car, const Edge& entry, Edge& next, unsigned& lane, Curve& curve)
+        static bool Choose(Vehicle& car, const Edge& entry, Edge& next, unsigned& lane, Curve& curve, bool respectLanes = AvoidCongestion)
         {
             std::array<Edge, 16> options;
             size_t count = Graph::Outgoing(entry.to, options);
@@ -218,6 +220,16 @@ namespace DistantTraffic
                 float dot = DotProduct(entry.direction, edge.direction);
                 if (dot < -.75f)
                     continue; // No instantaneous U-turns at dead ends.
+                if constexpr (AvoidCongestion)
+                {
+                    // re3 PickNextNodeRandomly: left turns use the innermost
+                    // lane, right turns the outermost. Crossing several lanes
+                    // at once creates mutually blocked cars at small junctions.
+                    float cross = entry.direction.x * edge.direction.y - entry.direction.y * edge.direction.x;
+                    if (respectLanes && ((cross > .77f && car.exitLane != 0) ||
+                        (cross < -.77f && car.exitLane + 1 != entry.lanes)))
+                        continue;
+                }
                 unsigned candidateLane = (std::min)(car.exitLane, edge.lanes - 1);
                 Curve trial;
                 if (!trial.Build(entry, car.exitLane, edge, candidateLane))
@@ -234,6 +246,10 @@ namespace DistantTraffic
                     chosen = true;
                 }
             }
+            // Like re3, relax the lane restriction if the road has no legal
+            // continuation (for example, every lane follows a sharp bend).
+            if constexpr (AvoidCongestion)
+                if (!chosen && respectLanes) return Choose(car, entry, next, lane, curve, false);
             return chosen;
         }
         static bool AdvanceRoute(Vehicle& car)
@@ -300,6 +316,16 @@ namespace DistantTraffic
                             float spacing = delta.MagnitudeSqr2D();
                             if (spacing < 80.0f * 80.0f)
                                 ++nearby;
+                            if constexpr (AvoidCongestion)
+                            {
+                                // Do not refill a queue as its tail creeps forward.
+                                // Reuse the spawn query; no additional world scan.
+                                if (!entry.water && spacing < 80.0f * 80.0f && other.waiting > .75f)
+                                {
+                                    occupied = true;
+                                    break;
+                                }
+                            }
                             if (spacing < spawnGap * spawnGap || (!entry.water && nearby >= 8))
                             {
                                 occupied = true;
@@ -387,6 +413,50 @@ namespace DistantTraffic
                     nextDirections[i] = car.curve.Direction(t);
                 }
             }
+            if constexpr (AvoidCongestion)
+            {
+                // Resolve against simultaneous end positions. Testing every
+                // moving car against its neighbour's OLD position can freeze
+                // a whole queue when the leader's tail swings around a bend.
+                // Recheck after a stop so followers cannot move into that car.
+                for (int pass = 0; pass < 8; ++pass)
+                {
+                    bool changed = false;
+                    auto stop = [&](size_t i)
+                    {
+                        advances[i] = speeds[i] = 0.0f;
+                        nextPositions[i] = cars[i].m_vecPos;
+                        nextDirections[i] = cars[i].m_vecDir;
+                        changed = true;
+                    };
+                    for (size_t i = 0; i < cars.size(); ++i)
+                    {
+                        const auto& car = cars[i];
+                        if (!car.m_bActive || car.m_bWaterNode || advances[i] == 0) continue;
+                        int x = static_cast<int>(std::floor(car.m_vecPos.x / 40.0f));
+                        int y = static_cast<int>(std::floor(car.m_vecPos.y / 40.0f));
+                        for (int dx = -1; dx <= 1 && advances[i] > 0; ++dx)
+                            for (int dy = -1; dy <= 1 && advances[i] > 0; ++dy)
+                            {
+                                int64_t key = Cell(x + dx, y + dy);
+                                for (size_t j = cells[Bucket(key)]; j != NoCar && advances[i] > 0; j = nextCell[j])
+                                {
+                                    const auto& other = cars[j];
+                                    if (i == j || cellKeys[j] != key || other.m_bWaterNode ||
+                                        (other.m_vecPos - car.m_vecPos).MagnitudeSqr2D() > 144.0f ||
+                                        Overlap(car.m_vecPos, car.m_vecDir, other.m_vecPos, other.m_vecDir)) continue;
+                                    if (!Overlap(nextPositions[i], nextDirections[i], nextPositions[j], nextDirections[j])) continue;
+                                    if (advances[j] == 0 || Overlap(nextPositions[i], nextDirections[i], other.m_vecPos, other.m_vecDir))
+                                        stop(i);
+                                    else
+                                        stop(j);
+                                }
+                            }
+                    }
+                    if (!changed) return;
+                }
+                // Unusually long stop chains use the conservative fallback below.
+            }
             for (size_t i = 0; i < cars.size(); ++i)
             {
                 const auto& car = cars[i];
@@ -424,8 +494,17 @@ namespace DistantTraffic
             BuildCells();
             advances.assign(cars.size(), 0);
             speeds.assign(cars.size(), 0);
-            lookPositions.resize(cars.size());
-            lookDirections.resize(cars.size());
+            if constexpr (AvoidCongestion)
+            {
+                yieldPositions.resize(cars.size());
+                yieldDirections.resize(cars.size());
+                yieldCount.assign(cars.size(), 6);
+            }
+            else
+            {
+                lookPositions.resize(cars.size());
+                lookDirections.resize(cars.size());
+            }
             for (size_t i = 0; i < cars.size(); ++i)
             {
                 auto& car = cars[i];
@@ -435,11 +514,67 @@ namespace DistantTraffic
                 car.previousDirection = car.m_vecDir;
                 if (!car.m_bWaterNode)
                 {
-                    float t = car.curve.Parameter((std::min)(car.distance + car.speed * 1.5f, car.curve.length));
-                    lookPositions[i] = car.curve.Point(t) + CVector(0, 0, .55f);
-                    lookDirections[i] = car.curve.Direction(t);
+                    if constexpr (AvoidCongestion)
+                    {
+                        Vehicle projected = car;
+                        for (size_t n = 0; n < yieldPositions[i].size(); ++n)
+                        {
+                            if (n) projected.distance += 5.0f;
+                            // III has short internal road links. Continue across
+                            // them using the same route/RNG choices as movement;
+                            // clamping here hides the next junction until too late.
+                            for (int transitions = 0; projected.distance >= projected.curve.length && transitions < 8; ++transitions)
+                            {
+                                float remaining = projected.distance - projected.curve.length;
+                                projected.distance = projected.curve.length;
+                                if (!AdvanceRoute(projected)) break;
+                                projected.distance = remaining;
+                            }
+                            float ahead = projected.curve.Parameter(projected.distance);
+                            yieldPositions[i][n] = projected.curve.Point(ahead) + CVector(0, 0, .55f);
+                            yieldDirections[i][n] = projected.curve.Direction(ahead);
+                        }
+                    }
+                    else
+                    {
+                        float t = car.curve.Parameter((std::min)(car.distance + car.speed * 1.5f, car.curve.length));
+                        lookPositions[i] = car.curve.Point(t) + CVector(0, 0, .55f);
+                        lookDirections[i] = car.curve.Direction(t);
+                    }
                 }
             }
+            if constexpr (AvoidCongestion)
+                for (size_t i = 0; i < cars.size(); ++i)
+                {
+                    const auto& car = cars[i];
+                    if (!car.m_bActive || car.m_bWaterNode) continue;
+                    int x = static_cast<int>(std::floor(car.m_vecPos.x / 40.0f));
+                    int y = static_cast<int>(std::floor(car.m_vecPos.y / 40.0f));
+                    for (int dx = -1; dx <= 1; ++dx)
+                        for (int dy = -1; dy <= 1; ++dy)
+                        {
+                            int64_t key = Cell(x + dx, y + dy);
+                            for (size_t j = cells[Bucket(key)]; j != NoCar; j = nextCell[j])
+                            {
+                                const auto& other = cars[j];
+                                if (i == j || cellKeys[j] != key || other.m_bWaterNode ||
+                                    DotProduct(car.m_vecDir, other.m_vecDir) < .5f) continue;
+                                bool sameEntry = car.entry.from == other.entry.from && car.entry.to == other.entry.to && car.lane == other.lane;
+                                bool nextLink = car.exit.from == other.entry.from && car.exit.to == other.entry.to && car.exitLane == other.lane;
+                                bool previousLink = car.entry.from == other.exit.from && car.entry.to == other.exit.to && car.lane == other.exitLane;
+                                if (!sameEntry && !nextLink && !previousLink) continue;
+                                // A queued driver cannot reserve the crossing beyond
+                                // the car in front. Otherwise the cross traffic yields
+                                // to the tail while the head yields to cross traffic.
+                                for (size_t n = 1; n < yieldCount[i]; ++n)
+                                    if (Overlap(yieldPositions[i][n], yieldDirections[i][n], other.m_vecPos, other.m_vecDir))
+                                    {
+                                        yieldCount[i] = n;
+                                        break;
+                                    }
+                            }
+                        }
+                }
             for (size_t i = 0; i < cars.size(); ++i)
             {
                 auto& car = cars[i];
@@ -447,7 +582,7 @@ namespace DistantTraffic
                     continue;
                 if (car.retiring)
                 {
-                    car.m_visual.fade = (std::max)(0.0f, car.m_visual.fade - dt / .8f);
+                    car.m_visual.fade = (std::max)(0.0f, car.m_visual.fade - dt / (AvoidCongestion ? .6f : .8f));
                     if (car.m_visual.fade == 0)
                     {
                         car.m_bActive = false;
@@ -466,6 +601,7 @@ namespace DistantTraffic
                 if (bend < .8f && car.distance > car.curve.leadLength - 25.0f && car.distance < car.curve.length - car.curve.trailLength + 25.0f)
                     desired = (std::min)(desired, 8.0f);
                 float allowed = 1000.0f;
+                unsigned queuedAhead = 0;
                 // Read one snapshot and apply all movement afterwards. Followers
                 // slow BEFORE moving; they are never pushed backwards to make room.
                 int x = static_cast<int>(std::floor(car.m_vecPos.x / 40.0f));
@@ -495,10 +631,21 @@ namespace DistantTraffic
                             {
                                 bool otherFirst = other.entry.from < car.entry.from ||
                                     (other.entry.from == car.entry.from && other.m_nCoronaId < car.m_nCoronaId);
+                                if constexpr (AvoidCongestion)
+                                    otherFirst = other.curve.length - other.distance < car.curve.length - car.distance ||
+                                        (other.curve.length - other.distance == car.curve.length - car.distance && other.m_nCoronaId < car.m_nCoronaId);
                                 following = otherFirst;
                             }
                             float heading = DotProduct(car.m_vecDir, other.m_vecDir);
-                            if (!(sameEntry && sameExit) && !car.m_bWaterNode && delta.MagnitudeSqr2D() < 400.0f &&
+                            if constexpr (AvoidCongestion)
+                            {
+                                float along = DotProduct(delta, car.m_vecDir);
+                                float lateral = std::abs(delta.x * car.m_vecDir.y - delta.y * car.m_vecDir.x);
+                                if (!other.retiring && heading > .5f && along > 0 && along < 40.0f && lateral < 3.0f &&
+                                    other.speed < (std::max)(1.0f, other.cruise * .25f))
+                                    ++queuedAhead;
+                            }
+                            if (!AvoidCongestion && !(sameEntry && sameExit) && !car.m_bWaterNode && delta.MagnitudeSqr2D() < 400.0f &&
                                 other.m_nCoronaId < car.m_nCoronaId &&
                                 Overlap(lookPositions[i], lookDirections[i], lookPositions[j], lookDirections[j]))
                                 desired = 0.0f;
@@ -511,14 +658,52 @@ namespace DistantTraffic
                                 {
                                     float space = (std::max)(0.0f, along - gap);
                                     allowed = (std::min)(allowed, space);
-                                    desired = (std::min)(desired, (std::max)(0.0f, other.speed + (space - car.speed * .8f) * .5f));
+                                    float headway = AvoidCongestion ? .55f : .8f;
+                                    float response = AvoidCongestion ? .8f : .5f;
+                                    float followingSpeed = (std::max)(0.0f, other.speed + (space - car.speed * headway) * response);
+                                    desired = (std::min)(desired, followingSpeed);
                                 }
                             }
                             // Local crossing priority, like the games' nearby-car
                             // scans. Never lock an entire node/link, and never stop
                             // a vehicle that is already clearing the crossing.
-                            if (car.entry.to != other.entry.to || car.entry.from == other.entry.from || heading > .7f)
+                            if ((!AvoidCongestion && (car.entry.to != other.entry.to || heading > .7f)) || car.entry.from == other.entry.from)
                                 continue;
+                            if constexpr (AvoidCongestion)
+                            {
+                                // Opposing turns can intersect even when the current
+                                // headings are parallel. Check the upcoming corridor,
+                                // not just a single speed-dependent future position.
+                                // Fixed distances keep the yielding car stopped until
+                                // the other driver actually clears its path.
+                                if (sameEntry || sameLane(car.entry, car.lane, other.exit, other.exitLane) ||
+                                    sameLane(car.exit, car.exitLane, other.entry, other.lane))
+                                    continue; // A car clearing the link never yields to its own queue.
+                                if (!car.m_bWaterNode && delta.MagnitudeSqr2D() < 3600.0f)
+                                {
+                                    size_t first = 6, otherFirst = 6;
+                                    for (size_t a = 0; a < yieldCount[i]; ++a)
+                                        for (size_t b = 0; b < yieldCount[j]; ++b)
+                                            if (Overlap(yieldPositions[i][a], yieldDirections[i][a], yieldPositions[j][b], yieldDirections[j][b]))
+                                            {
+                                                first = (std::min)(first, a);
+                                                otherFirst = (std::min)(otherFirst, b);
+                                            }
+                                    // The driver nearest the actual conflict clears
+                                    // first. Node IDs are not arrival order, especially
+                                    // when a curve crosses several short road links.
+                                    bool yield = first > otherFirst || (first == otherFirst && other.m_nCoronaId < car.m_nCoronaId);
+                                    if (sameExit)
+                                        yield = other.curve.length - other.distance < car.curve.length - car.distance ||
+                                            (other.curve.length - other.distance == car.curve.length - car.distance && other.m_nCoronaId < car.m_nCoronaId);
+                                    if (first < 6 && yield)
+                                    {
+                                        allowed = (std::min)(allowed, (std::max)(0.0f, (static_cast<float>(first) - 1.0f) * 5.0f));
+                                        desired = 0.0f;
+                                    }
+                                }
+                                continue;
+                            }
                             float cross = car.m_vecDir.x * other.m_vecDir.y - car.m_vecDir.y * other.m_vecDir.x;
                             if (std::abs(cross) < .25f || (other.speed < .5f && other.waiting > 3.0f))
                                 continue;
@@ -539,7 +724,19 @@ namespace DistantTraffic
                             }
                         }
                     }
-                float speed = car.speed + (std::clamp)(desired - car.speed, -4.0f * dt, 2.0f * dt);
+                if constexpr (AvoidCongestion)
+                    if (queuedAhead >= 3 && car.waiting > .75f)
+                    {
+                        // Ambient traffic must not fill a street with a standing
+                        // queue. Keep its front cars and fade excess tails using
+                        // the existing envelope; never teleport through the jam.
+                        car.retiring = true;
+                        continue;
+                    }
+                // III's queue should pull away promptly once its leader moves.
+                // Keep the same braking and physical clearance checks.
+                float acceleration = AvoidCongestion ? 3.5f : 2.0f;
+                float speed = car.speed + (std::clamp)(desired - car.speed, -4.0f * dt, acceleration * dt);
                 float advance = (std::min)((std::max)(0.0f, speed) * dt, allowed);
                 speeds[i] = advance / dt;
                 advances[i] = advance;
@@ -551,10 +748,20 @@ namespace DistantTraffic
                 if (!car.m_bActive || car.retiring)
                     continue;
                 car.speed = speeds[i];
-                car.waiting = car.speed < .5f && car.cruise > 1.0f ? car.waiting + dt : 0.0f;
+                if constexpr (AvoidCongestion)
+                {
+                    // A creeping queue is still congested. Short bursts of
+                    // movement must not restart its recovery timer every time.
+                    car.waiting = car.speed < car.cruise * .25f && car.cruise > 1.0f ?
+                        car.waiting + dt : (std::max)(0.0f, car.waiting - dt * 2.0f);
+                }
+                else
+                    car.waiting = car.speed < .5f && car.cruise > 1.0f ? car.waiting + dt : 0.0f;
                 // Recycle a genuinely stuck distant driver gradually. Stagger the
                 // timeout so a whole queue does not disappear on the same frame.
-                if (car.waiting > 24.0f + static_cast<float>(car.m_nCoronaId % 12))
+                float stuckTime = AvoidCongestion ? 8.0f + static_cast<float>(car.m_nCoronaId % 4) :
+                    24.0f + static_cast<float>(car.m_nCoronaId % 12);
+                if (car.waiting > stuckTime)
                 {
                     car.retiring = true;
                     continue;
@@ -597,10 +804,19 @@ namespace DistantTraffic
             cars.reserve(capacity);
             advances.reserve(capacity);
             speeds.reserve(capacity);
-            lookPositions.reserve(capacity);
-            lookDirections.reserve(capacity);
             nextPositions.reserve(capacity);
             nextDirections.reserve(capacity);
+            if constexpr (AvoidCongestion)
+            {
+                yieldPositions.reserve(capacity);
+                yieldDirections.reserve(capacity);
+                yieldCount.reserve(capacity);
+            }
+            else
+            {
+                lookPositions.reserve(capacity);
+                lookDirections.reserve(capacity);
+            }
             nextCell.reserve(capacity);
             cellKeys.reserve(capacity);
             size_t buckets = 1;

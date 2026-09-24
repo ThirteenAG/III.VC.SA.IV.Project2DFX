@@ -177,14 +177,17 @@ export namespace DistantCarRenderer
 
             RenderStates()
             {
-                // ZWRITE stays off on purpose. Everything that draws after the
+                // VC/SA keep ZWRITE off on purpose. Everything that draws after the
                 // models and z-tests will be rejected inside their pixels if the
                 // models write depth, so cars would cut holes into the moving fog
                 // and the volumetric clouds (both only test, they never occlude
                 // anything themselves). The test stays on, so buildings occlude
                 // the cars, and the cars are sorted back to front, which is what
                 // the alpha blending needs.
-                const uintptr_t values[10] = { 0,1,0,1,5,6,2,1,2,8 };
+                // III still draws fading roads after this hook. Let those
+                // surfaces depth-test against cars instead of painting over
+                // them when the map switches between normal and LOD geometry.
+                const uintptr_t values[10] = { 0,1,bLegacyIm3D ? 1u : 0u,1,5,6,2,1,2,8 };
                 for (int i = 0; i < 10; ++i)
                 {
                     RwRenderStateGet(states[i], &saved[i]);
@@ -201,8 +204,7 @@ export namespace DistantCarRenderer
         void Render()
         {
             if (cars.empty()) return;
-            // All three dllmains resolve PauseMode; the regular millisecond
-            // GameRef is declared but unbound. Cache age can use pause time.
+            // Use the timer bound by this game's dllmain for cache age.
             const uint32_t now = CTimer::GetEffectsTimeInMilliseconds();
             // Round-robin sampling prevents distant entries from starving. At
             // most 128 vertical queries per frame, independent of pool size.
