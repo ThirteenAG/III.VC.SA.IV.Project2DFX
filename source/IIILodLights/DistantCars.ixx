@@ -2,6 +2,7 @@ module;
 
 #include <stdafx.h>
 #include "../DistantTraffic.hpp"
+#include "WaterPaths.hpp"
 
 #include <Facade.hpp>
 
@@ -392,6 +393,45 @@ struct TrafficGraph
 
 using TrafficSimulation = DistantTraffic::Simulation<TrafficGraph, DistantCarRenderer::State, true>;
 static TrafficSimulation traffic;
+struct WaterTrafficGraph
+{
+    using Node = DistantTraffic::Node;
+    using Edge = DistantTraffic::Edge;
+    static bool Valid(const Edge& edge)
+    {
+        return bDistantMaritimeTraffic && edge.from < IIIWaterPaths::Nodes.size() && edge.to < IIIWaterPaths::Nodes.size();
+    }
+    static Node RandomNode(uint32_t random)
+    {
+        return bDistantMaritimeTraffic ? random % IIIWaterPaths::Nodes.size() : DistantTraffic::InvalidNode;
+    }
+    static size_t Outgoing(Node from, std::array<Edge, 16>& result)
+    {
+        if (!bDistantMaritimeTraffic || from >= IIIWaterPaths::Nodes.size()) return 0;
+        const auto& a = IIIWaterPaths::Nodes[from];
+        for (unsigned i = 0; i < a.count; ++i)
+        {
+            const auto& b = IIIWaterPaths::Nodes[a.links[i]];
+            Edge edge;
+            edge.from = from;
+            edge.to = a.links[i];
+            edge.position = { (a.x + b.x) * .5f, (a.y + b.y) * .5f, 0.0f };
+            edge.direction = { b.x - a.x, b.y - a.y, 0.0f };
+            edge.direction.Normalise();
+            edge.lanes = 1;
+            edge.laneWidth = 24.0f;
+            edge.speed = 8.0f;
+            edge.water = true;
+            result[i] = edge;
+        }
+        return a.count;
+    }
+    static bool SpawnAllowed(const Edge&) { return bDistantMaritimeTraffic; }
+    static void Hide(uint32_t id) { TrafficGraph::Hide(id); }
+};
+// Separate IDs and a small reserved share of the configured total prevent
+// long-lived coastal traffic from gradually taking over the road-car pool.
+static DistantTraffic::Simulation<WaterTrafficGraph, DistantCarRenderer::State> boats(0x7F010000u);
 export class CMovingThings
 {
   public:
@@ -400,9 +440,11 @@ export class CMovingThings
     static void InitDistantCarImpostors()
     {
         traffic.Clear();
+        boats.Clear();
         traffic.Reserve(static_cast<size_t>((std::clamp)(nNumDistantCarImpostors, 0, 10000)));
+        boats.Reserve(32);
     }
-    static void ShutdownDistantCarImpostors() { traffic.Clear(); }
+    static void ShutdownDistantCarImpostors() { traffic.Clear(); boats.Clear(); }
     static void UpdateDistantCarImpostors();
     static void RenderDistantCarImpostors();
 };
@@ -427,25 +469,26 @@ void CMovingThings::UpdateDistantCarImpostors()
         density *= .65f;
     density *= 1.0f - .22f * static_cast<float>(CWeather::Rain);
     density *= 1.0f - .16f * static_cast<float>(CWeather::Foggyness);
-    traffic.Update(CTimer::GetTimeStepInSeconds(), static_cast<size_t>((std::clamp)(nNumDistantCarImpostors, 0, 10000)), density, camera, farClip);
+    size_t capacity = static_cast<size_t>((std::clamp)(nNumDistantCarImpostors, 0, 10000));
+    size_t boatCapacity = bDistantMaritimeTraffic ? (std::min)(size_t(32), capacity / 20) : 0;
+    float dt = CTimer::GetTimeStepInSeconds();
+    traffic.Update(dt, capacity - boatCapacity, density, camera, farClip);
+    boats.Update(dt, boatCapacity, density, camera, farClip);
 }
 
-void CMovingThings::RenderDistantCarImpostors()
+template<class Simulation>
+static void RenderTraffic(Simulation& simulation, DistantCarRenderer::Frame& models, const CVector& camPos, float maxDist)
 {
-    if (nNumDistantCarImpostors <= 0 || aDistantCarImpostors.empty())
-        return;
-
-    CVector camPos = TheCamera->GetPosition();
-    float maxDist = CTimeCycle::m_fCurrentFarClip;
-    DistantCarRenderer::Frame models(camPos, maxDist);
-
-    for (size_t i = 0; i < aDistantCarImpostors.size(); i++)
+    for (size_t i = 0; i < simulation.cars.size(); i++)
     {
-        CDistantCarImpostor& impostor = aDistantCarImpostors[i];
+        auto& impostor = simulation.cars[i];
         if (!impostor.m_bActive)
             continue;
 
-        CVector toImpostor = traffic.RenderPosition(impostor) - camPos;
+        if (impostor.m_bWaterNode && !bDistantMaritimeTraffic)
+            continue;
+
+        CVector toImpostor = simulation.RenderPosition(impostor) - camPos;
         float distSqr = toImpostor.MagnitudeSqr2D();
         if (distSqr < SQR(140.0f) || distSqr > SQR(maxDist))
             continue;
@@ -454,27 +497,109 @@ void CMovingThings::RenderDistantCarImpostors()
         if (dist < 0.001f)
             continue;
 
-        float dirDot = DotProduct(traffic.RenderDirection(impostor), camPos - traffic.RenderPosition(impostor));
+        float dirDot = DotProduct(simulation.RenderDirection(impostor), camPos - simulation.RenderPosition(impostor));
         bool approaching = dirDot > 0.0f;
 
-        uint8 red = approaching ? 255 : 255;
-        uint8 green = approaching ? 255 : 40;
-        uint8 blue = approaching ? 230 : 40;
-        uint8 alpha = 150;
+        uint8 red, green, blue;
+        if (impostor.m_bWaterNode)
+        {
+            // Boats show an all-round white masthead/stern light (warm white).
+            red = 255;
+            green = 242;
+            blue = 218;
+        }
+        else
+        {
+            // Road vehicle: white headlights (approaching), red tail lights (receding)
+            red = 255;
+            green = approaching ? 255 : 40;
+            blue = approaching ? 230 : 40;
+        }
 
         float fadeFar = Clamp((maxDist - dist) / 250.0f, 0.0f, 1.0f);
         float fadeNear = Clamp((dist - 140.0f) / 120.0f, 0.0f, 1.0f);
         float fade = fadeFar * fadeNear;
-        if (models.Add(traffic.RenderPosition(impostor), traffic.RenderDirection(impostor), impostor.m_visual, impostor.m_nCoronaId, fade))
+
+        if (models.Add(simulation.RenderPosition(impostor), simulation.RenderDirection(impostor), impostor.m_visual, impostor.m_nCoronaId, fade, impostor.m_bWaterNode))
             continue;
 
+        float size = 4.0f * fDistantCarsRadiusMultiplier;
         fade *= impostor.m_visual.fade;
-        alpha = (uint8)(alpha * fade);
-        if (alpha == 0)
+        uint8 alpha = (uint8)(150 * fade);
+
+        // Boat navigation lights: compute the camera bearing relative to the
+        // boat heading (fwd = cos, cross > 0 -> camera on the port side).
+        uint8 sideAlpha = 0;
+        float boatCross = 0.0f, sectorBlend = 0.0f;
+        CVector portPos, stbdPos;
+        if (impostor.m_bWaterNode)
+        {
+            float toCamX = camPos.x - simulation.RenderPosition(impostor).x;
+            float toCamY = camPos.y - simulation.RenderPosition(impostor).y;
+            float toCamLen = Sqrt(toCamX * toCamX + toCamY * toCamY);
+            if (toCamLen > 0.001f)
+            {
+                float fwd = (simulation.RenderDirection(impostor).x * toCamX + simulation.RenderDirection(impostor).y * toCamY) / toCamLen;
+                boatCross = simulation.RenderDirection(impostor).x * toCamY - simulation.RenderDirection(impostor).y * toCamX;
+
+                // Sidelights cover from dead ahead to 22.5° abaft the beam.
+                constexpr float SECTOR_EDGE = -0.38f; // cos(112.5°)
+                constexpr float EDGE_RAMP = 0.15f;
+                sectorBlend = Clamp((fwd - SECTOR_EDGE) / EDGE_RAMP, 0.0f, 1.0f);
+
+                // White light: bright masthead in the forward arc, dimmer
+                // stern light astern.
+                size = 2.6f * fDistantCarsRadiusMultiplier;
+                alpha = (uint8)((70.0f + 40.0f * sectorBlend) * fade);
+                sideAlpha = (uint8)(180.0f * fade * sectorBlend);
+
+                // Port/starboard light positions, offset to each side of the
+                // bow so red and green are clearly separated and never wash
+                // out against the white masthead light.
+                const float beamHalf = 2.0f;
+                portPos = simulation.RenderPosition(impostor) +
+                          CVector(-simulation.RenderDirection(impostor).y * beamHalf, simulation.RenderDirection(impostor).x * beamHalf, 0.0f);
+                stbdPos = simulation.RenderPosition(impostor) +
+                          CVector(simulation.RenderDirection(impostor).y * beamHalf, -simulation.RenderDirection(impostor).x * beamHalf, 0.0f);
+            }
+        }
+        if (alpha == 0 && sideAlpha == 0)
             continue;
 
-        CLODLights::RegisterCorona(impostor.m_nCoronaId, nullptr, red, green, blue, alpha, traffic.RenderPosition(impostor),
-                                   4.0f * fDistantCarsRadiusMultiplier, maxDist, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+        if (alpha)
+        {
+            CLODLights::RegisterCorona(impostor.m_nCoronaId, nullptr, red, green, blue, alpha, simulation.RenderPosition(impostor), size, maxDist, 1, 0, false,
+                                       false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+        }
+
+        if (impostor.m_bWaterNode && sideAlpha)
+        {
+            uint32 baseId = impostor.m_nCoronaId - 0x7F000000u;
+
+            // Red port light — camera anywhere on the port side of the bow.
+            if (boatCross >= 0.0f)
+            {
+                CLODLights::RegisterCorona(ImpostorPortSideCoronaId((int32)baseId), nullptr, 255, 30, 30, sideAlpha, portPos,
+                                           2.4f * fDistantCarsRadiusMultiplier, maxDist, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+            }
+
+            // Green starboard light.
+            if (boatCross <= 0.0f)
+            {
+                CLODLights::RegisterCorona(ImpostorStarboardSideCoronaId((int32)baseId), nullptr, 30, 255, 60, sideAlpha, stbdPos,
+                                           2.4f * fDistantCarsRadiusMultiplier, maxDist, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false);
+            }
+        }
     }
+}
+
+void CMovingThings::RenderDistantCarImpostors()
+{
+    if (nNumDistantCarImpostors <= 0) return;
+    CVector camPos = TheCamera->GetPosition();
+    float maxDist = CTimeCycle::m_fCurrentFarClip;
+    DistantCarRenderer::Frame models(camPos, maxDist);
+    RenderTraffic(traffic, models, camPos, maxDist);
+    RenderTraffic(boats, models, camPos, maxDist);
     models.Flush();
 }

@@ -23,6 +23,7 @@ import Heli;
 import PointLights;
 import DistantCars;
 import DistantCarRenderer;
+import WaterLevel;
 
 #include "TrafficLights.hpp"
 
@@ -608,6 +609,7 @@ void GetMemoryAddresses()
     RwEngineInstance.SetAddress((RwGlobals**)0x661228);
 
     DistantCarRenderer::bLegacyIm3D = true;
+    CWaterLevel::GetWaterLevelNoWaves = reinterpret_cast<decltype(CWaterLevel::GetWaterLevelNoWaves)>(0x555440);
     DistantCarRenderer::fNightAmbient = .38f;
     RwIm3DTransform = (decltype(RwIm3DTransform))0x5B6720;
     RwIm3DRenderIndexedPrimitive = (decltype(RwIm3DRenderIndexedPrimitive))0x5B6820;

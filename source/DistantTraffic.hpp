@@ -148,6 +148,7 @@ namespace DistantTraffic
     template <class Graph, class Visual, bool AvoidCongestion = false> class Simulation
     {
         using Vehicle = Car<Visual>;
+        uint32_t firstCoronaId;
         float accumulator = 0;
         std::vector<float> advances, speeds;
         std::vector<CVector> lookPositions, lookDirections, nextPositions, nextDirections;
@@ -698,8 +699,11 @@ namespace DistantTraffic
                                             (other.curve.length - other.distance == car.curve.length - car.distance && other.m_nCoronaId < car.m_nCoronaId);
                                     if (first < 6 && yield)
                                     {
-                                        allowed = (std::min)(allowed, (std::max)(0.0f, (static_cast<float>(first) - 1.0f) * 5.0f));
-                                        desired = 0.0f;
+                                        float space = (std::max)(0.0f, (static_cast<float>(first) - 1.0f) * 5.0f);
+                                        allowed = (std::min)(allowed, space);
+                                        // Approach the yield point while it is still
+                                        // distant, instead of stopping 25 metres back.
+                                        desired = (std::min)(desired, std::sqrt(4.0f * space));
                                     }
                                 }
                                 continue;
@@ -785,6 +789,7 @@ namespace DistantTraffic
         }
 
       public:
+        explicit Simulation(uint32_t firstId = 0x7F000000u) :firstCoronaId(firstId) {}
         std::vector<Vehicle> cars;
         CVector RenderPosition(const Vehicle& car) const
         {
@@ -844,7 +849,7 @@ namespace DistantTraffic
             cars.resize(capacity);
             for (size_t i = old; i < cars.size(); ++i)
             {
-                cars[i].m_nCoronaId = 0x7F000000u + static_cast<uint32_t>(i);
+                cars[i].m_nCoronaId = firstCoronaId + static_cast<uint32_t>(i);
                 cars[i].random = 0x9E3779B9u ^ ((static_cast<uint32_t>(i) + 1) * 747796405u);
                 if (!cars[i].random)
                     cars[i].random = 1;
