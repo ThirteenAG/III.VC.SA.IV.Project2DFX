@@ -366,6 +366,9 @@ struct TrafficGraph
             edge.direction = direction;
             edge.laneOffset = link.OneWayLaneOffset();
             edge.water = false;
+            // re3 stores the controlled direction in bit 7 of the type.
+            if ((link.pathNodeIndex == to) != ((link.trafficLightType & 0x80) != 0))
+                edge.signal = link.trafficLightType & 0x7F;
             edge.speed = edge.water ? 8.0f : 16.0f;
             result[count++] = edge;
         }
@@ -472,6 +475,7 @@ void CMovingThings::UpdateDistantCarImpostors()
     size_t capacity = static_cast<size_t>((std::clamp)(nNumDistantCarImpostors, 0, 10000));
     size_t boatCapacity = bDistantMaritimeTraffic ? (std::min)(size_t(32), capacity / 20) : 0;
     float dt = CTimer::GetTimeStepInSeconds();
+    traffic.SetSignals(CTrafficLights::StopForCars(1, CTimer::m_snTimeInMilliseconds), CTrafficLights::StopForCars(2, CTimer::m_snTimeInMilliseconds));
     traffic.Update(dt, capacity - boatCapacity, density, camera, farClip);
     boats.Update(dt, boatCapacity, density, camera, farClip);
 }

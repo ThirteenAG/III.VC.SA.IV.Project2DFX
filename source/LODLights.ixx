@@ -43,6 +43,14 @@ export namespace CTrafficLights
         if (logic) return logic();
         return DistantLightLogic::TrafficPhase(GameTime ? *GameTime : fallbackTime, group, TimeDivisor);
     }
+    bool StopForCars(unsigned group, uint32_t fallbackTime)
+    {
+        auto logic = group == 1 ? LightForCars1 : LightForCars2;
+        // Native driving phases let traffic through flashing storm/riot lights.
+        if (logic) return logic() != 0;
+        auto phase = Phase(group, fallbackTime);
+        return phase == 1 || phase == 2;
+    }
 }
 
 export class CRegisteredCorona

@@ -326,6 +326,9 @@ struct TrafficGraph
             edge.laneWidth = 5.4f;
             edge.laneOffset = (link.numLeftLanes == 0 || link.numRightLanes == 0) ? (.5f - .5f * lanes) : .5f;
             edge.water = a.m_bWaterNode;
+            // SA's direction bit has the opposite sense to III/VC.
+            if (!edge.water && attached == bool(link.m_bTrafficLightDirection))
+                edge.signal = link.m_nTrafficLightState;
             edge.speed = edge.water ? 8.0f : (a.m_bHighway ? 23.0f : 16.0f);
             result[count++] = edge;
         }
@@ -379,6 +382,7 @@ void CMovingThings::UpdateDistantCarImpostors()
         density *= .65f;
     density *= 1.0f - .22f * static_cast<float>(CWeather::Rain);
     density *= 1.0f - .16f * static_cast<float>(CWeather::Foggyness);
+    traffic.SetSignals(CTrafficLights::StopForCars(1, CTimer::m_snTimeInMilliseconds), CTrafficLights::StopForCars(2, CTimer::m_snTimeInMilliseconds));
     traffic.Update(CTimer::GetTimeStepInSeconds(), static_cast<size_t>((std::clamp)(nNumDistantCarImpostors, 0, 10000)), density, camera, farClip);
 }
 

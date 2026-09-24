@@ -20,6 +20,7 @@ namespace DistantTraffic
         float laneOffset = .5f, laneWidth = 5.0f, speed = 16.0f;
         unsigned lanes = 0;
         unsigned spawnRate = 15;
+        unsigned signal = 0;
         bool water = false;
         CVector Lane(unsigned index) const
         {
@@ -140,6 +141,7 @@ namespace DistantTraffic
         Curve curve;
         float distance = 0, speed = 0, cruise = 0, waiting = 0;
         bool retiring = false;
+        bool signalWaiting = false;
         uint32_t random = 1;
     };
 
@@ -150,6 +152,9 @@ namespace DistantTraffic
         using Vehicle = Car<Visual>;
         uint32_t firstCoronaId;
         float accumulator = 0;
+        CVector avoidancePosition = {0, 0, 0};
+        bool avoidViewer = false;
+        std::array<bool, 3> stopSignals{};
         std::vector<float> advances, speeds;
         std::vector<CVector> lookPositions, lookDirections, nextPositions, nextDirections;
         std::vector<std::array<CVector, 6>> yieldPositions, yieldDirections;
@@ -207,12 +212,18 @@ namespace DistantTraffic
             car.m_vecPos = car.curve.Point(t) + CVector(0, 0, .55f);
             car.m_vecDir = car.curve.Direction(t);
         }
-        static bool Choose(Vehicle& car, const Edge& entry, Edge& next, unsigned& lane, Curve& curve, bool respectLanes = AvoidCongestion)
+        bool Choose(Vehicle& car, const Edge& entry, Edge& next, unsigned& lane, Curve& curve, bool respectLanes = AvoidCongestion)
         {
             std::array<Edge, 16> options;
             size_t count = Graph::Outgoing(entry.to, options);
             float total = 0;
             bool chosen = false;
+            CVector toViewer = avoidancePosition - entry.position;
+            float lateral = toViewer.x * entry.direction.y - toViewer.y * entry.direction.x;
+            bool nearViewer = avoidViewer && !entry.water && std::abs(toViewer.z) < 12.0f &&
+                toViewer.MagnitudeSqr2D() > 140.0f * 140.0f && toViewer.MagnitudeSqr2D() < 500.0f * 500.0f &&
+                std::abs(lateral) < 60.0f;
+            bool escaping = false;
             for (size_t i = 0; i < count; ++i)
             {
                 auto& edge = options[i];
@@ -235,6 +246,14 @@ namespace DistantTraffic
                 Curve trial;
                 if (!trial.Build(entry, car.exitLane, edge, candidateLane))
                     continue;
+                // Prefer a legal side road at the next decision point. Never
+                // rebuild the curve a visible car is already driving along.
+                float turn = entry.direction.x * edge.direction.y - entry.direction.y * edge.direction.x;
+                bool escape = nearViewer && dot < .8f && dot > -.3f &&
+                    (turn <= .77f || car.exitLane == 0) && (turn >= -.77f || car.exitLane + 1 == entry.lanes) &&
+                    std::abs(toViewer.x * edge.direction.y - toViewer.y * edge.direction.x) > 140.0f;
+                if (escaping && !escape) continue;
+                if (escape && !escaping) { escaping = true; chosen = false; total = 0; }
                 // As in PickNextNodeRandomly, prefer continuing along the road;
                 // choose once per transition, never reroll a blocked turn.
                 float weight = dot > .85f ? 5.0f : 1.0f;
@@ -253,7 +272,7 @@ namespace DistantTraffic
                 if (!chosen && respectLanes) return Choose(car, entry, next, lane, curve, false);
             return chosen;
         }
-        static bool AdvanceRoute(Vehicle& car)
+        bool AdvanceRoute(Vehicle& car)
         {
             Edge next;
             unsigned nextLane;
@@ -317,7 +336,7 @@ namespace DistantTraffic
                             float spacing = delta.MagnitudeSqr2D();
                             if (spacing < 80.0f * 80.0f)
                                 ++nearby;
-                            if constexpr (AvoidCongestion)
+                            if (AvoidCongestion || other.signalWaiting)
                             {
                                 // Do not refill a queue as its tail creeps forward.
                                 // Reuse the spawn query; no additional world scan.
@@ -346,6 +365,7 @@ namespace DistantTraffic
                 car.cruise = (entry.water ? 8.0f : entry.speed) * (.85f + static_cast<float>(Random(car.random) % 300) / 1000.0f);
                 car.speed = car.cruise;
                 car.waiting = 0;
+                car.signalWaiting = false;
                 car.retiring = false;
                 car.m_visual = {};
                 car.m_visual.fade = 0;
@@ -520,7 +540,11 @@ namespace DistantTraffic
                         Vehicle projected = car;
                         for (size_t n = 0; n < yieldPositions[i].size(); ++n)
                         {
+                            bool stoppedAtSignal = n && projected.exit.signal > 0 && projected.exit.signal < stopSignals.size() &&
+                                stopSignals[projected.exit.signal] && projected.distance <= projected.curve.length - 3.95f &&
+                                projected.distance + 5.0f >= projected.curve.length - 4.0f;
                             if (n) projected.distance += 5.0f;
+                            if (stoppedAtSignal) projected.distance = (std::max)(0.0f, projected.curve.length - 4.0f);
                             // III has short internal road links. Continue across
                             // them using the same route/RNG choices as movement;
                             // clamping here hides the next junction until too late.
@@ -534,11 +558,18 @@ namespace DistantTraffic
                             float ahead = projected.curve.Parameter(projected.distance);
                             yieldPositions[i][n] = projected.curve.Point(ahead) + CVector(0, 0, .55f);
                             yieldDirections[i][n] = projected.curve.Direction(ahead);
+                            // A red-light queue cannot reserve the green road's
+                            // crossing corridor beyond its own stop line.
+                            if (stoppedAtSignal) { yieldCount[i] = n + 1; break; }
                         }
                     }
                     else
                     {
-                        float t = car.curve.Parameter((std::min)(car.distance + car.speed * 1.5f, car.curve.length));
+                        float ahead = (std::min)(car.distance + car.speed * 1.5f, car.curve.length);
+                        if (car.exit.signal > 0 && car.exit.signal < stopSignals.size() && stopSignals[car.exit.signal] &&
+                            car.distance <= car.curve.length - 3.95f)
+                            ahead = (std::min)(ahead, (std::max)(0.0f, car.curve.length - 4.0f));
+                        float t = car.curve.Parameter(ahead);
                         lookPositions[i] = car.curve.Point(t) + CVector(0, 0, .55f);
                         lookDirections[i] = car.curve.Direction(t);
                     }
@@ -602,6 +633,21 @@ namespace DistantTraffic
                 if (bend < .8f && car.distance > car.curve.leadLength - 25.0f && car.distance < car.curve.length - car.curve.trailLength + 25.0f)
                     desired = (std::min)(desired, 8.0f);
                 float allowed = 1000.0f;
+                bool wasSignalWaiting = car.signalWaiting;
+                car.signalWaiting = false;
+                if (!car.m_bWaterNode && car.exit.signal > 0 && car.exit.signal < stopSignals.size() && stopSignals[car.exit.signal])
+                {
+                    // Native signals control the directed path link. Its lane
+                    // position is this curve's end; leave room for the bonnet.
+                    float space = car.curve.length - car.distance - 4.0f;
+                    if (space >= -.05f)
+                    {
+                        space = (std::max)(0.0f, space);
+                        allowed = (std::min)(allowed, space);
+                        desired = (std::min)(desired, std::sqrt(6.0f * space));
+                        car.signalWaiting = space < 45.0f;
+                    }
+                }
                 unsigned queuedAhead = 0;
                 // Read one snapshot and apply all movement afterwards. Followers
                 // slow BEFORE moving; they are never pushed backwards to make room.
@@ -638,7 +684,7 @@ namespace DistantTraffic
                                 following = otherFirst;
                             }
                             float heading = DotProduct(car.m_vecDir, other.m_vecDir);
-                            if constexpr (AvoidCongestion)
+                            if (AvoidCongestion || car.exit.signal || other.signalWaiting)
                             {
                                 float along = DotProduct(delta, car.m_vecDir);
                                 float lateral = std::abs(delta.x * car.m_vecDir.y - delta.y * car.m_vecDir.x);
@@ -657,6 +703,7 @@ namespace DistantTraffic
                                 float gap = car.m_bWaterNode ? 35.0f : 6.0f;
                                 if (along > 0 && along <= 70 && lateral <= (car.m_bWaterNode ? 5.0f : sameExit && !sameEntry ? 6.0f : 1.8f) && ((sameEntry && sameExit) || heading > .7f))
                                 {
+                                    car.signalWaiting = car.signalWaiting || other.signalWaiting;
                                     float space = (std::max)(0.0f, along - gap);
                                     allowed = (std::min)(allowed, space);
                                     float headway = AvoidCongestion && !car.m_bWaterNode ? .55f : .8f;
@@ -728,7 +775,10 @@ namespace DistantTraffic
                             }
                         }
                     }
-                if constexpr (AvoidCongestion)
+                // A normal red phase must not leave an expired stuck timer
+                // behind when green releases the queue.
+                if (wasSignalWaiting && !car.signalWaiting) car.waiting = 0;
+                if (AvoidCongestion || car.signalWaiting)
                     if (!car.m_bWaterNode && queuedAhead >= 3 && car.waiting > .75f)
                     {
                         // Ambient traffic must not fill a street with a standing
@@ -765,7 +815,7 @@ namespace DistantTraffic
                 // timeout so a whole queue does not disappear on the same frame.
                 float stuckTime = AvoidCongestion && !car.m_bWaterNode ? 8.0f + static_cast<float>(car.m_nCoronaId % 4) :
                     24.0f + static_cast<float>(car.m_nCoronaId % 12);
-                if (car.waiting > stuckTime)
+                if (car.waiting > stuckTime && !car.signalWaiting)
                 {
                     car.retiring = true;
                     continue;
@@ -789,6 +839,7 @@ namespace DistantTraffic
         }
 
       public:
+        void SetSignals(bool first, bool second) { stopSignals = { false, first, second }; }
         explicit Simulation(uint32_t firstId = 0x7F000000u) :firstCoronaId(firstId) {}
         std::vector<Vehicle> cars;
         CVector RenderPosition(const Vehicle& car) const
@@ -841,6 +892,8 @@ namespace DistantTraffic
         }
         void Update(float dt, size_t capacity, float density, const CVector& camera, float farClip)
         {
+            avoidancePosition = camera;
+            avoidViewer = true;
             capacity = (std::min)(capacity, size_t(10000));
             if (capacity < cars.size())
                 for (size_t i = capacity; i < cars.size(); ++i)
