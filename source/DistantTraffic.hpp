@@ -223,11 +223,11 @@ namespace DistantTraffic
                     continue; // No instantaneous U-turns at dead ends.
                 if constexpr (AvoidCongestion)
                 {
-                    // re3 PickNextNodeRandomly: left turns use the innermost
+                    // re3/reVC PickNextNodeRandomly: left turns use the innermost
                     // lane, right turns the outermost. Crossing several lanes
                     // at once creates mutually blocked cars at small junctions.
                     float cross = entry.direction.x * edge.direction.y - entry.direction.y * edge.direction.x;
-                    if (respectLanes && ((cross > .77f && car.exitLane != 0) ||
+                    if (!entry.water && respectLanes && ((cross > .77f && car.exitLane != 0) ||
                         (cross < -.77f && car.exitLane + 1 != entry.lanes)))
                         continue;
                 }
@@ -583,7 +583,7 @@ namespace DistantTraffic
                     continue;
                 if (car.retiring)
                 {
-                    car.m_visual.fade = (std::max)(0.0f, car.m_visual.fade - dt / (AvoidCongestion ? .6f : .8f));
+                    car.m_visual.fade = (std::max)(0.0f, car.m_visual.fade - dt / (AvoidCongestion && !car.m_bWaterNode ? .6f : .8f));
                     if (car.m_visual.fade == 0)
                     {
                         car.m_bActive = false;
@@ -632,7 +632,7 @@ namespace DistantTraffic
                             {
                                 bool otherFirst = other.entry.from < car.entry.from ||
                                     (other.entry.from == car.entry.from && other.m_nCoronaId < car.m_nCoronaId);
-                                if constexpr (AvoidCongestion)
+                                if (AvoidCongestion && !car.m_bWaterNode)
                                     otherFirst = other.curve.length - other.distance < car.curve.length - car.distance ||
                                         (other.curve.length - other.distance == car.curve.length - car.distance && other.m_nCoronaId < car.m_nCoronaId);
                                 following = otherFirst;
@@ -659,8 +659,8 @@ namespace DistantTraffic
                                 {
                                     float space = (std::max)(0.0f, along - gap);
                                     allowed = (std::min)(allowed, space);
-                                    float headway = AvoidCongestion ? .55f : .8f;
-                                    float response = AvoidCongestion ? .8f : .5f;
+                                    float headway = AvoidCongestion && !car.m_bWaterNode ? .55f : .8f;
+                                    float response = AvoidCongestion && !car.m_bWaterNode ? .8f : .5f;
                                     float followingSpeed = (std::max)(0.0f, other.speed + (space - car.speed * headway) * response);
                                     desired = (std::min)(desired, followingSpeed);
                                 }
@@ -668,9 +668,9 @@ namespace DistantTraffic
                             // Local crossing priority, like the games' nearby-car
                             // scans. Never lock an entire node/link, and never stop
                             // a vehicle that is already clearing the crossing.
-                            if ((!AvoidCongestion && (car.entry.to != other.entry.to || heading > .7f)) || car.entry.from == other.entry.from)
+                            if (((!AvoidCongestion || car.m_bWaterNode) && (car.entry.to != other.entry.to || heading > .7f)) || car.entry.from == other.entry.from)
                                 continue;
-                            if constexpr (AvoidCongestion)
+                            if (AvoidCongestion && !car.m_bWaterNode)
                             {
                                 // Opposing turns can intersect even when the current
                                 // headings are parallel. Check the upcoming corridor,
@@ -729,7 +729,7 @@ namespace DistantTraffic
                         }
                     }
                 if constexpr (AvoidCongestion)
-                    if (queuedAhead >= 3 && car.waiting > .75f)
+                    if (!car.m_bWaterNode && queuedAhead >= 3 && car.waiting > .75f)
                     {
                         // Ambient traffic must not fill a street with a standing
                         // queue. Keep its front cars and fade excess tails using
@@ -737,9 +737,9 @@ namespace DistantTraffic
                         car.retiring = true;
                         continue;
                     }
-                // III's queue should pull away promptly once its leader moves.
+                // Road queues should pull away promptly once their leader moves.
                 // Keep the same braking and physical clearance checks.
-                float acceleration = AvoidCongestion ? 3.5f : 2.0f;
+                float acceleration = AvoidCongestion && !car.m_bWaterNode ? 3.5f : 2.0f;
                 float speed = car.speed + (std::clamp)(desired - car.speed, -4.0f * dt, acceleration * dt);
                 float advance = (std::min)((std::max)(0.0f, speed) * dt, allowed);
                 speeds[i] = advance / dt;
@@ -752,7 +752,7 @@ namespace DistantTraffic
                 if (!car.m_bActive || car.retiring)
                     continue;
                 car.speed = speeds[i];
-                if constexpr (AvoidCongestion)
+                if (AvoidCongestion && !car.m_bWaterNode)
                 {
                     // A creeping queue is still congested. Short bursts of
                     // movement must not restart its recovery timer every time.
@@ -763,7 +763,7 @@ namespace DistantTraffic
                     car.waiting = car.speed < .5f && car.cruise > 1.0f ? car.waiting + dt : 0.0f;
                 // Recycle a genuinely stuck distant driver gradually. Stagger the
                 // timeout so a whole queue does not disappear on the same frame.
-                float stuckTime = AvoidCongestion ? 8.0f + static_cast<float>(car.m_nCoronaId % 4) :
+                float stuckTime = AvoidCongestion && !car.m_bWaterNode ? 8.0f + static_cast<float>(car.m_nCoronaId % 4) :
                     24.0f + static_cast<float>(car.m_nCoronaId % 12);
                 if (car.waiting > stuckTime)
                 {
