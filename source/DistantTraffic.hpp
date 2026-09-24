@@ -163,6 +163,47 @@ namespace DistantTraffic
         // distinguish hash collisions without allocating a list for each cell.
         static constexpr size_t NoCar = size_t(-1);
         std::vector<size_t> cells, nextCell;
+        size_t densityCursor = 0;
+        static unsigned LocalLimit(const Edge& edge, const CVector& position)
+        {
+            if constexpr (requires { Graph::DensityAt(position); })
+            {
+                // III/VC initialise zone carDensity to 10. Keep the usual
+                // eight-car neighbourhood at that density, scale quieter roads.
+                float density = (std::clamp)(Graph::DensityAt(position) / 10.0f, 0.0f, 1.0f);
+                return static_cast<unsigned>(std::ceil(8.0f * density * (edge.spawnRate + 1) / 16.0f));
+            }
+            return 8;
+        }
+        void ThinLocalTraffic()
+        {
+            if constexpr (requires(CVector p) { Graph::DensityAt(p); })
+            {
+                // Bounded work: reuse the neighbour grid, with at most sixteen
+                // zone queries per tick, not one query per visible car/frame.
+                for (size_t n = 0; n < (std::min)(cars.size(), size_t(16)); ++n)
+                {
+                    auto& car = cars[densityCursor++ % cars.size()];
+                    if (!car.m_bActive || car.retiring || car.m_bWaterNode) continue;
+                    unsigned limit = LocalLimit(car.entry, car.m_vecPos), nearby = 0;
+                    int x = static_cast<int>(std::floor(car.m_vecPos.x / 40.0f));
+                    int y = static_cast<int>(std::floor(car.m_vecPos.y / 40.0f));
+                    for (int dx = -2; dx <= 2; ++dx)
+                        for (int dy = -2; dy <= 2; ++dy)
+                        {
+                            int64_t key = Cell(x + dx, y + dy);
+                            for (size_t j = cells[Bucket(key)]; j != NoCar; j = nextCell[j])
+                            {
+                                const auto& other = cars[j];
+                                if (cellKeys[j] != key || other.retiring || other.m_bWaterNode || other.m_nCoronaId > car.m_nCoronaId) continue;
+                                CVector delta = other.m_vecPos - car.m_vecPos;
+                                if (std::abs(delta.z) < 4.0f && delta.MagnitudeSqr2D() < 80.0f * 80.0f) ++nearby;
+                            }
+                        }
+                    if (nearby > limit) car.retiring = true;
+                }
+            }
+        }
         std::vector<int64_t> cellKeys;
 
         size_t Bucket(int64_t key) const
@@ -314,6 +355,8 @@ namespace DistantTraffic
                 if (d2 < 260.0f * 260.0f || d2 > farClip * farClip)
                     continue;
                 bool occupied = false;
+                unsigned localLimit = entry.water ? 8 : LocalLimit(entry, position);
+                if (!entry.water && !localLimit) continue;
                 float spawnGap = entry.water ? 90.0f : (std::max)(28.0f, entry.speed * 2.0f);
                 unsigned nearby = 0;
                 float radius = (std::max)(80.0f, spawnGap);
@@ -334,7 +377,7 @@ namespace DistantTraffic
                             if (std::abs(delta.z) >= 4.0f)
                                 continue;
                             float spacing = delta.MagnitudeSqr2D();
-                            if (spacing < 80.0f * 80.0f)
+                            if (!other.m_bWaterNode && spacing < 80.0f * 80.0f)
                                 ++nearby;
                             if (AvoidCongestion || other.signalWaiting)
                             {
@@ -346,7 +389,7 @@ namespace DistantTraffic
                                     break;
                                 }
                             }
-                            if (spacing < spawnGap * spawnGap || (!entry.water && nearby >= 8))
+                            if (spacing < spawnGap * spawnGap || (!entry.water && nearby >= localLimit))
                             {
                                 occupied = true;
                                 break;
@@ -513,6 +556,7 @@ namespace DistantTraffic
         void Step(float dt)
         {
             BuildCells();
+            ThinLocalTraffic();
             advances.assign(cars.size(), 0);
             speeds.assign(cars.size(), 0);
             if constexpr (AvoidCongestion)

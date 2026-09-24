@@ -372,16 +372,14 @@ struct TrafficGraph
         }
         return count;
     }
-    static bool SpawnAllowed(const Edge& edge)
+    static bool SpawnAllowed(const Edge& edge) { return !edge.water || bDistantMaritimeTraffic; }
+    static float DensityAt(CVector position)
     {
-        if (edge.water)
-            return bDistantMaritimeTraffic;
         if (!CTheZones::GetZoneInfoForTimeOfDay)
-            return true;
-        CVector position = edge.position;
+            return 10.0f;
         CZoneInfo info{};
         CTheZones::GetZoneInfoForTimeOfDay(&position, &info);
-        return info.carDensity > 0;
+        return static_cast<float>(info.carDensity);
     }
     static void Hide(uint32_t id)
     {
