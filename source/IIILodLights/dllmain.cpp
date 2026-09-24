@@ -24,6 +24,8 @@ import PointLights;
 import DistantCars;
 import DistantCarRenderer;
 
+#include "TrafficLights.hpp"
+
 using RwV3D = RwV3d;
 
 void RegisterCustomCoronas()
@@ -190,6 +192,8 @@ void InsertLamppostsForModel(CEntity* pObj, unsigned short nModelID)
             std::min(data.fObjectDrawDistance, modelInfo->m_lodDistances[2]),
             data.pPredicate
         ));
+        if (data.fCustomSizeMult == .45f)
+            m_Lampposts.back().nTrafficLightType = CTrafficLights::Type(pObj, pObj->GetMatrix().GetForward());
     }
 }
 
@@ -576,7 +580,11 @@ void ApplyMemoryPatches()
 void GetMemoryAddresses()
 {
     CModelInfo::GetModelInfo = (decltype(CModelInfo::GetModelInfo))0x50B860;
-    CTimer::m_snTimeInMillisecondsPauseMode.SetAddress((unsigned int*)0x885B48);
+    CTimer::m_snTimeInMilliseconds.SetAddress((unsigned int*)0x885B48);
+    CTimer::EffectsTime = &CTimer::m_snTimeInMilliseconds;
+    CTrafficLights::LightForCars1 = &LocalTrafficLights::LightForCars1;
+    CTrafficLights::LightForCars2 = &LocalTrafficLights::LightForCars2;
+    CTrafficLights::FindTrafficLightType = &LocalTrafficLights::FindTrafficLightType;
     CTimer::ms_fTimeStep.SetAddress((float*)0x8E2CB4);
     TheCamera.SetAddress((CCamera*)0x6FACF8);
 

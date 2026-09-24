@@ -3,6 +3,7 @@ module;
 #define NOMINMAX
 #include <stdafx.h>
 #include <unordered_map>
+#include "DistantLightLogic.hpp"
 
 export module LODLights;
 
@@ -17,6 +18,32 @@ import Game;
 import LamppostInfo;
 import Timecycle;
 import PointLights;
+
+// Native phase readers include cheats and VC storm/SA riot flashing.
+// Only two calls per frame; object classification is cached at map registration.
+export namespace CTrafficLights
+{
+    uint8_t (__cdecl* LightForCars1)() = nullptr;
+    uint8_t (__cdecl* LightForCars2)() = nullptr;
+    uint8_t (__cdecl* LightForCars1_Visual)() = nullptr;
+    uint8_t (__cdecl* LightForCars2_Visual)() = nullptr;
+    int (__cdecl* FindTrafficLightType)(CEntity*) = nullptr;
+    uint32_t* GameTime = nullptr;
+    unsigned TimeDivisor = 1;
+
+    uint8_t Type(CEntity* entity, const CVector& forward)
+    {
+        return FindTrafficLightType ? static_cast<uint8_t>(FindTrafficLightType(entity)) : DistantLightLogic::TrafficGroup(forward.x, forward.y);
+    }
+    uint8_t Phase(unsigned group, uint32_t fallbackTime)
+    {
+        auto visual = group == 1 ? LightForCars1_Visual : LightForCars2_Visual;
+        auto logic = group == 1 ? LightForCars1 : LightForCars2;
+        if (visual) return visual();
+        if (logic) return logic();
+        return DistantLightLogic::TrafficPhase(GameTime ? *GameTime : fallbackTime, group, TimeDivisor);
+    }
+}
 
 export class CRegisteredCorona
 {
@@ -153,6 +180,9 @@ private:
     static inline std::vector<CLODLightsLinkedListNode> aLinkedList;
     static inline std::vector<CRegisteredCorona> aCoronas;
     static inline uint8_t CurrentFrameStamp = 1;
+    static inline std::vector<size_t> TrafficLampIndices;
+    static inline const CLamppostInfo* TrafficLampData = nullptr;
+    static inline size_t TrafficLampCount = size_t(-1);
     static inline CLODLightsLinkedListNode* pFarthestNode = nullptr;
     static inline float fFarthestDistSq = 0.0f;
 
@@ -462,6 +492,7 @@ public:
             aLinkedList.resize(numCoronas);
             aCoronas.resize(numCoronas);
             InitMap(numCoronas);
+            TrafficLampIndices.reserve(numCoronas);
             if (m_RenderBatches.empty())
             {
                 m_RenderBatches.reserve(9);
@@ -485,6 +516,9 @@ public:
 
     static void Shutdown()
     {
+        TrafficLampData = nullptr;
+        TrafficLampCount = size_t(-1);
+        TrafficLampIndices.clear();
         // Drop every registered corona. The game runs CCoronas::Shutdown
         // (which destroys gpCoronaTexture[]) shortly after this when a game
         // is restarted, so nothing stale may be left behind to render.
@@ -714,7 +748,8 @@ public:
 
     static void RegisterLODLights()
     {
-        if (!(CClock::GetIsTimeInRange(20, 7) && CGame::currArea == 0))
+        const bool night = CClock::GetIsTimeInRange(20, 7);
+        if (CGame::currArea != 0)
         {
             Update();
             return;
@@ -739,7 +774,8 @@ public:
 
         unsigned char bAlpha = 0;
         unsigned int nTime = CClock::ms_nGameClockHours * 60 + CClock::ms_nGameClockMinutes;
-        unsigned int curMin = CClock::ms_nGameClockMinutes;
+        const uint32_t timeMs = CTimer::GetEffectsTimeInMilliseconds();
+        const uint8_t trafficPhases[] = { CTrafficLights::Phase(1, timeMs), CTrafficLights::Phase(2, timeMs) };
 
         fCoronaFarClip = autoFarClip ? CTimeCycle::m_fCurrentFarClip : fCoronaFarClip;
 
@@ -747,7 +783,9 @@ public:
         const float REFERENCE_FAR_CLIP = 1000.0f;
 
         // Time-based alpha
-        if (nTime >= 20 * 60)
+        if (!night)
+            bAlpha = 0;
+        else if (nTime >= 20 * 60)
             bAlpha = static_cast<unsigned char>((15.0f / 16.0f) * nTime - 1095.0f);
         else if (nTime < 3 * 60)
             bAlpha = 255;
@@ -760,8 +798,19 @@ public:
         const float fVeryFarDistSq = 260.0f * 260.0f;
         const uint8_t frameSlice4 = CurrentFrameStamp & 3;
 
-        for (auto it = m_Lampposts.cbegin(); it != m_Lampposts.cend(); ++it)
+        if (TrafficLampData != m_Lampposts.data() || TrafficLampCount != m_Lampposts.size())
         {
+            TrafficLampIndices.clear();
+            for (size_t i = 0; i < m_Lampposts.size(); ++i)
+                if (m_Lampposts[i].fCustomSizeMult == .45f) TrafficLampIndices.push_back(i);
+            TrafficLampData = m_Lampposts.data();
+            TrafficLampCount = m_Lampposts.size();
+        }
+        const size_t lampCount = night ? m_Lampposts.size() : TrafficLampIndices.size();
+        for (size_t lampIndex = 0; lampIndex < lampCount; ++lampIndex)
+        {
+            auto it = m_Lampposts.cbegin() + (night ? lampIndex : TrafficLampIndices[lampIndex]);
+            const bool trafficLight = it->fCustomSizeMult == .45f;
             if (it->vecPos.z < -15.0f || it->vecPos.z > 1030.0f)
                 continue;
 
@@ -780,7 +829,7 @@ public:
                 (fDistSqr <= fEffectiveCoronaDistSq || fDistSqr >= fCoronaFarClipSq))
                 continue;
 
-            if (fDistSqr > fVeryFarDistSq)
+            if (fDistSqr > fVeryFarDistSq && !trafficLight && !it->nCoronaShowMode)
             {
                 if (((coronaId >> 5) & 3u) != frameSlice4)
                 {
@@ -833,7 +882,7 @@ public:
             }
 
             // Calculate normalized alpha
-            float fNormalizedAlpha = (bAlpha / 255.0f) * (it->colour.a / 255.0f) * fAlphaMultiplier;
+            float fNormalizedAlpha = ((trafficLight ? 255 : bAlpha) / 255.0f) * (it->colour.a / 255.0f) * fAlphaMultiplier;
 
             // Helper for registration
             auto RegisterLampCorona = [&](float normalizedAlpha)  // 0.0 to 1.0
@@ -914,84 +963,14 @@ public:
                 }
                 else
                 {
-                    // Per-light blinking using unique seed
-                    uint32_t seed = reinterpret_cast<uint32_t>(&*it);
-                    float timeMs = static_cast<float>(CTimer::m_snTimeInMillisecondsPauseMode);
                     float blinking = 1.0f;
-
-                    switch (it->nCoronaShowMode)
+                    if (it->nCoronaShowMode == BlinkTypes::RANDOM_FLASHING)
+                        blinking = DistantLightLogic::Pulse(timeMs, 500, 500);
+                    else if (it->nCoronaShowMode >= BlinkTypes::T_1S_ON_1S_OFF && it->nCoronaShowMode <= BlinkTypes::T_6S_ON_4S_OFF)
                     {
-                        case BlinkTypes::DEFAULT:
-                            blinking = 1.0f;  // Always on
-                            break;
-                        case BlinkTypes::RANDOM_FLASHING:
-                        {
-                            // All RANDOM_FLASHING lights blink together, randomly
-                            static float nextToggleTime = 0.0f;
-                            static bool isOn = true;
-
-                            if (timeMs >= nextToggleTime)
-                            {
-                                isOn = !isOn;
-                                // Random interval between 500ms and 1500ms
-                                float randomInterval = 500.0f + (rand() % 1000);
-                                nextToggleTime = timeMs + randomInterval;
-                            }
-
-                            blinking = isOn ? 1.0f : 0.0f;
-                            break;
-                        }
-                        case BlinkTypes::T_1S_ON_1S_OFF:
-                        {
-                            float period = 2000.0f;  // 1s on + 1s off = 2s total
-                            float phase = (seed % 1000) / 1000.0f * period;
-                            float t = fmodf(timeMs + phase, period);
-                            blinking = (t < 1000.0f) ? 1.0f : 0.0f;
-                            break;
-                        }
-                        case BlinkTypes::T_2S_ON_2S_OFF:
-                        {
-                            float period = 4000.0f;  // 2s on + 2s off = 4s total
-                            float phase = (seed % 1000) / 1000.0f * period;
-                            float t = fmodf(timeMs + phase, period);
-                            blinking = (t < 2000.0f) ? 1.0f : 0.0f;
-                            break;
-                        }
-                        case BlinkTypes::T_3S_ON_3S_OFF:
-                        {
-                            float period = 6000.0f;  // 3s on + 3s off = 6s total
-                            float phase = (seed % 1000) / 1000.0f * period;
-                            float t = fmodf(timeMs + phase, period);
-                            blinking = (t < 3000.0f) ? 1.0f : 0.0f;
-                            break;
-                        }
-                        case BlinkTypes::T_4S_ON_4S_OFF:
-                        {
-                            float period = 8000.0f;  // 4s on + 4s off = 8s total
-                            float phase = (seed % 1000) / 1000.0f * period;
-                            float t = fmodf(timeMs + phase, period);
-                            blinking = (t < 4000.0f) ? 1.0f : 0.0f;
-                            break;
-                        }
-                        case BlinkTypes::T_5S_ON_5S_OFF:
-                        {
-                            float period = 10000.0f;  // 5s on + 5s off = 10s total
-                            float phase = (seed % 1000) / 1000.0f * period;
-                            float t = fmodf(timeMs + phase, period);
-                            blinking = (t < 5000.0f) ? 1.0f : 0.0f;
-                            break;
-                        }
-                        case BlinkTypes::T_6S_ON_4S_OFF:
-                        {
-                            float period = 10000.0f;  // 6s on + 4s off = 10s total
-                            float phase = (seed % 1000) / 1000.0f * period;
-                            float t = fmodf(timeMs + phase, period);
-                            blinking = (t < 6000.0f) ? 1.0f : 0.0f;
-                            break;
-                        }
-                        default:
-                            blinking = 1.0f;
-                            break;
+                        uint32_t on = (it->nCoronaShowMode - BlinkTypes::T_1S_ON_1S_OFF + 1) * 1000;
+                        uint32_t off = it->nCoronaShowMode == BlinkTypes::T_6S_ON_4S_OFF ? 4000 : on;
+                        blinking = DistantLightLogic::Pulse(timeMs, on, off);
                     }
 
                     RegisterLampCorona(blinking * fNormalizedAlpha);
@@ -999,39 +978,10 @@ public:
             }
             else  // Traffic lights
             {
-                // Rotate local position by object heading to get world-facing direction
-                float cosHeading = cos(it->fHeading);
-                float sinHeading = sin(it->fHeading);
-
-                float worldX = it->vecLocalPos.x * cosHeading - it->vecLocalPos.y * sinHeading;
-                float worldY = it->vecLocalPos.x * sinHeading + it->vecLocalPos.y * cosHeading;
-
-                // Determine if this bulb set faces N/S or E/W
-                bool isFacingEastWest = fabs(worldX) > fabs(worldY);
-
-                // Color detection
-                bool isYellow = (it->colour.r >= 250 && it->colour.g >= 100 && it->colour.b <= 150);
-                bool isRed = (it->colour.r >= 250 && it->colour.g < 100 && it->colour.b == 0);
-                bool isGreen = (it->colour.r == 0 && it->colour.g >= 250 && it->colour.b == 0);
-
-                // Timing (simplified - can hook CTrafficLights for real timing)
-                uint8_t curMin = CClock::ms_nGameClockMinutes;
-                bool isYellowTime = (curMin % 10 == 9);
-                bool isRedTime = (curMin % 20 < 9);
-                bool isGreenTime = !isYellowTime && !isRedTime;
-
-                // E/W gets OPPOSITE phase from N/S
-                if (isFacingEastWest)
-                {
-                    bool temp = isRedTime;
-                    isRedTime = isGreenTime;
-                    isGreenTime = temp;
-                }
-
-                bool shouldDraw = (isYellow && isYellowTime) ||
-                    (isRed && isRedTime) ||
-                    (isGreen && isGreenTime);
-
+                // All bulb sets on one entity follow its native traffic group.
+                // Bulb offsets describe geometry, not a different signal phase.
+                const uint8_t phase = trafficPhases[it->nTrafficLightType == 1 ? 0 : 1];
+                const bool shouldDraw = phase < 3 && phase == it->nTrafficLightState;
                 if (shouldDraw)
                     RegisterLampCorona(fNormalizedAlpha);
             }

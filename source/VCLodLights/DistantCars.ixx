@@ -357,6 +357,7 @@ struct TrafficGraph
             direction.Normalise();
             float t = (std::clamp)(((linkPosition.x - start.x) * segment.x + (linkPosition.y - start.y) * segment.y) / (length * length), 0.0f, 1.0f);
             Edge edge;
+            edge.spawnRate = (std::min)(unsigned(a.spawnRate), unsigned(b.spawnRate));
             edge.from = from;
             edge.to = to;
             edge.lanes = static_cast<unsigned>(lanes);

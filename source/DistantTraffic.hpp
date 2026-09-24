@@ -19,6 +19,7 @@ namespace DistantTraffic
         CVector position = {0, 0, 0}, direction = {0, 1, 0};
         float laneOffset = .5f, laneWidth = 5.0f, speed = 16.0f;
         unsigned lanes = 0;
+        unsigned spawnRate = 15;
         bool water = false;
         CVector Lane(unsigned index) const
         {
@@ -149,6 +150,7 @@ namespace DistantTraffic
         using Vehicle = Car<Visual>;
         float accumulator = 0;
         std::vector<float> advances, speeds;
+        std::vector<CVector> lookPositions, lookDirections, nextPositions, nextDirections;
         // Intrusive bucket chains reuse one link per pool slot. Exact cell keys
         // distinguish hash collisions without allocating a list for each cell.
         static constexpr size_t NoCar = size_t(-1);
@@ -260,6 +262,8 @@ namespace DistantTraffic
                 if (!count)
                     continue;
                 Edge entry = edges[Random(car.random) % count];
+                if (entry.spawnRate < 15 && (Random(car.random) & 15u) > entry.spawnRate)
+                    continue;
                 if (!Graph::SpawnAllowed(entry))
                     continue;
                 car.exitLane = Random(car.random) % entry.lanes;
@@ -329,11 +333,99 @@ namespace DistantTraffic
             }
             return false;
         }
+        static bool Overlap(const CVector& a, const CVector& directionA, const CVector& b, const CVector& directionB)
+        {
+            CVector delta = b - a;
+            if (std::abs(delta.z) > 3.0f || delta.MagnitudeSqr2D() > 40.0f) return false;
+            CVector rightA(directionA.y, -directionA.x, 0), rightB(directionB.y, -directionB.x, 0);
+            // The 1.2x sedan is 5.57m long and about 2.2m wide. Include a small
+            // clearance, and test all four separating axes, not just centre lines.
+            const CVector axes[] = { directionA, rightA, directionB, rightB };
+            for (const auto& axis : axes)
+            {
+                float separation = std::abs(delta.x * axis.x + delta.y * axis.y);
+                auto radius = [&](const CVector& forward, const CVector& right)
+                {
+                    return 2.9f * std::abs(forward.x * axis.x + forward.y * axis.y) +
+                        1.2f * std::abs(right.x * axis.x + right.y * axis.y);
+                };
+                if (separation >= radius(directionA, rightA) + radius(directionB, rightB)) return false;
+            }
+            return true;
+        }
+        void PreventOverlaps()
+        {
+            nextPositions.resize(cars.size());
+            nextDirections.resize(cars.size());
+            for (size_t i = 0; i < cars.size(); ++i)
+            {
+                const auto& car = cars[i];
+                if (!car.m_bActive || car.m_bWaterNode) continue;
+                float distance = car.distance + advances[i];
+                if (distance > car.curve.length)
+                {
+                    // Predict the same route transition/RNG choice without changing
+                    // the driver. Merely clamping to the link would miss collisions
+                    // in the overshoot applied by the movement pass below.
+                    Vehicle projected = car;
+                    projected.distance = distance;
+                    for (int transitions = 0; projected.distance >= projected.curve.length && transitions < 8; ++transitions)
+                    {
+                        float remaining = projected.distance - projected.curve.length;
+                        projected.distance = projected.curve.length;
+                        if (!AdvanceRoute(projected)) break;
+                        projected.distance = remaining;
+                    }
+                    Position(projected);
+                    nextPositions[i] = projected.m_vecPos;
+                    nextDirections[i] = projected.m_vecDir;
+                }
+                else
+                {
+                    float t = car.curve.Parameter(distance);
+                    nextPositions[i] = car.curve.Point(t) + CVector(0, 0, .55f);
+                    nextDirections[i] = car.curve.Direction(t);
+                }
+            }
+            for (size_t i = 0; i < cars.size(); ++i)
+            {
+                const auto& car = cars[i];
+                if (!car.m_bActive || car.m_bWaterNode || advances[i] == 0) continue;
+                int x = static_cast<int>(std::floor(car.m_vecPos.x / 40.0f));
+                int y = static_cast<int>(std::floor(car.m_vecPos.y / 40.0f));
+                bool blocked = false;
+                for (int dx = -1; dx <= 1 && !blocked; ++dx)
+                    for (int dy = -1; dy <= 1 && !blocked; ++dy)
+                    {
+                        int64_t key = Cell(x + dx, y + dy);
+                        for (size_t j = cells[Bucket(key)]; j != NoCar; j = nextCell[j])
+                        {
+                            const auto& other = cars[j];
+                            if (i == j || cellKeys[j] != key || !other.m_bActive || other.m_bWaterNode ||
+                                (other.m_vecPos - car.m_vecPos).MagnitudeSqr2D() > 144.0f) continue;
+                            // Let pre-existing overlaps separate instead of freezing
+                            // both cars. Spawn spacing prevents new overlaps at birth.
+                            if (Overlap(car.m_vecPos, car.m_vecDir, other.m_vecPos, other.m_vecDir)) continue;
+                            // Check both ends of the other driver's move. Therefore
+                            // either car can yield without invalidating this result.
+                            if (Overlap(nextPositions[i], nextDirections[i], other.m_vecPos, other.m_vecDir) ||
+                                Overlap(nextPositions[i], nextDirections[i], nextPositions[j], nextDirections[j]))
+                            {
+                                blocked = true;
+                                break;
+                            }
+                        }
+                    }
+                if (blocked) advances[i] = speeds[i] = 0.0f;
+            }
+        }
         void Step(float dt)
         {
             BuildCells();
             advances.assign(cars.size(), 0);
             speeds.assign(cars.size(), 0);
+            lookPositions.resize(cars.size());
+            lookDirections.resize(cars.size());
             for (size_t i = 0; i < cars.size(); ++i)
             {
                 auto& car = cars[i];
@@ -341,6 +433,12 @@ namespace DistantTraffic
                     continue;
                 car.previousPosition = car.m_vecPos;
                 car.previousDirection = car.m_vecDir;
+                if (!car.m_bWaterNode)
+                {
+                    float t = car.curve.Parameter((std::min)(car.distance + car.speed * 1.5f, car.curve.length));
+                    lookPositions[i] = car.curve.Point(t) + CVector(0, 0, .55f);
+                    lookDirections[i] = car.curve.Direction(t);
+                }
             }
             for (size_t i = 0; i < cars.size(); ++i)
             {
@@ -400,12 +498,16 @@ namespace DistantTraffic
                                 following = otherFirst;
                             }
                             float heading = DotProduct(car.m_vecDir, other.m_vecDir);
+                            if (!(sameEntry && sameExit) && !car.m_bWaterNode && delta.MagnitudeSqr2D() < 400.0f &&
+                                other.m_nCoronaId < car.m_nCoronaId &&
+                                Overlap(lookPositions[i], lookDirections[i], lookPositions[j], lookDirections[j]))
+                                desired = 0.0f;
                             if (following)
                             {
                                 float along = sameEntry && sameExit ? other.distance - car.distance : DotProduct(delta, car.m_vecDir);
                                 float lateral = sameEntry && sameExit ? 0.0f : std::abs(delta.x * car.m_vecDir.y - delta.y * car.m_vecDir.x);
                                 float gap = car.m_bWaterNode ? 35.0f : 6.0f;
-                                if (along > 0 && along <= 70 && lateral <= (car.m_bWaterNode ? 5.0f : 1.8f) && ((sameEntry && sameExit) || heading > .7f))
+                                if (along > 0 && along <= 70 && lateral <= (car.m_bWaterNode ? 5.0f : sameExit && !sameEntry ? 6.0f : 1.8f) && ((sameEntry && sameExit) || heading > .7f))
                                 {
                                     float space = (std::max)(0.0f, along - gap);
                                     allowed = (std::min)(allowed, space);
@@ -442,6 +544,7 @@ namespace DistantTraffic
                 speeds[i] = advance / dt;
                 advances[i] = advance;
             }
+            PreventOverlaps();
             for (size_t i = 0; i < cars.size(); ++i)
             {
                 auto& car = cars[i];
@@ -494,6 +597,10 @@ namespace DistantTraffic
             cars.reserve(capacity);
             advances.reserve(capacity);
             speeds.reserve(capacity);
+            lookPositions.reserve(capacity);
+            lookDirections.reserve(capacity);
+            nextPositions.reserve(capacity);
+            nextDirections.reserve(capacity);
             nextCell.reserve(capacity);
             cellKeys.reserve(capacity);
             size_t buckets = 1;

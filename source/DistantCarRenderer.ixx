@@ -203,7 +203,7 @@ export namespace DistantCarRenderer
             if (cars.empty()) return;
             // All three dllmains resolve PauseMode; the regular millisecond
             // GameRef is declared but unbound. Cache age can use pause time.
-            const uint32_t now = CTimer::m_snTimeInMillisecondsPauseMode;
+            const uint32_t now = CTimer::GetEffectsTimeInMilliseconds();
             // Round-robin sampling prevents distant entries from starving. At
             // most 128 vertical queries per frame, independent of pool size.
             static size_t probeCursor = 0;

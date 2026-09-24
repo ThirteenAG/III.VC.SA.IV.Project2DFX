@@ -68,11 +68,15 @@ public:
     int nDrawSearchlight;
     float fHeading;
     float fObjectDrawDistance;
+    uint8_t nTrafficLightType = 2, nTrafficLightState = 3;
     CoronaPredicate pPredicate;
 
     CLamppostInfo(const CVector& pos, const CVector& localpos, const CRGBA& col, float fCustomMult, int CoronaShowMode, int nNoDistance, int nDrawSearchlight, float heading, float ObjectDrawDistance = 0.0f, CoronaPredicate pPred = nullptr)
         : vecPos(pos), vecLocalPos(localpos), colour(col), fCustomSizeMult(fCustomMult), nCoronaShowMode(CoronaShowMode), nNoDistance(nNoDistance), nDrawSearchlight(nDrawSearchlight), fHeading(heading), fObjectDrawDistance(ObjectDrawDistance), pPredicate(pPred)
     {
+        if (col.r >= 250 && col.g >= 100 && col.b <= 150) nTrafficLightState = 1;
+        else if (col.r >= 250 && col.g < 100 && col.b == 0) nTrafficLightState = 2;
+        else if (col.r == 0 && col.g >= 250 && col.b == 0) nTrafficLightState = 0;
     }
 };
 
@@ -129,7 +133,7 @@ export bool IsBlinkingNeeded(int BlinkType)
             return false;
     }
 
-    return signed(CTimer::m_snTimeInMillisecondsPauseMode % (nOnDuration + nOffDuration)) < nOnDuration;
+    return signed(CTimer::GetEffectsTimeInMilliseconds() % (nOnDuration + nOffDuration)) < nOnDuration;
 }
 
 export std::map<unsigned int, CLamppostInfo> FileContent;

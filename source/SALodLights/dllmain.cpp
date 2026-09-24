@@ -77,6 +77,8 @@ void RegisterLamppost(CEntity* pObj)
             std::min(data.fObjectDrawDistance, modelInfo->m_fDrawDistance),
             data.pPredicate
         ));
+        if (data.fCustomSizeMult == .45f)
+            m_Lampposts.back().nTrafficLightType = CTrafficLights::Type(pObj, dummyMatrix.GetForward());
     }
 }
 
@@ -489,6 +491,11 @@ void GetMemoryAddresses()
 {
     CModelInfo::GetModelInfo = (decltype(CModelInfo::GetModelInfo))0x4C5940;
     CTimer::m_snTimeInMillisecondsPauseMode.SetAddress((unsigned int*)0xB7CB7C);
+    CTrafficLights::TimeDivisor = 2;
+    CTrafficLights::GameTime = reinterpret_cast<uint32_t*>(0xB7CB84); // CTimer::m_snTimeInMilliseconds
+    CTrafficLights::LightForCars1_Visual = reinterpret_cast<decltype(CTrafficLights::LightForCars1_Visual)>(0x49D350); // _TimeToSwitchTrafficLightToYellow
+    CTrafficLights::LightForCars2_Visual = reinterpret_cast<decltype(CTrafficLights::LightForCars2_Visual)>(0x49D3A0); // _TimeToSwitchTrafficLightToGreen
+    CTrafficLights::FindTrafficLightType = reinterpret_cast<decltype(CTrafficLights::FindTrafficLightType)>(0x49D580);
     CTimer::ms_fTimeStep.SetAddress((float*)0xB7CB5C);
     TheCamera.SetAddress((CCamera*)0xB6F028);
 
