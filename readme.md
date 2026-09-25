@@ -8,7 +8,7 @@
 
 **Project2DFX** lights up entire cities with thousands of distant lamppost and streetlight glows, and greatly extends the draw distance.
 
-III, VC, and SA also support optional [embedded 3D distant cars](docs/distant-cars.md) with directional headlights and taillights.
+III, VC, and SA also support optional 3D distant cars with directional headlights and taillights.
 
 [Website](https://fusionfix.io/p2dfx) · [Discord](https://discord.gg/2ckFCS572Z) · [Telegram](https://t.me/fusionfix) · [YouTube](https://www.youtube.com/@FusionFix10) · [X](https://x.com/fusionfix10)
 
