@@ -28,27 +28,26 @@ export namespace CTrafficLights
     uint8_t (__cdecl* LightForCars1_Visual)() = nullptr;
     uint8_t (__cdecl* LightForCars2_Visual)() = nullptr;
     int (__cdecl* FindTrafficLightType)(CEntity*) = nullptr;
-    uint32_t* GameTime = nullptr;
     unsigned TimeDivisor = 1;
 
     uint8_t Type(CEntity* entity, const CVector& forward)
     {
         return FindTrafficLightType ? static_cast<uint8_t>(FindTrafficLightType(entity)) : DistantLightLogic::TrafficGroup(forward.x, forward.y);
     }
-    uint8_t Phase(unsigned group, uint32_t fallbackTime)
+    uint8_t Phase(unsigned group)
     {
         auto visual = group == 1 ? LightForCars1_Visual : LightForCars2_Visual;
         auto logic = group == 1 ? LightForCars1 : LightForCars2;
         if (visual) return visual();
         if (logic) return logic();
-        return DistantLightLogic::TrafficPhase(GameTime ? *GameTime : fallbackTime, group, TimeDivisor);
+        return DistantLightLogic::TrafficPhase(CTimer::m_snTimeInMilliseconds, group, TimeDivisor);
     }
-    bool StopForCars(unsigned group, uint32_t fallbackTime)
+    bool StopForCars(unsigned group)
     {
         auto logic = group == 1 ? LightForCars1 : LightForCars2;
         // Native driving phases let traffic through flashing storm/riot lights.
         if (logic) return logic() != 0;
-        auto phase = Phase(group, fallbackTime);
+        auto phase = Phase(group);
         return phase == 1 || phase == 2;
     }
 }
@@ -783,7 +782,7 @@ public:
         unsigned char bAlpha = 0;
         unsigned int nTime = CClock::ms_nGameClockHours * 60 + CClock::ms_nGameClockMinutes;
         const uint32_t timeMs = CTimer::GetEffectsTimeInMilliseconds();
-        const uint8_t trafficPhases[] = { CTrafficLights::Phase(1, timeMs), CTrafficLights::Phase(2, timeMs) };
+        const uint8_t trafficPhases[] = { CTrafficLights::Phase(1), CTrafficLights::Phase(2) };
 
         fCoronaFarClip = autoFarClip ? CTimeCycle::m_fCurrentFarClip : fCoronaFarClip;
 

@@ -473,7 +473,7 @@ void CMovingThings::UpdateDistantCarImpostors()
     size_t capacity = static_cast<size_t>((std::clamp)(nNumDistantCarImpostors, 0, 10000));
     size_t boatCapacity = bDistantMaritimeTraffic ? (std::min)(size_t(32), capacity / 20) : 0;
     float dt = CTimer::GetTimeStepInSeconds();
-    traffic.SetSignals(CTrafficLights::StopForCars(1, CTimer::m_snTimeInMilliseconds), CTrafficLights::StopForCars(2, CTimer::m_snTimeInMilliseconds));
+    traffic.SetSignals(CTrafficLights::StopForCars(1), CTrafficLights::StopForCars(2));
     traffic.Update(dt, capacity - boatCapacity, density, camera, farClip);
     boats.Update(dt, boatCapacity, density, camera, farClip);
 }
@@ -481,6 +481,7 @@ void CMovingThings::UpdateDistantCarImpostors()
 template<class Simulation>
 static void RenderTraffic(Simulation& simulation, DistantCarRenderer::Frame& models, const CVector& camPos, float maxDist)
 {
+    float nearScale = DistantTraffic::ViewDistanceScale(TheCamera->Cams[TheCamera->ActiveCam].FOV);
     for (size_t i = 0; i < simulation.cars.size(); i++)
     {
         auto& impostor = simulation.cars[i];
@@ -519,7 +520,7 @@ static void RenderTraffic(Simulation& simulation, DistantCarRenderer::Frame& mod
         }
 
         float fadeFar = Clamp((maxDist - dist) / 250.0f, 0.0f, 1.0f);
-        float fadeNear = Clamp((dist - 140.0f) / 120.0f, 0.0f, 1.0f);
+        float fadeNear = Clamp((dist * nearScale - 140.0f) / 120.0f, 0.0f, 1.0f);
         float fade = fadeFar * fadeNear;
 
         if (models.Add(simulation.RenderPosition(impostor), simulation.RenderDirection(impostor), impostor.m_visual, impostor.m_nCoronaId, fade, impostor.m_bWaterNode))

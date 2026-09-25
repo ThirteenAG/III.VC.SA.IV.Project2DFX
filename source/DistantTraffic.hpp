@@ -12,6 +12,13 @@ namespace DistantTraffic
 {
     using Node = uint32_t;
     constexpr Node InvalidNode = UINT32_MAX;
+    inline float ViewDistanceScale(float fov)
+    {
+        // Compare apparent size with the games' normal 70-degree view. Wider
+        // views must not bring low-detail traffic closer than the usual fade.
+        if (!std::isfinite(fov) || fov <= 0.0f || fov >= 70.0f) return 1.0f;
+        return std::tan(fov * .00872664626f) / .700207538f;
+    }
 
     struct Edge
     {

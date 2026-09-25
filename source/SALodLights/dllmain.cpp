@@ -491,8 +491,8 @@ void GetMemoryAddresses()
 {
     CModelInfo::GetModelInfo = (decltype(CModelInfo::GetModelInfo))0x4C5940;
     CTimer::m_snTimeInMillisecondsPauseMode.SetAddress((unsigned int*)0xB7CB7C);
+    CTimer::m_snTimeInMilliseconds.SetAddress((unsigned int*)0xB7CB84);
     CTrafficLights::TimeDivisor = 2;
-    CTrafficLights::GameTime = reinterpret_cast<uint32_t*>(0xB7CB84); // CTimer::m_snTimeInMilliseconds
     CTrafficLights::LightForCars1_Visual = reinterpret_cast<decltype(CTrafficLights::LightForCars1_Visual)>(0x49D350); // _TimeToSwitchTrafficLightToYellow
     CTrafficLights::LightForCars2_Visual = reinterpret_cast<decltype(CTrafficLights::LightForCars2_Visual)>(0x49D3A0); // _TimeToSwitchTrafficLightToGreen
     CTrafficLights::FindTrafficLightType = reinterpret_cast<decltype(CTrafficLights::FindTrafficLightType)>(0x49D580);

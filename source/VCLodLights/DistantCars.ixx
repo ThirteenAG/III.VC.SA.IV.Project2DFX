@@ -427,7 +427,7 @@ void CMovingThings::UpdateDistantCarImpostors()
         density *= .65f;
     density *= 1.0f - .22f * static_cast<float>(CWeather::Rain);
     density *= 1.0f - .16f * static_cast<float>(CWeather::Foggyness);
-    traffic.SetSignals(CTrafficLights::StopForCars(1, CTimer::m_snTimeInMilliseconds), CTrafficLights::StopForCars(2, CTimer::m_snTimeInMilliseconds));
+    traffic.SetSignals(CTrafficLights::StopForCars(1), CTrafficLights::StopForCars(2));
     traffic.Update(CTimer::GetTimeStepInSeconds(), static_cast<size_t>((std::clamp)(nNumDistantCarImpostors, 0, 10000)), density, camera, farClip);
 }
 
@@ -440,6 +440,7 @@ void CMovingThings::RenderDistantCarImpostors()
     auto maxDist = CTimeCycle::m_fCurrentFarClip;
     DistantCarRenderer::Frame models(camPos, maxDist);
 
+    float nearScale = DistantTraffic::ViewDistanceScale(TheCamera->Cams[TheCamera->ActiveCam].FOV);
     for (size_t i = 0; i < aDistantCarImpostors.size(); i++)
     {
         CDistantCarImpostor& impostor = aDistantCarImpostors[i];
@@ -478,7 +479,7 @@ void CMovingThings::RenderDistantCarImpostors()
         }
 
         float fadeFar = Clamp((maxDist - dist) / 250.0f, 0.0f, 1.0f);
-        float fadeNear = Clamp((dist - 140.0f) / 120.0f, 0.0f, 1.0f);
+        float fadeNear = Clamp((dist * nearScale - 140.0f) / 120.0f, 0.0f, 1.0f);
         float fade = fadeFar * fadeNear;
 
         if (models.Add(traffic.RenderPosition(impostor), traffic.RenderDirection(impostor), impostor.m_visual, impostor.m_nCoronaId, fade, impostor.m_bWaterNode))
