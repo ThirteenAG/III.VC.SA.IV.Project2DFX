@@ -695,6 +695,27 @@ void ConvertLightTo2DFX()
         FindClose(TXTFile);
     }
 
+    // Dukes Bay Bridge: custom model-local coronas at the emissive tube fittings.
+    // The native point lights have zero-size coronas, so normal extraction skips
+    // them. Each station has two fittings on opposite sides of the roadway.
+    LodLights << "%AM_FM1_BridgeLite" << endl;
+    LodLights << "238 208 143 128 -15.851560 -71.448487 -1.1883540 1.20 100.00 00 0 0" << endl;
+    LodLights << "238 208 143 128 -9.1441650 -73.578612 -1.1579590 1.20 100.00 00 0 0" << endl;
+    LodLights << "238 208 143 128 -3.5186770 0.32116700 -0.8319090 1.20 100.00 00 0 0" << endl;
+    LodLights << "238 208 143 128 3.51855500 0.36804200 -0.8015140 1.20 100.00 00 0 0" << endl;
+    LodLights << "238 208 143 128 -3.5854490 73.2401130 -1.1883540 1.20 100.00 00 0 0" << endl;
+    LodLights << "238 208 143 128 3.45202600 73.2868670 -1.1579590 1.20 100.00 00 0 0" << endl;
+    LodLights << "238 208 143 128 -3.5854490 146.509300 -2.5617680 1.20 100.00 00 0 0" << endl;
+    LodLights << "238 208 143 128 3.45202600 146.556050 -2.5319820 1.20 100.00 00 0 0" << endl;
+    LodLights << "%bxe_fw_hi_snglel02" << endl;
+    LodLights << "241 218 167 128 -3.7841800 -20.243042 7.73803700 1.20 100.00 00 0 0" << endl;
+    LodLights << "241 218 167 128 3.25305200 -20.196043 7.76757800 1.20 100.00 00 0 0" << endl;
+    LodLights << "238 208 143 128 -3.7841800 53.7133750 4.69055200 1.20 100.00 00 0 0" << endl;
+    LodLights << "238 208 143 128 3.25305200 53.7605000 4.72021400 1.20 100.00 00 0 0" << endl;
+    LodLights << "%bxe_fw_hi_snglel" << endl;
+    LodLights << "238 208 143 128 -3.7841800 16.5852050 5.37573300 1.20 100.00 00 0 0" << endl;
+    LodLights << "238 208 143 128 3.25293000 16.6317120 5.40600600 1.20 100.00 00 0 0" << endl;
+
     //LodLights << "%bm_nylamp110b" << endl;
     //LodLights << "255 219 155 255 -1.1508710 -0.0219250 6.95975000 0.80 00 0 0" << endl;
     //LodLights << "255 219 155 255 1.10668200 -0.0219260 6.95970100 0.80 00 0 0" << endl;
