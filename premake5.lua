@@ -1,3 +1,11 @@
+require "vstudio"
+
+-- PS2 and PSP as Visual Studio platforms of their own (as premake-consoles does for
+-- consoles); their projects are Makefile ones, so no MSBuild platform files are needed.
+premake.vstudio.vs2010_architectures.ps2 = "PS2"
+premake.vstudio.vs2010_architectures.psp = "PSP"
+premake.api.addAllowed("system", { "ps2", "psp" })
+
 -- The folder a project is deployed to, and the game it is started from when debugging,
 -- is the path of one machine and does not belong in the repository. It is read from a
 -- `.env` file next to this script, which is not tracked by git and holds one
@@ -146,3 +154,70 @@ project "IVLodLights"
    files { "source/FileMgr.ixx", "source/LamppostInfo.ixx", "source/Timer.ixx" }
    -- the plugins of GTA IV are loaded from the plugins folder
    setpaths("GTA_IV_DIR", "GTAIV.exe", "plugins/")
+
+-- ====================== CONSOLE SOLUTIONS ======================
+-- Vice City Stories and Liberty City Stories on PCSX2F (PS2) and PPSSPP (PSP). These are
+-- MIPS modules built by the SDK submodules (external/ps2sdk, external/pspsdk) from
+-- source/console/<name>/module.json into data/<name>/, laid out the way they are unpacked
+-- into the folder of the emulator. source/console/shared holds what they have in common.
+function ConsoleSetup(name, platform)
+   workspace (name)
+      configurations { "Release", "Debug" }
+      platforms { platform }
+      system (platform:lower())
+      bindirs { "$(PATH)" } -- unknown VS platform: keep the system PATH for the build commands
+      location "build"
+      kind "Makefile"
+      language "C++"
+      includedirs { "external/injector/include" }
+      files { "source/console/%{prj.name}/*.h", "source/console/%{prj.name}/*.hpp", "source/console/%{prj.name}/*.c",
+              "source/console/%{prj.name}/*.cpp", "source/console/%{prj.name}/module.json", "source/console/%{prj.name}/*.exp",
+              "source/console/shared/**.hpp", "data/%{prj.name}/**.ini" }
+      filter "configurations:Debug"
+         defines { "DEBUG" }
+      filter "configurations:Release"
+         defines { "NDEBUG" }
+      filter {}
+end
+
+-- Builds the module with the SDK of `sdk` into data/<name>/<output>, and copies it into the
+-- folder of the emulator that `key` names in the .env file.
+function consolepaths(sdk, key, output, exepath)
+   local manifest = '"%{wks.location}/../source/console/%{prj.name}/module.json"'
+   local command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}/../external/' .. sdk .. '/plugins/build-module.ps1" -Project ' .. manifest
+   if sdk == "pspsdk" then
+      command = command .. ' -Configuration "%{cfg.buildcfg}"'
+   end
+   local gamepath = envdir(key)
+   local deploy = {}
+   if gamepath then
+      local target = gamepath .. "\\" .. path.translate(path.getdirectory(output))
+      deploy = { 'if not exist "' .. target .. '" mkdir "' .. target .. '"',
+         'copy /y "$(NMakeOutput)" "' .. target .. '"' }
+      debugdir (gamepath)
+      debugcommand (gamepath .. "\\" .. exepath)
+   end
+   buildcommands { command, 'if errorlevel 1 exit /b %errorlevel%', deploy }
+   rebuildcommands { command .. ' -Clean', 'if errorlevel 1 exit /b %errorlevel%', command,
+      'if errorlevel 1 exit /b %errorlevel%', deploy }
+   cleancommands { command .. ' -Clean' }
+   targetdir ("data/%{prj.name}/" .. path.getdirectory(output))
+   targetname (path.getbasename(output))
+   targetextension (path.getextension(output))
+end
+
+ConsoleSetup("Project2DFX.PS2", "PS2")
+   includedirs { "external/ps2sdk/ps2sdk/ee" }
+
+project "GTAVCS.PCSX2F.Project2DFX"
+   consolepaths("ps2sdk", "PCSX2F_DIR", "PLUGINS/GTAVCS.PCSX2F.Project2DFX.elf", "pcsx2-qtx64.exe")
+project "GTALCS.PCSX2F.Project2DFX"
+   consolepaths("ps2sdk", "PCSX2F_DIR", "PLUGINS/GTALCS.PCSX2F.Project2DFX.elf", "pcsx2-qtx64.exe")
+
+ConsoleSetup("Project2DFX.PSP", "PSP")
+   includedirs { "external/pspsdk/usr/local/pspdev/psp/sdk/include" }
+
+project "GTAVCS.PPSSPP.Project2DFX"
+   consolepaths("pspsdk", "PPSSPP_DIR", "memstick/PSP/PLUGINS/GTAVCS.PPSSPP.Project2DFX/GTAVCS.PPSSPP.Project2DFX.prx", "PPSSPPWindows64.exe")
+project "GTALCS.PPSSPP.Project2DFX"
+   consolepaths("pspsdk", "PPSSPP_DIR", "memstick/PSP/PLUGINS/GTALCS.PPSSPP.Project2DFX/GTALCS.PPSSPP.Project2DFX.prx", "PPSSPPWindows64.exe")

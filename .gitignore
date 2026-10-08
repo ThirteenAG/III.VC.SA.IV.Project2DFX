@@ -8,6 +8,10 @@ data/**/*.zip
 data/**/*.exe
 data/**/*.exp
 data/**/*.lib
+data/**/*.elf
+data/**/*.prx
+data/**/*.map
+data/**/*.objects/
 data/2DFXDataGrabber/iv_data
 data/2DFXDataGrabber/sa_data
 data/2DFXDataGrabber/vc_data

@@ -51,6 +51,11 @@ copy /b/v/y "2DFXDataGrabber\iii_data\IIILodLights.dat" "IIILodLights\IIILodLigh
 7za a -tzip ".\VC.Project2DFX.zip"  ".\VCLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
 7za a -tzip ".\SA.Project2DFX.zip"  ".\SALodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
 7za a -tzip ".\IV.Project2DFX.zip"  ".\IVLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
+rem the console plugins, laid out the way they are unpacked into the folder of the emulator
+7za a -tzip ".\GTAVCS.PCSX2F.Project2DFX.zip" ".\GTAVCS.PCSX2F.Project2DFX\*" -xr!*.objects -xr!*.map -xr!.gitkeep
+7za a -tzip ".\GTALCS.PCSX2F.Project2DFX.zip" ".\GTALCS.PCSX2F.Project2DFX\*" -xr!*.objects -xr!*.map -xr!.gitkeep
+7za a -tzip ".\GTAVCS.PPSSPP.Project2DFX.zip" ".\GTAVCS.PPSSPP.Project2DFX\*" -xr!*.objects -xr!*.map -xr!*.elf -xr!.gitkeep
+7za a -tzip ".\GTALCS.PPSSPP.Project2DFX.zip" ".\GTALCS.PPSSPP.Project2DFX\*" -xr!*.objects -xr!*.map -xr!*.elf -xr!.gitkeep
 EXIT
 
 7-Zip Extra

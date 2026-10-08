@@ -1,17 +1,13 @@
 ## Compatible Games:
 
-- **Grand Theft Auto: Liberty City Stories** (**ULUS10041**, **ULES00151**, **NPJH50825**, **ULJM05255**, **ULJM05359**, **ULJM05885**)
+- **Grand Theft Auto: Liberty City Stories** [**SLUS-21423 (crc: 7EA439F5)**]
 
 ## Installation
 
-- Download and install [PPSSPP for Windows](https://www.ppsspp.org/download).
-- Download [LCS.Project2DFX for PPSSPP](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/download/gtalcs/GTALCS.PPSSPP.Project2DFX.zip) and unpack the content of archive to PPSSPP root dir, where the exe is located. Make sure to place memstick directory to an appropriate place, if you have different memstick path (File -> Open Memory Stick).
+- Download and install [PCSX2-Fork-With-Plugins](https://github.com/ASI-Factory/PCSX2-Fork-With-Plugins/releases/tag/latest).
+- Download [LCS.Project2DFX](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/download/gtalcsps2/GTALCS.PCSX2F.Project2DFX.zip) and unpack the content of archive to PCSX2F root dir, where the exe is located.
 
-## Screenshots
-
-[![[PPSSPP] LCS.Project2DFX](https://user-images.githubusercontent.com/4904157/157916939-3675934d-278d-410a-94be-ca256c7989f3.png)](https://www.youtube.com/watch?v=xaW3t5Q8qTU)
-
-Official website: http://fusionfix.io/p2dfx
+Official website: https://fusionfix.io/p2dfx
 
 <p align="center">
   <a href="https://patreon.fusionfix.io/" target="_blank"><picture><source media="(max-width: 768px) and (prefers-color-scheme: dark)" srcset="https://fusionlegacyinitiative.com/sponsors-progress/sponsors-progress-p2dfx-mobile-dark.svg"><source media="(max-width: 768px)" srcset="https://fusionlegacyinitiative.com/sponsors-progress/sponsors-progress-p2dfx-mobile.svg"><source media="(prefers-color-scheme: dark)" srcset="https://fusionlegacyinitiative.com/sponsors-progress/sponsors-progress-p2dfx-dark.svg"><img width="100%" src="https://fusionlegacyinitiative.com/sponsors-progress/sponsors-progress-p2dfx.svg"></picture></a>

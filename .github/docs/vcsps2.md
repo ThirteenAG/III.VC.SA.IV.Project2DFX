@@ -5,7 +5,7 @@
 ## Installation
 
 - Download and install [PCSX2-Fork-With-Plugins](https://github.com/ASI-Factory/PCSX2-Fork-With-Plugins/releases/tag/latest).
-- Download [VCS.Project2DFX](https://github.com/ThirteenAG/WidescreenFixesPack/releases/download/gtavcs/GTAVCS.PCSX2F.Project2DFX.zip) and unpack the content of archive to PCSX2F root dir, where the exe is located.
+- Download [VCS.Project2DFX](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/download/gtavcsps2/GTAVCS.PCSX2F.Project2DFX.zip) and unpack the content of archive to PCSX2F root dir, where the exe is located.
 
 ## Screenshots
 

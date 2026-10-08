@@ -5,7 +5,7 @@
 ## Installation
 
 - Download and install [PPSSPP for Windows](https://www.ppsspp.org/download).
-- Download [VCS.Project2DFX for PPSSPP](https://github.com/ThirteenAG/WidescreenFixesPack/releases/download/gtavcspsp/GTAVCS.PPSSPP.Project2DFX.zip) and unpack the content of archive to PPSSPP root dir, where the exe is located. Make sure to place memstick directory to an appropriate place, if you have different memstick path (File -> Open Memory Stick).
+- Download [VCS.Project2DFX for PPSSPP](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/download/gtavcs/GTAVCS.PPSSPP.Project2DFX.zip) and unpack the content of archive to PPSSPP root dir, where the exe is located. Make sure to place memstick directory to an appropriate place, if you have different memstick path (File -> Open Memory Stick).
 
 ## Screenshots
 

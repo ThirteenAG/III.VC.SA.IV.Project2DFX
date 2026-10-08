@@ -13,3 +13,9 @@
 [submodule "external/ModUtils"]
 	path = external/ModUtils
 	url = https://github.com/CookiePLMonster/ModUtils.git
+[submodule "external/ps2sdk"]
+	path = external/ps2sdk
+	url = https://github.com/ThirteenAG/ps2sdk
+[submodule "external/pspsdk"]
+	path = external/pspsdk
+	url = https://github.com/ThirteenAG/pspsdk

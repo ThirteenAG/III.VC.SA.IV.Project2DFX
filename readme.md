@@ -54,7 +54,7 @@ III, VC, and SA also support optional 3D distant cars with directional headlight
 
 <img src="https://cloud.githubusercontent.com/assets/4904157/17226189/d29cbfe2-5510-11e6-8283-44a50963d3db.jpeg" width="100%" alt="GTA IV">
 
-**Grand Theft Auto: Liberty City Stories** — <a href="https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/tag/gtalcs">⬇ Download</a>
+**Grand Theft Auto: Liberty City Stories (PPSSPP)** — <a href="https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/tag/gtalcs">⬇ Download</a> · **(PCSX2F)** — <a href="https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/tag/gtalcsps2">⬇ Download</a>
 
 <img src="https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/assets/4904157/56214234-5a21-4274-bc56-77b4fb94e346" width="100%" alt="GTA Liberty City Stories">
 
@@ -98,4 +98,6 @@ To deploy to your game automatically after each build, create a `.env` file in t
     GTA_IV_DIR=C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto IV\GTAIV
 
 The keys are `GTAIII_DIR`, `GRAND_THEFT_AUTO_VICE_CITY_DIR`, `GTA_SAN_ANDREAS_DIR` and `GTA_IV_DIR`. The build then copies the built `.asi` into the `scripts` folder of that game (`plugins` for GTA IV) and debugging launches the game from there. The `.env` file is ignored by git, only a plugin that is already installed is replaced, and a game without a key is not deployed at all.
+
+The Vice City Stories and Liberty City Stories plugins for PCSX2F and PPSSPP are in `source/console` and are built by the `Project2DFX.PS2` and `Project2DFX.PSP` solutions with the MIPS toolchains of the `external/ps2sdk` and `external/pspsdk` submodules (`git submodule update --init --recursive`). They are built into `data/<plugin>/` and copied into the emulator that `PCSX2F_DIR` or `PPSSPP_DIR` names in `.env`.
 

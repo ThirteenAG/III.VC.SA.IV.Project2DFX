@@ -24,6 +24,10 @@ on:
           - 'gtavc'
           - 'gtasa'
           - 'gtaiv'
+          - 'gtavcsps2'
+          - 'gtalcsps2'
+          - 'gtavcs'
+          - 'gtalcs'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -51,6 +55,8 @@ jobs:
     - name: Build
       run: |
         msbuild -m build/III.VC.SA.IV.Project2DFX.slnx /property:Configuration=Release /property:Platform=Win32
+        msbuild -m build/Project2DFX.PS2.slnx /property:Configuration=Release /property:Platform=PS2
+        msbuild -m build/Project2DFX.PSP.slnx /property:Configuration=Release /property:Platform=PSP
 
     - name: Download III.VC.SA.LimitAdjuster
       uses: robinraju/release-downloader@v1.13
@@ -96,6 +102,30 @@ jobs:
       with:
         archive: false
         path: data/IV.Project2DFX.zip
+
+    - name: Upload GTAVCS.PCSX2F.Project2DFX artifact
+      uses: actions/upload-artifact@v7
+      with:
+        archive: false
+        path: data/GTAVCS.PCSX2F.Project2DFX.zip
+
+    - name: Upload GTALCS.PCSX2F.Project2DFX artifact
+      uses: actions/upload-artifact@v7
+      with:
+        archive: false
+        path: data/GTALCS.PCSX2F.Project2DFX.zip
+
+    - name: Upload GTAVCS.PPSSPP.Project2DFX artifact
+      uses: actions/upload-artifact@v7
+      with:
+        archive: false
+        path: data/GTAVCS.PPSSPP.Project2DFX.zip
+
+    - name: Upload GTALCS.PPSSPP.Project2DFX artifact
+      uses: actions/upload-artifact@v7
+      with:
+        archive: false
+        path: data/GTALCS.PPSSPP.Project2DFX.zip
 
     - name: Get release info
       if: github.event.inputs.release != '' && github.event.inputs.release != 'none'
@@ -165,3 +195,59 @@ jobs:
         bodyFile: ".github/docs/iv.md"
         tag: ${{ steps.release_info.outputs.tag_name }}
         artifacts: data/IV.Project2DFX.zip
+    - name: Upload Release VCS PCSX2F
+      if: |
+        github.event.inputs.release == 'gtavcsps2' &&
+        github.ref_name == 'master' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
+      uses: ncipollo/release-action@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        allowUpdates: true
+        name: ${{ steps.release_info.outputs.name }}
+        bodyFile: ".github/docs/vcsps2.md"
+        tag: ${{ steps.release_info.outputs.tag_name }}
+        artifacts: data/GTAVCS.PCSX2F.Project2DFX.zip
+    - name: Upload Release LCS PCSX2F
+      if: |
+        github.event.inputs.release == 'gtalcsps2' &&
+        github.ref_name == 'master' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
+      uses: ncipollo/release-action@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        allowUpdates: true
+        name: ${{ steps.release_info.outputs.name }}
+        bodyFile: ".github/docs/lcsps2.md"
+        tag: ${{ steps.release_info.outputs.tag_name }}
+        artifacts: data/GTALCS.PCSX2F.Project2DFX.zip
+    - name: Upload Release VCS PPSSPP
+      if: |
+        github.event.inputs.release == 'gtavcs' &&
+        github.ref_name == 'master' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
+      uses: ncipollo/release-action@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        allowUpdates: true
+        name: ${{ steps.release_info.outputs.name }}
+        bodyFile: ".github/docs/vcspsp.md"
+        tag: ${{ steps.release_info.outputs.tag_name }}
+        artifacts: data/GTAVCS.PPSSPP.Project2DFX.zip
+    - name: Upload Release LCS PPSSPP
+      if: |
+        github.event.inputs.release == 'gtalcs' &&
+        github.ref_name == 'master' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
+      uses: ncipollo/release-action@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        allowUpdates: true
+        name: ${{ steps.release_info.outputs.name }}
+        bodyFile: ".github/docs/lcspsp.md"
+        tag: ${{ steps.release_info.outputs.tag_name }}
+        artifacts: data/GTALCS.PPSSPP.Project2DFX.zip
