@@ -119,7 +119,7 @@ export
     bool bAdaptiveDrawDistanceEnabled;
     float fNewFarClip, fMaxPossibleDrawDistance;
     float fMaxDrawDistanceForNormalObjects, fTimedObjectsDrawDistance, fNeonsDrawDistance, fLODObjectsDrawDistance;
-    float fGenericObjectsDrawDistance, fAllNormalObjectsDrawDistance, fVegetationDrawDistance;
+    float fGenericObjectsDrawDistance, fAllNormalObjectsDrawDistance, fVegetationDrawDistance, fProceduralObjectsDrawDistance;
     bool bLoadAllBinaryIPLs, bPreloadLODs;
     float fDrawDistance;
     bool bRandomExplosionEffects, bReplaceSmokeTrailWithBulletTrail;
@@ -203,6 +203,7 @@ export
         fGenericObjectsDrawDistance = iniReader.ReadFloat("IDETweaker", "GenericObjectsDrawDistance", 0.0f);
         fAllNormalObjectsDrawDistance = iniReader.ReadFloat("IDETweaker", "AllNormalObjectsDrawDistance", 0.0f);
         fVegetationDrawDistance = iniReader.ReadFloat("IDETweaker", "VegetationDrawDistance", 0.0f);
+        fProceduralObjectsDrawDistance = iniReader.ReadFloat("IDETweaker", "ProceduralObjectsDrawDistance", 0.0f);
         fDrawDistance = iniReader.ReadFloat("IDETweaker", "DrawDistance", 0.0f);
         bPreloadLODs = iniReader.ReadInteger("IDETweaker", "PreloadLODs", 0) != 0;
 
