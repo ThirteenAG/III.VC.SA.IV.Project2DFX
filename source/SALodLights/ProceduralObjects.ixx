@@ -48,7 +48,6 @@ namespace ProceduralObjects
         result.objectDrawDistance = ClampDrawDistance(objectDrawDistance);
         result.grassDrawDistance = ClampDrawDistance(grassDrawDistance);
 
-        // Budget for the maximum stock slider. The 150 cap keeps both fades at 20 units.
         if (result.objectDrawDistance != 0.0f)
         {
             result.objectMinDistance = result.objectDrawDistance * MaximumCameraMultiplier + FadeWidth + SafetyMargin;
@@ -56,16 +55,14 @@ namespace ProceduralObjects
         }
         if (result.grassDrawDistance != 0.0f)
         {
-            // Grass needs cached triangles beyond its fade, but no creation exclusion.
             const float grassCacheRadius = result.grassDrawDistance * MaximumCameraMultiplier + FadeWidth + SafetyMargin;
             result.triangleCacheRadius = (std::max)(result.triangleCacheRadius, grassCacheRadius);
         }
-        // Preserve the grass cache floor and safety margin; only the object window narrows.
+        // Keep the 100-unit floor; only the object window narrows at 340.
         result.triangleCacheRadius = std::clamp(result.triangleCacheRadius, DefaultTriangleCacheRadius, OuterCollisionCacheRadius);
         return result;
     }
 
-    // Only the field rewritten after native initialization needs a known offset.
     struct SurfaceInfo
     {
         uint8_t properties[0x10];
@@ -74,7 +71,6 @@ namespace ProceduralObjects
 
     static_assert(offsetof(SurfaceInfo, squaredMinDistance) == 0x10);
 
-    // Load-time configuration; patched instructions retain pointers to this storage.
     DistanceSettings distanceSettings;
     float triangleCacheRadiusSquared = 0.0f;
 
@@ -83,7 +79,6 @@ namespace ProceduralObjects
     SafetyHookInline grassRenderHook;
     SafetyHookInline objectSurfaceInitHook;
 
-    // Restore shared model/grass state before another instance is processed.
     class ScopedDistanceOverride
     {
     public:
@@ -121,36 +116,30 @@ namespace ProceduralObjects
         if (!entity->bIsProcObject)
             return objectFadeAlphaHook.unsafe_ccall<int>(model, entity, distance);
 
-        // Deferred rendering needs its own override after visibility restored the model.
+        // Fade runs after visibility restores the shared distance.
         ScopedDistanceOverride override(model->m_fDrawDistance, distanceSettings.objectDrawDistance);
         return objectFadeAlphaHook.unsafe_ccall<int>(model, entity, distance);
     }
 
-    // Opaque PPTriPlant* and RpAtomic**; the original owns both layouts.
     void __cdecl RenderGrass(void* plants, int32_t count, void** models)
     {
-        // Override CGrassRenderer::m_farDist at draw time to survive plant reloads.
-        // Native rendering retains its fade, near-camera exclusion and FX-quality scaling.
-        auto& farDistance = *reinterpret_cast<float*>(0x8D132C);
+        auto& farDistance = *reinterpret_cast<float*>(0x8D132C); // CGrassRenderer::m_farDist
         ScopedDistanceOverride override(farDistance, distanceSettings.grassDrawDistance * TheCamera->LODDistMultiplier);
         grassRenderHook.unsafe_ccall<void>(plants, count, models);
     }
 
-    // __fastcall preserves the original __thiscall ECX and stack arguments.
     bool __fastcall InitObjectSurface(SurfaceInfo* surface, void*, const char* surfaceType, const char* modelName,
         float spacing, float minDist, int32_t minRot, int32_t maxRot,
         float minScale, float maxScale, float minScaleZ, float maxScaleZ,
         float zOffsetMin, float zOffsetMax, bool align, uint8_t useGrid)
     {
-        // Native SA 1.0 US clamps this argument down to 80. Its return reports
-        // whether the model was valid, so no second lookup is needed.
         const bool initialized = objectSurfaceInitHook.unsafe_thiscall<bool>(surface, surfaceType, modelName, spacing, minDist,
             minRot, maxRot, minScale, maxScale, minScaleZ, maxScaleZ,
             zOffsetMin, zOffsetMax, align, useGrid);
         if (!initialized)
             return false;
 
-        // Apply our floor while preserving a higher authored .dat minimum.
+        // SA clamps .dat minimum down to 80; keep any higher value.
         const float minimum = (std::max)(minDist, distanceSettings.objectMinDistance);
         surface->squaredMinDistance = minimum * minimum;
         return true;
@@ -162,8 +151,7 @@ namespace ProceduralObjects
             return;
 
         triangleCacheRadiusSquared = distanceSettings.triangleCacheRadius * distanceSettings.triangleCacheRadius;
-        // Retarget only CPlantMgr's triangle removal/admission comparisons, not
-        // the original 10000 constant shared with unrelated systems.
+        // Patch only these comparisons; 10000 is shared.
         for (const auto& range : { std::pair{0x5DBF20, 0x5DC510}, std::pair{0x5DC8B0, 0x5DCD80} })
         {
             auto checks = hook::range_pattern(range.first, range.second, "D8 1D A4 9A 85 00");
@@ -173,8 +161,7 @@ namespace ProceduralObjects
             });
         }
 
-        // Collision face-group sphere test uses an immediate, unsquared radius.
-        auto sphereRadius = hook::range_pattern(0x5DCD80, 0x5DCF00, "68 00 00 C8 42");
+        auto sphereRadius = hook::range_pattern(0x5DCD80, 0x5DCF00, "68 00 00 C8 42"); // Unsquared radius.
         injector::WriteMemory<float>(sphereRadius.get_first(1), distanceSettings.triangleCacheRadius, true);
     }
 
