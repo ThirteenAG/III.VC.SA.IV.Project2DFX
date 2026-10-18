@@ -1,6 +1,13 @@
 module;
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "stdafx.h"
+#include <cstddef>
+#include <initializer_list>
+#include <utility>
 #include "ProceduralDistances.hpp"
 #include "ProceduralObjectRecovery.hpp"
 
@@ -107,7 +114,7 @@ namespace ProceduralDetails
 
             // Use the .dat argument, rather than the original's 80-unit clamp.
             // Higher authored minima remain authoritative.
-            const float minimum = std::max(minDist, distanceSettings.objectMinDistance);
+            const float minimum = (std::max)(minDist, distanceSettings.objectMinDistance);
             surface->squaredMinDistance = minimum * minimum;
         }
 

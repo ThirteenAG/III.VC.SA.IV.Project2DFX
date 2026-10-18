@@ -22,7 +22,7 @@ namespace ProceduralDetails::Distances
 
     inline float ClampDrawDistance(float value)
     {
-        return std::isfinite(value) && value > 0.0f ? std::min(value, MaximumDrawDistance) : 0.0f;
+        return std::isfinite(value) && value > 0.0f ? (std::min)(value, MaximumDrawDistance) : 0.0f;
     }
 
     inline Settings Calculate(float configuredObjectDrawDistance, float configuredGrassDrawDistance = 0.0f)
@@ -50,7 +50,7 @@ namespace ProceduralDetails::Distances
             // has no minimum creation exclusion. Keep triangles beyond its fade.
             // Both consumers use this cache, so neither may shrink the other's range.
             const float grassCacheRadius = result.grassDrawDistance * MaximumCameraMultiplier + FadeWidth + SafetyMargin;
-            result.triangleCacheRadius = std::max(result.triangleCacheRadius, grassCacheRadius);
+            result.triangleCacheRadius = (std::max)(result.triangleCacheRadius, grassCacheRadius);
         }
         result.triangleCacheRadius = std::clamp(result.triangleCacheRadius, DefaultTriangleCacheRadius, OuterCollisionCacheRadius);
         return result;
