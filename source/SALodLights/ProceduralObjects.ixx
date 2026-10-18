@@ -65,80 +65,19 @@ namespace ProceduralObjects
         return result;
     }
 
-    // Tracking structures and recovery adapted from Open Limit Adjuster
-    struct ObjectEntry
-    {
-        ObjectEntry* prev;
-        ObjectEntry* next;
-        void* object;
-        void* triangle;
-        bool allocatedMatrix;
-    };
-
-    struct ObjectList
-    {
-        ObjectEntry* head;
-        ObjectEntry* tail;
-        uint32_t count;
-
-        void Add(ObjectEntry& item)
-        {
-            item.prev = nullptr;
-            item.next = head;
-            if (head)
-                head->prev = &item;
-            else
-                tail = &item;
-            head = &item;
-            ++count;
-        }
-    };
-
+    // Only the field rewritten after native initialization needs a known offset.
     struct SurfaceInfo
     {
         uint8_t properties[0x10];
         float squaredMinDistance;
-        uint8_t placementProperties[0x28];
-        ObjectList objects;
     };
 
-    struct AllocationSnapshot
-    {
-        ObjectEntry* head;
-        ObjectEntry* next;
-        uint32_t count;
-
-        explicit AllocationSnapshot(const ObjectList& list)
-            : head(list.head), next(head ? head->next : nullptr), count(list.count)
-        {
-        }
-
-        void RecoverFailure(ObjectList& list, const SurfaceInfo& surface) const
-        {
-            // Return only the single entry lost by a failed creation. Do not
-            // reclaim an owned entry or duplicate recovery performed by another fix.
-            if (head && count && list.count == count - 1 && list.head == next &&
-                !head->object && surface.objects.head != head)
-            {
-                *head = {};
-                list.Add(*head);
-            }
-        }
-    };
-
-    static_assert(sizeof(ObjectEntry) == 0x14);
-    static_assert(offsetof(ObjectEntry, object) == 0x8);
-    static_assert(sizeof(ObjectList) == 0xC);
     static_assert(offsetof(SurfaceInfo, squaredMinDistance) == 0x10);
-    static_assert(offsetof(SurfaceInfo, objects) == 0x3C);
-    static_assert(sizeof(SurfaceInfo) == 0x48);
-    static_assert(sizeof(RwV3d) == 0xC);
 
     // Load-time configuration; patched instructions retain pointers to this storage.
     DistanceSettings distanceSettings;
     float triangleCacheRadiusSquared = 0.0f;
 
-    SafetyHookInline createObjectHook;
     SafetyHookInline objectVisibilityHook;
     SafetyHookInline objectFadeAlphaHook;
     SafetyHookInline grassRenderHook;
@@ -166,17 +105,6 @@ namespace ProceduralObjects
         float& value;
         const float saved;
     };
-
-    ObjectEntry* __fastcall CreateObject(SurfaceInfo* surface, void*, RwV3d position, RwV3d normal, uint8_t lighting)
-    {
-        // ProcObjectMan::m_ObjectsList, shared by vanilla and OLA storage.
-        auto& unused = *reinterpret_cast<ObjectList*>(0xBBC8B8);
-        const AllocationSnapshot snapshot(unused);
-        auto* result = createObjectHook.unsafe_thiscall<ObjectEntry*>(surface, position, normal, lighting);
-        if (!result)
-            snapshot.RecoverFailure(unused, *surface);
-        return result;
-    }
 
     int __cdecl SetupObjectVisibility(CEntity* entity, float* distance)
     {
@@ -209,22 +137,23 @@ namespace ProceduralObjects
     }
 
     // __fastcall preserves the original __thiscall ECX and stack arguments.
-    void __fastcall InitObjectSurface(SurfaceInfo* surface, void*, const char* surfaceType, const char* modelName,
+    bool __fastcall InitObjectSurface(SurfaceInfo* surface, void*, const char* surfaceType, const char* modelName,
         float spacing, float minDist, int32_t minRot, int32_t maxRot,
         float minScale, float maxScale, float minScaleZ, float maxScaleZ,
         float zOffsetMin, float zOffsetMax, bool align, uint8_t useGrid)
     {
-        objectSurfaceInitHook.unsafe_thiscall<void>(surface, surfaceType, modelName, spacing, minDist,
+        // Native SA 1.0 US clamps this argument down to 80. Its return reports
+        // whether the model was valid, so no second lookup is needed.
+        const bool initialized = objectSurfaceInitHook.unsafe_thiscall<bool>(surface, surfaceType, modelName, spacing, minDist,
             minRot, maxRot, minScale, maxScale, minScaleZ, maxScaleZ,
             zOffsetMin, zOffsetMax, align, useGrid);
+        if (!initialized)
+            return false;
 
-        int modelID;
-        if (!CModelInfo::GetModelInfo(modelName, &modelID))
-            return; // The original returns early for unknown models.
-
-        // Replace the original 80-unit clamp, preserving higher authored minima.
+        // Apply our floor while preserving a higher authored .dat minimum.
         const float minimum = (std::max)(minDist, distanceSettings.objectMinDistance);
         surface->squaredMinDistance = minimum * minimum;
+        return true;
     }
 
     void PatchTriangleCache()
@@ -249,11 +178,6 @@ namespace ProceduralObjects
         injector::WriteMemory<float>(sphereRadius.get_first(1), distanceSettings.triangleCacheRadius, true);
     }
 
-    export void InstallRecoveryFix()
-    {
-        createObjectHook = safetyhook::create_inline(0x5A32D0, CreateObject);
-    }
-
     export void InstallHooks(float objectDrawDistance, float grassDrawDistance)
     {
         distanceSettings = CalculateDistances(objectDrawDistance, grassDrawDistance);
@@ -262,8 +186,7 @@ namespace ProceduralObjects
         {
             objectVisibilityHook = safetyhook::create_inline(0x554230, SetupObjectVisibility);
             objectFadeAlphaHook = safetyhook::create_inline(0x732500, CalculateObjectFadeAlpha);
-            if (distanceSettings.objectMinDistance != DefaultObjectMinDistance)
-                objectSurfaceInitHook = safetyhook::create_inline(0x5A2EB0, InitObjectSurface);
+            objectSurfaceInitHook = safetyhook::create_inline(0x5A2EB0, InitObjectSurface);
         }
         if (distanceSettings.grassDrawDistance != 0.0f)
             grassRenderHook = safetyhook::create_inline(0x5DAD00, RenderGrass);

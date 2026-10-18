@@ -149,8 +149,6 @@ void DrawDistanceChanger()
 
 void ApplyMemoryPatches()
 {
-    ProceduralObjects::InstallRecoveryFix();
-
     auto pattern = hook::pattern("68 ? ? ? ? E8 ? ? ? ? 68 ? ? ? ? E8 ? ? ? ? E8");
     static auto CFileLoaderLoadLevelHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
