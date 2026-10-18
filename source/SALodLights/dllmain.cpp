@@ -21,7 +21,7 @@ import PointLights;
 import DistantCars;
 import DistantCarRenderer;
 import WaterLevel;
-import ProceduralDetails;
+import ProceduralObjects;
 
 using RwV3D = RwV3d;
 
@@ -149,6 +149,8 @@ void DrawDistanceChanger()
 
 void ApplyMemoryPatches()
 {
+    ProceduralObjects::InstallRecoveryFix();
+
     auto pattern = hook::pattern("68 ? ? ? ? E8 ? ? ? ? 68 ? ? ? ? E8 ? ? ? ? E8");
     static auto CFileLoaderLoadLevelHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
@@ -449,7 +451,7 @@ void ApplyMemoryPatches()
 
     if (fProceduralObjectsDrawDistance || fProceduralGrassDrawDistance)
     {
-        ProceduralDetails::InstallHooks(fProceduralObjectsDrawDistance, fProceduralGrassDrawDistance);
+        ProceduralObjects::InstallHooks(fProceduralObjectsDrawDistance, fProceduralGrassDrawDistance);
     }
 
     if (bPreloadLODs)
