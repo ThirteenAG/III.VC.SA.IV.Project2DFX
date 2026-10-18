@@ -21,6 +21,7 @@ import PointLights;
 import DistantCars;
 import DistantCarRenderer;
 import WaterLevel;
+import ProceduralObjects;
 
 using RwV3D = RwV3d;
 
@@ -297,7 +298,7 @@ void ApplyMemoryPatches()
         }; injector::MakeInline<IncreaseDrawDistanceForTimedObjectsHook>(0x5B3F4C);
     }
 
-    if (fLODObjectsDrawDistance || fGenericObjectsDrawDistance || fAllNormalObjectsDrawDistance || fVegetationDrawDistance || fProceduralObjectsDrawDistance)
+    if (fLODObjectsDrawDistance || fGenericObjectsDrawDistance || fAllNormalObjectsDrawDistance || fVegetationDrawDistance)
     {
         struct IncreaseDrawDistanceForObjectsHook
         {
@@ -352,24 +353,8 @@ void ApplyMemoryPatches()
                     return false;
                 };
 
-                auto isProceduralObjectID = [](int id) -> bool
-                {
-                    if (id < 0) return false;
-                    if (id >= 800 && id <= 906) return true;
-                    return false;
-                };
-
                 if (isInteriorObjectID(modelID))
                 {
-                    *(float*)&regs.edx = drawDist;
-                    return;
-                }
-
-                if (isProceduralObjectID(modelID))
-                {
-                    if (fProceduralObjectsDrawDistance)
-                        drawDist = fProceduralObjectsDrawDistance;
-
                     *(float*)&regs.edx = drawDist;
                     return;
                 }
@@ -460,6 +445,10 @@ void ApplyMemoryPatches()
             injector::WriteMemory(0x554230 + 0x3D0 + 0x2, &fMaxDrawDistanceForNormalObjects, true); // fld     ds:flt_858FD8
             injector::WriteMemory(0x554230 + 0x3FA + 0x2, &fMaxDrawDistanceForNormalObjects, true); // fsub    ds:flt_858FD8
         }
+    }
+
+    if (fProceduralObjectsDrawDistance) {
+        ProceduralObjects::InstallHooks(fProceduralObjectsDrawDistance);
     }
 
     if (bPreloadLODs)
