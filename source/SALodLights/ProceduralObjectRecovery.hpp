@@ -3,7 +3,7 @@
 #pragma once
 #include <cstdint>
 
-namespace ProceduralObjects::Recovery
+namespace ProceduralDetails::ObjectRecovery
 {
     struct ObjectEntry
     {

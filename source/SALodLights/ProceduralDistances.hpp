@@ -2,38 +2,57 @@
 #include <algorithm>
 #include <cmath>
 
-namespace ProceduralObjects::Distances
+namespace ProceduralDetails::Distances
 {
-    inline constexpr float DefaultMinimum = 80.0f;
-    inline constexpr float DefaultMaximum = 100.0f;
-    inline constexpr float OuterCacheRadius = 340.0f;
+    inline constexpr float DefaultObjectMinDistance = 80.0f;
+    inline constexpr float DefaultTriangleCacheRadius = 100.0f;
+    inline constexpr float OuterCollisionCacheRadius = 340.0f;
     inline constexpr float MaximumDrawDistance = 150.0f;
+    inline constexpr float FadeWidth = 20.0f;
+    inline constexpr float SafetyMargin = 20.0f;
+    inline constexpr float MaximumCameraMultiplier = 1.8f;
 
     struct Settings
     {
-        float draw = 0.0f;
-        float minimum = DefaultMinimum;
-        float maximum = DefaultMaximum;
+        float objectDrawDistance = 0.0f;
+        float grassDrawDistance = 0.0f;
+        float objectMinDistance = DefaultObjectMinDistance;
+        float triangleCacheRadius = DefaultTriangleCacheRadius;
     };
 
-    inline Settings Calculate(float configuredDrawDistance)
+    inline float ClampDrawDistance(float value)
     {
-        if (!std::isfinite(configuredDrawDistance) || configuredDrawDistance <= 0.0f)
-            return {};
+        return std::isfinite(value) && value > 0.0f ? std::min(value, MaximumDrawDistance) : 0.0f;
+    }
 
-        constexpr float cameraMultiplier = 1.8f;
-        constexpr float fadeWidth = 20.0f;
-        constexpr float safetyMargin = 30.0f;
-        constexpr float generationWindow = 40.0f;
+    inline Settings Calculate(float configuredObjectDrawDistance, float configuredGrassDrawDistance = 0.0f)
+    {
+        constexpr float objectGenerationWindow = 40.0f;
 
-        const float draw = std::min(configuredDrawDistance, MaximumDrawDistance);
-        // Plan for the stock slider maximum, independently of its current value.
-        // With draw capped at 150, the stock fade is always 20 units wide.
-        const float fadeEnd = cameraMultiplier * draw + fadeWidth;
-        const float scale = std::min(1.0f, (OuterCacheRadius - fadeEnd) / (safetyMargin + generationWindow));
-        const float minimum = fadeEnd + safetyMargin * scale;
-        // Preserve the shared grass/triangle cache's vanilla radius at the low end.
-        const float maximum = std::clamp(minimum + generationWindow * scale, DefaultMaximum, OuterCacheRadius);
-        return { draw, minimum, maximum };
+        Settings result;
+        result.objectDrawDistance = ClampDrawDistance(configuredObjectDrawDistance);
+        result.grassDrawDistance = ClampDrawDistance(configuredGrassDrawDistance);
+
+        if (result.objectDrawDistance != 0.0f)
+        {
+            // Plan for the stock slider maximum, independently of its current value.
+            // With draw capped at 150, the stock object fade is 20 units wide.
+            const float fadeEnd = MaximumCameraMultiplier * result.objectDrawDistance + FadeWidth;
+            result.objectMinDistance = fadeEnd + SafetyMargin;
+            // Preserve the safety margin; only the generation window narrows
+            // when the final shared-cache radius is clamped to the outer limit.
+            result.triangleCacheRadius = result.objectMinDistance + objectGenerationWindow;
+        }
+
+        if (result.grassDrawDistance != 0.0f)
+        {
+            // Budget for the maximum stock slider and High/Very High FX. Grass
+            // has no minimum creation exclusion. Keep triangles beyond its fade.
+            // Both consumers use this cache, so neither may shrink the other's range.
+            const float grassCacheRadius = result.grassDrawDistance * MaximumCameraMultiplier + FadeWidth + SafetyMargin;
+            result.triangleCacheRadius = std::max(result.triangleCacheRadius, grassCacheRadius);
+        }
+        result.triangleCacheRadius = std::clamp(result.triangleCacheRadius, DefaultTriangleCacheRadius, OuterCollisionCacheRadius);
+        return result;
     }
 }
