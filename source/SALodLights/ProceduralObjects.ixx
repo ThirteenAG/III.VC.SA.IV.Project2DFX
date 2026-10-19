@@ -165,8 +165,15 @@ namespace ProceduralObjects
         injector::WriteMemory<float>(sphereRadius.get_first(1), distanceSettings.triangleCacheRadius, true);
     }
 
+    void SkipCreationChecks()
+    {
+        injector::MakeNOP(0x5A3355, 2, true); // TempObjectThreshold
+        injector::MakeNOP(0x5A332A, 2, true); // MatrixAllowance
+    }
+
     export void InstallHooks(float objectDrawDistance, float grassDrawDistance)
     {
+        SkipCreationChecks();
         distanceSettings = CalculateDistances(objectDrawDistance, grassDrawDistance);
 
         if (distanceSettings.objectDrawDistance != 0.0f)
