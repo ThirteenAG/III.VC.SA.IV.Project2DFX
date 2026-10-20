@@ -21,6 +21,7 @@ import PointLights;
 import DistantCars;
 import DistantCarRenderer;
 import WaterLevel;
+import ProceduralObjects;
 
 using RwV3D = RwV3d;
 
@@ -444,6 +445,11 @@ void ApplyMemoryPatches()
             injector::WriteMemory(0x554230 + 0x3D0 + 0x2, &fMaxDrawDistanceForNormalObjects, true); // fld     ds:flt_858FD8
             injector::WriteMemory(0x554230 + 0x3FA + 0x2, &fMaxDrawDistanceForNormalObjects, true); // fsub    ds:flt_858FD8
         }
+    }
+
+    if (fProceduralObjectsDrawDistance || fProceduralGrassDrawDistance)
+    {
+        ProceduralObjects::InstallHooks(fProceduralObjectsDrawDistance, fProceduralGrassDrawDistance);
     }
 
     if (bPreloadLODs)
