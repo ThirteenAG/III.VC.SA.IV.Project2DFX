@@ -1,0 +1,17 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "Lumières lointaines",
+  "RenderLodLights": "Lumières lointaines",
+  "RenderLodLights.description": "Les réverbères et autres lumières brillent loin à travers la ville la nuit, comme sur les versions console. Désactivé : les lumières lointaines du jeu.",
+  "CoronaRadiusMultiplier": "Taille des lumières",
+  "CoronaRadiusMultiplier.description": "Multiplicateur de la taille des lumières lointaines.",
+  "CoronaAlphaMultiplier": "Luminosité des lumières",
+  "CoronaAlphaMultiplier.description": "Multiplicateur de la luminosité des lumières lointaines.",
+  "SlightlyIncreaseRadiusWithDistance": "Agrandir avec la distance",
+  "SlightlyIncreaseRadiusWithDistance.description": "Les lumières lointaines grandissent légèrement avec la distance pour rester visibles de loin.",
+  "DrawDistance": "Distance d'affichage",
+  "DrawDistance.description": "Jusqu'à quelle distance les lumières lointaines sont affichées. Auto : aussi loin que voit la caméra.",
+  "DrawDistance.auto": "Auto",
+  "DisableDefaultLodLights": "Masquer les lumières lointaines du jeu",
+  "DisableDefaultLodLights.description": "Masque les lumières lointaines du jeu tant que celles-ci sont affichées, pour qu'elles n'apparaissent pas en double."
+}

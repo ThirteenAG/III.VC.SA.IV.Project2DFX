@@ -144,8 +144,11 @@ export inline unsigned int PackKey(unsigned short nModel, unsigned short nIndex)
 
 export void LoadDatFile()
 {
-    CIniReader iniReader("");
-    auto DataFilePath = iniReader.GetIniPath();
+    HMODULE module = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, reinterpret_cast<LPCWSTR>(&LoadDatFile), &module);
+    wchar_t modulePath[MAX_PATH * 4] = {};
+    GetModuleFileNameW(module, modulePath, DWORD(std::size(modulePath)));
+    std::filesystem::path DataFilePath(modulePath);
     DataFilePath.replace_extension(".dat");
 
     m_Lampposts.clear();

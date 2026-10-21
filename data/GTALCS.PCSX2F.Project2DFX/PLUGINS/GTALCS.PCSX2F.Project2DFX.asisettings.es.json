@@ -1,0 +1,23 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "Luces a lo lejos",
+  "page.traffic": "Tráfico lejano",
+  "RenderLodLights": "Luces a lo lejos",
+  "CoronaRadiusMultiplier": "Tamaño de las luces",
+  "CoronaRadiusMultiplier.description": "Multiplicador del tamaño de las luces lejanas.",
+  "CoronaFarClip": "Distancia de las luces",
+  "ConsoleLights.description": "De noche, las farolas y otras luces brillan a lo lejos por toda la ciudad.",
+  "CoronaLimit": "Límite de luces",
+  "CoronaLimit.description": "Máximo de luces lejanas mostradas a la vez.",
+  "DistantCars": "Coches lejanos",
+  "DistantCars.description": "Coches 3D circulan por las carreteras a lo lejos.",
+  "DistantBoats": "Barcos lejanos",
+  "DistantBoats.description": "Barcos 3D navegan por el agua a lo lejos.",
+  "MaxCars": "Límite de coches lejanos",
+  "MaxCars.description": "Máximo de coches lejanos a la vez.",
+  "MaxBoats": "Límite de barcos lejanos",
+  "MaxBoats.description": "Máximo de barcos lejanos a la vez.",
+  "TrafficDrawDistance": "Distancia del tráfico",
+  "TrafficDrawDistance.description": "Distancia a la que desaparece el tráfico lejano.",
+  "ConsoleFarClip.description": "Hasta qué distancia se dibujan las luces lejanas. Los valores bajos van más rápido."
+}

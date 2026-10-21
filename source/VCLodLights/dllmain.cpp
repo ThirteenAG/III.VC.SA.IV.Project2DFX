@@ -2,6 +2,7 @@
 #include "stdafx.h"
 #include <ranges>
 #include <deque>
+#include "asi_settings/asi_settings.hpp"
 #include <iterator>
 #include <string>
 
@@ -622,10 +623,12 @@ void GetMemoryAddresses()
 
 void Init()
 {
-    ReadIniSettings();
+    ReadSettings();
     GetMemoryAddresses();
     ApplyMemoryPatches();
 }
+
+ASI_SETTINGS_EXPORT(Settings())
 
 extern "C" __declspec(dllexport) void InitializeASI()
 {

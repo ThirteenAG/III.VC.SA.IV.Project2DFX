@@ -1,0 +1,17 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "Distant Lights",
+  "RenderLodLights": "Distant Lights",
+  "RenderLodLights.description": "Street lamps and other lights glow far across the city at night, as on the console versions. Off: the game's own distant lights.",
+  "CoronaRadiusMultiplier": "Light Size",
+  "CoronaRadiusMultiplier.description": "Multiplier of the size of the distant lights.",
+  "CoronaAlphaMultiplier": "Light Brightness",
+  "CoronaAlphaMultiplier.description": "Multiplier of the brightness of the distant lights.",
+  "SlightlyIncreaseRadiusWithDistance": "Grow With Distance",
+  "SlightlyIncreaseRadiusWithDistance.description": "Distant lights grow slightly with distance, so they stay visible far away.",
+  "DrawDistance": "Draw Distance",
+  "DrawDistance.description": "How far away distant lights are drawn. Auto: as far as the camera sees.",
+  "DrawDistance.auto": "Auto",
+  "DisableDefaultLodLights": "Hide the Game's Distant Lights",
+  "DisableDefaultLodLights.description": "Hides the game's own distant lights while these are shown, so they don't appear twice."
+}

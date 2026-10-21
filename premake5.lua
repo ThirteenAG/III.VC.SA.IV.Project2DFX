@@ -111,6 +111,8 @@ workspace "III.VC.SA.IV.Project2DFX"
    files { "external/injector/zydis/**.h", "external/injector/zydis/**.c" }
    files { "data/**/*.ini" }
    includedirs { "includes" }
+   -- Shared headers (callbacks.h, gameref.hpp) and ASI Settings: FusionFixUtils, a submodule
+   includedirs { "external/FusionFixUtils/include", "external/FusionFixUtils" }
    includedirs { "external/hooking" }
    includedirs { "external/injector/safetyhook/include" }
    includedirs { "external/injector/zydis" }
@@ -137,6 +139,32 @@ workspace "III.VC.SA.IV.Project2DFX"
       defines "NDEBUG"
       optimize "On"
 
+-- The settings of a plugin (ASI Settings, external/FusionFixUtils/asi_settings): settings/<plugin>.json and its
+-- translations settings/<plugin>.<language>.json, embedded by source/<plugin>/Settings.rc. A broken description fails
+-- the build, before compiling and in the built plugin.
+function settings(languages)
+   files { "source/%{prj.name}/Settings.rc", "settings/%{prj.name}.json", "settings/%{prj.name}.*.json" }
+   dependson { "AsiSettingsValidator" }
+   local inputs = '"../settings/%{prj.name}.json"'
+   for _, language in ipairs(languages) do
+      inputs = inputs .. ' "../settings/%{prj.name}.' .. language .. '.json"'
+   end
+   prebuildcommands { '"../data/tools/asi-settings-validate.exe" ' .. inputs }
+   postbuildcommands { '"../data/tools/asi-settings-validate.exe" "$(TargetPath)"' }
+end
+
+local languages = { "en", "fr", "de", "it", "es", "ru", "ja" }
+
+-- Checks the settings descriptions of the plugins (see settings above)
+project "AsiSettingsValidator"
+   kind "ConsoleApp"
+   targetdir "data/tools/"
+   targetname "asi-settings-validate"
+   targetextension ".exe"
+   characterset ("Unicode")
+   removefiles { "source/**", "external/**", "resources/**", "data/**" }
+   files { "external/FusionFixUtils/asi_settings/tools/validator.cpp" }
+
 project "2DFXDataGrabber"
    kind "ConsoleApp"
    targetdir "data/%{prj.name}/"
@@ -144,14 +172,17 @@ project "2DFXDataGrabber"
    characterset ("MBCS")
    removefiles { "source/*.hpp", "source/*.ixx" }
 project "IIILodLights"
+   settings(languages)
    setpaths("GTAIII_DIR", "gta3.exe")
 project "VCLodLights"
+   settings(languages)
    setpaths("GRAND_THEFT_AUTO_VICE_CITY_DIR", "gta-vc.exe")
 project "SALodLights"
+   settings(languages)
    setpaths("GTA_SAN_ANDREAS_DIR", "gta_sa.exe")
 project "IVLodLights"
+   settings(languages)
    removefiles { "source/*.hpp", "source/*.ixx" }
-   files { "source/FileMgr.ixx", "source/LamppostInfo.ixx", "source/Timer.ixx" }
    -- the plugins of GTA IV are loaded from the plugins folder
    setpaths("GTA_IV_DIR", "GTAIV.exe", "plugins/")
 

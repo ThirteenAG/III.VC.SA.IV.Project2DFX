@@ -1,0 +1,23 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "Distant Lights",
+  "page.traffic": "Distant Traffic",
+  "RenderLodLights": "Distant Lights",
+  "CoronaRadiusMultiplier": "Light Size",
+  "CoronaRadiusMultiplier.description": "Multiplier of the size of the distant lights.",
+  "CoronaFarClip": "Light Draw Distance",
+  "ConsoleLights.description": "Street lamps and other lights glow far across the city at night.",
+  "CoronaLimit": "Light Limit",
+  "CoronaLimit.description": "Most distant lights shown at once.",
+  "DistantCars": "Distant Cars",
+  "DistantCars.description": "Moving 3D cars on the roads far away.",
+  "DistantBoats": "Distant Boats",
+  "DistantBoats.description": "Moving 3D boats on the water far away.",
+  "MaxCars": "Distant Car Limit",
+  "MaxCars.description": "Most distant cars at once.",
+  "MaxBoats": "Distant Boat Limit",
+  "MaxBoats.description": "Most distant boats at once.",
+  "TrafficDrawDistance": "Traffic Draw Distance",
+  "TrafficDrawDistance.description": "Distance at which distant traffic fades out.",
+  "ConsoleFarClip.description": "How far away distant lights are drawn. Lower values run faster."
+}

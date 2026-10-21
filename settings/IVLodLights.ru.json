@@ -1,0 +1,17 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "Далёкие огни",
+  "RenderLodLights": "Далёкие огни",
+  "RenderLodLights.description": "Ночью фонари и другие огни светятся далеко по всему городу, как в консольных версиях. Выкл.: собственные далёкие огни игры.",
+  "CoronaRadiusMultiplier": "Размер огней",
+  "CoronaRadiusMultiplier.description": "Множитель размера далёких огней.",
+  "CoronaAlphaMultiplier": "Яркость огней",
+  "CoronaAlphaMultiplier.description": "Множитель яркости далёких огней.",
+  "SlightlyIncreaseRadiusWithDistance": "Рост с расстоянием",
+  "SlightlyIncreaseRadiusWithDistance.description": "Далёкие огни немного растут с расстоянием, чтобы оставаться заметными издалека.",
+  "DrawDistance": "Дальность прорисовки",
+  "DrawDistance.description": "На каком расстоянии рисуются далёкие огни. Авто: насколько видит камера.",
+  "DrawDistance.auto": "Авто",
+  "DisableDefaultLodLights": "Скрыть далёкие огни игры",
+  "DisableDefaultLodLights.description": "Скрывает собственные далёкие огни игры, пока показаны эти, чтобы они не появлялись дважды."
+}

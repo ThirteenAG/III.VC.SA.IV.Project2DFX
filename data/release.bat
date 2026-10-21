@@ -47,10 +47,15 @@ cd ..
 cd ..
 copy /b/v/y "2DFXDataGrabber\iii_data\IIILodLights.dat" "IIILodLights\IIILodLights.dat"
 
-7za a -tzip ".\III.Project2DFX.zip" ".\IIILodLights\*"      -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
-7za a -tzip ".\VC.Project2DFX.zip"  ".\VCLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
-7za a -tzip ".\SA.Project2DFX.zip"  ".\SALodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
-7za a -tzip ".\IV.Project2DFX.zip"  ".\IVLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep
+7za a -tzip ".\III.Project2DFX.zip" ".\IIILodLights\*"      -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep -xr!*.cfg
+7za a -tzip ".\VC.Project2DFX.zip"  ".\VCLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep -xr!*.cfg
+7za a -tzip ".\SA.Project2DFX.zip"  ".\SALodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep -xr!*.cfg
+7za a -tzip ".\IV.Project2DFX.zip"  ".\IVLodLights\*"       -x!*.pdb -x!*.db -x!*.ipdb -x!*.iobj -x!*.lib -x!*.exp -x!.gitkeep -xr!*.cfg
+rem The settings file is written by the plugin on its first start (and by FusionFixHub or the site): never in the
+rem package, where an update would overwrite the player's settings. The old ini isn't read any more.
+for %%z in (III VC SA IV) do (
+    7za l "%%z.Project2DFX.zip" | findstr /i /r "LodLights\.cfg LodLights\.ini" && (echo ERROR: %%z.Project2DFX.zip contains a settings file & exit /b 1)
+)
 rem the console plugins, laid out the way they are unpacked into the folder of the emulator
 7za a -tzip ".\GTAVCS.PCSX2F.Project2DFX.zip" ".\GTAVCS.PCSX2F.Project2DFX\*" -xr!*.objects -xr!*.map -xr!.gitkeep
 7za a -tzip ".\GTALCS.PCSX2F.Project2DFX.zip" ".\GTALCS.PCSX2F.Project2DFX\*" -xr!*.objects -xr!*.map -xr!.gitkeep

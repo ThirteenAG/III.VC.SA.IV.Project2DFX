@@ -1,0 +1,23 @@
+{
+  "format": "asi-settings",
+  "version": "1.0",
+  "plugin": {"id": "GTALCS.PPSSPP.Project2DFX", "name": "@plugin.name", "priority": 60, "games": [{"name": "PPSSPP", "exe": ["PPSSPPWindows64.exe", "PPSSPPWindows.exe"]}]},
+  "storage": {"file": "{name}.ini"},
+  "pages": [
+    {"id": "lights", "title": "@page.lights", "section": "graphics"},
+    {"id": "traffic", "title": "@page.traffic", "section": "graphics"}
+  ],
+  "settings": [
+    {"id": "PROJECT2DFX.RenderLodLights", "type": "bool", "default": 1, "label": "@RenderLodLights", "description": "@ConsoleLights.description", "page": "lights", "control": ["switch", "cycler"], "presets": {"vanilla": 0, "recommended": 1, "enhanced": 1}, "apply": "restart"},
+    {"id": "PROJECT2DFX.MaxVisibleLights", "type": "int", "default": 900, "min": 1, "max": 2048, "step": 50, "label": "@MaxVisibleLights", "description": "@MaxVisibleLights.description", "page": "lights", "control": ["slider"], "visibility": "editor", "apply": "restart"},
+    {"id": "PROJECT2DFX.CoronaLimit", "type": "int", "default": 1000, "min": 0, "max": 1024, "step": 8, "special": [{"value": 0, "label": "@special.game"}], "label": "@CoronaPool", "description": "@CoronaPool.description", "page": "lights", "visibility": "file", "apply": "restart"},
+    {"id": "PROJECT2DFX.CoronaRadiusMultiplier", "type": "float", "default": 1.5, "min": 0.01, "max": 10, "step": 0.05, "decimals": 2, "label": "@CoronaRadiusMultiplier", "description": "@CoronaRadiusMultiplier.description", "page": "lights", "control": ["slider"], "visibility": "editor", "apply": "restart"},
+    {"id": "PROJECT2DFX.CoronaFarClip", "type": "float", "default": 500, "min": 100, "max": 4000, "step": 50, "unit": "m", "label": "@CoronaFarClip", "description": "@ConsoleFarClip.description", "page": "lights", "control": ["slider"], "visibility": "editor", "apply": "restart"},
+    {"id": "PROJECT2DFX.SkyGfx", "type": "bool", "default": 1, "label": "@SkyGfx", "description": "@SkyGfx.description", "page": "lights", "control": ["switch", "cycler"], "presets": {"vanilla": 0, "recommended": 1, "enhanced": 1}, "apply": "restart"},
+    {"id": "DISTANTTRAFFIC.DistantCars", "type": "bool", "default": 1, "label": "@DistantCars", "description": "@DistantCars.description", "page": "traffic", "control": ["switch", "cycler"], "presets": {"vanilla": 0, "recommended": 1, "enhanced": 1}, "apply": "restart"},
+    {"id": "DISTANTTRAFFIC.DistantBoats", "type": "bool", "default": 1, "label": "@DistantBoats", "description": "@DistantBoats.description", "page": "traffic", "control": ["switch", "cycler"], "presets": {"vanilla": 0, "recommended": 1, "enhanced": 1}, "apply": "restart"},
+    {"id": "DISTANTTRAFFIC.MaxCars", "type": "int", "default": 40, "min": 0, "max": 40, "step": 1, "label": "@MaxCars", "description": "@MaxCars.description", "page": "traffic", "control": ["slider"], "visibility": "editor", "apply": "restart"},
+    {"id": "DISTANTTRAFFIC.MaxBoats", "type": "int", "default": 8, "min": 0, "max": 8, "step": 1, "label": "@MaxBoats", "description": "@MaxBoats.description", "page": "traffic", "control": ["slider"], "visibility": "editor", "apply": "restart"},
+    {"id": "DISTANTTRAFFIC.DrawDistance", "type": "float", "default": 800, "min": 450, "max": 2000, "step": 50, "unit": "m", "label": "@TrafficDrawDistance", "description": "@TrafficDrawDistance.description", "page": "traffic", "control": ["slider"], "visibility": "editor", "apply": "restart"}
+  ]
+}

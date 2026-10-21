@@ -1,0 +1,11 @@
+// ASI Settings (see external/FusionFixUtils/asi_settings): the description of the plugin's settings and one
+// translation per BCP 47 language tag, read by menu hosts and editors
+SETTINGS ASISETTINGS "../../settings/VCLodLights.json"
+
+en ASISETTINGS_TEXT "../../settings/VCLodLights.en.json"
+fr ASISETTINGS_TEXT "../../settings/VCLodLights.fr.json"
+de ASISETTINGS_TEXT "../../settings/VCLodLights.de.json"
+it ASISETTINGS_TEXT "../../settings/VCLodLights.it.json"
+es ASISETTINGS_TEXT "../../settings/VCLodLights.es.json"
+ru ASISETTINGS_TEXT "../../settings/VCLodLights.ru.json"
+ja ASISETTINGS_TEXT "../../settings/VCLodLights.ja.json"

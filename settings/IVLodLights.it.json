@@ -1,0 +1,17 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "Luci distanti",
+  "RenderLodLights": "Luci distanti",
+  "RenderLodLights.description": "Di notte lampioni e altre luci brillano lontano attraverso la città, come nelle versioni console. Disattivato: le luci distanti del gioco.",
+  "CoronaRadiusMultiplier": "Dimensione delle luci",
+  "CoronaRadiusMultiplier.description": "Moltiplicatore della dimensione delle luci distanti.",
+  "CoronaAlphaMultiplier": "Luminosità delle luci",
+  "CoronaAlphaMultiplier.description": "Moltiplicatore della luminosità delle luci distanti.",
+  "SlightlyIncreaseRadiusWithDistance": "Crescita con la distanza",
+  "SlightlyIncreaseRadiusWithDistance.description": "Le luci distanti crescono leggermente con la distanza, così restano visibili da lontano.",
+  "DrawDistance": "Distanza di visualizzazione",
+  "DrawDistance.description": "Fino a quale distanza vengono disegnate le luci distanti. Auto: fin dove vede la telecamera.",
+  "DrawDistance.auto": "Auto",
+  "DisableDefaultLodLights": "Nascondi le luci distanti del gioco",
+  "DisableDefaultLodLights.description": "Nasconde le luci distanti del gioco mentre sono mostrate queste, così non appaiono due volte."
+}

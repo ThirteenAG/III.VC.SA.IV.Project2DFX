@@ -20,6 +20,7 @@ on:
         default: 'none'
         options:
           - 'none'
+          - 'all'
           - 'gta3'
           - 'gtavc'
           - 'gtasa'
@@ -127,127 +128,52 @@ jobs:
         archive: false
         path: data/GTALCS.PPSSPP.Project2DFX.zip
 
-    - name: Get release info
-      if: github.event.inputs.release != '' && github.event.inputs.release != 'none'
-      id: release_info
-      uses: cardinalby/git-get-release-action@1.2.6
+    # Uploads the packages to their existing releases (one release per game, by tag; their names stay as they are, the
+    # body comes from .github/docs). "all" releases every game: a failure is reported per game and the others go on.
+    - name: Upload releases
+      if: |
+        github.event.inputs.release != '' && github.event.inputs.release != 'none' &&
+        github.ref_name == 'master' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
+      shell: pwsh
       env:
-       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag: ${{ github.event.inputs.release }}
-
-    - name: Upload Release III
-      if: |
-        github.event.inputs.release == 'gta3' &&
-        github.ref_name == 'master' &&
-        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
-      uses: ncipollo/release-action@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        allowUpdates: true
-        name: ${{ steps.release_info.outputs.name }}
-        bodyFile: ".github/docs/iii.md"
-        tag: ${{ steps.release_info.outputs.tag_name }}
-        artifacts: data/III.Project2DFX.zip
-
-    - name: Upload Release VC
-      if: |
-        github.event.inputs.release == 'gtavc' &&
-        github.ref_name == 'master' &&
-        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
-      uses: ncipollo/release-action@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        allowUpdates: true
-        name: ${{ steps.release_info.outputs.name }}
-        bodyFile: ".github/docs/vc.md"
-        tag: ${{ steps.release_info.outputs.tag_name }}
-        artifacts: data/VC.Project2DFX.zip
-
-    - name: Upload Release SA
-      if: |
-        github.event.inputs.release == 'gtasa' &&
-        github.ref_name == 'master' &&
-        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
-      uses: ncipollo/release-action@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        allowUpdates: true
-        name: ${{ steps.release_info.outputs.name }}
-        bodyFile: ".github/docs/sa.md"
-        tag: ${{ steps.release_info.outputs.tag_name }}
-        artifacts: data/SA.Project2DFX.zip
-
-    - name: Upload Release IV
-      if: |
-        github.event.inputs.release == 'gtaiv' &&
-        github.ref_name == 'master' &&
-        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
-      uses: ncipollo/release-action@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        allowUpdates: true
-        name: ${{ steps.release_info.outputs.name }}
-        bodyFile: ".github/docs/iv.md"
-        tag: ${{ steps.release_info.outputs.tag_name }}
-        artifacts: data/IV.Project2DFX.zip
-    - name: Upload Release VCS PCSX2F
-      if: |
-        github.event.inputs.release == 'gtavcsps2' &&
-        github.ref_name == 'master' &&
-        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
-      uses: ncipollo/release-action@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        allowUpdates: true
-        name: ${{ steps.release_info.outputs.name }}
-        bodyFile: ".github/docs/vcsps2.md"
-        tag: ${{ steps.release_info.outputs.tag_name }}
-        artifacts: data/GTAVCS.PCSX2F.Project2DFX.zip
-    - name: Upload Release LCS PCSX2F
-      if: |
-        github.event.inputs.release == 'gtalcsps2' &&
-        github.ref_name == 'master' &&
-        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
-      uses: ncipollo/release-action@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        allowUpdates: true
-        name: ${{ steps.release_info.outputs.name }}
-        bodyFile: ".github/docs/lcsps2.md"
-        tag: ${{ steps.release_info.outputs.tag_name }}
-        artifacts: data/GTALCS.PCSX2F.Project2DFX.zip
-    - name: Upload Release VCS PPSSPP
-      if: |
-        github.event.inputs.release == 'gtavcs' &&
-        github.ref_name == 'master' &&
-        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
-      uses: ncipollo/release-action@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        allowUpdates: true
-        name: ${{ steps.release_info.outputs.name }}
-        bodyFile: ".github/docs/vcspsp.md"
-        tag: ${{ steps.release_info.outputs.tag_name }}
-        artifacts: data/GTAVCS.PPSSPP.Project2DFX.zip
-    - name: Upload Release LCS PPSSPP
-      if: |
-        github.event.inputs.release == 'gtalcs' &&
-        github.ref_name == 'master' &&
-        (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-        github.repository == 'ThirteenAG/III.VC.SA.IV.Project2DFX'
-      uses: ncipollo/release-action@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        allowUpdates: true
-        name: ${{ steps.release_info.outputs.name }}
-        bodyFile: ".github/docs/lcspsp.md"
-        tag: ${{ steps.release_info.outputs.tag_name }}
-        artifacts: data/GTALCS.PPSSPP.Project2DFX.zip
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE: ${{ github.event.inputs.release }}
+      run: |
+        $games = [ordered]@{
+          'gta3'      = @{ asset = 'data/III.Project2DFX.zip';            doc = '.github/docs/iii.md' }
+          'gtavc'     = @{ asset = 'data/VC.Project2DFX.zip';             doc = '.github/docs/vc.md' }
+          'gtasa'     = @{ asset = 'data/SA.Project2DFX.zip';             doc = '.github/docs/sa.md' }
+          'gtaiv'     = @{ asset = 'data/IV.Project2DFX.zip';             doc = '.github/docs/iv.md' }
+          'gtavcsps2' = @{ asset = 'data/GTAVCS.PCSX2F.Project2DFX.zip'; doc = '.github/docs/vcsps2.md' }
+          'gtalcsps2' = @{ asset = 'data/GTALCS.PCSX2F.Project2DFX.zip'; doc = '.github/docs/lcsps2.md' }
+          'gtavcs'    = @{ asset = 'data/GTAVCS.PPSSPP.Project2DFX.zip'; doc = '.github/docs/vcspsp.md' }
+          'gtalcs'    = @{ asset = 'data/GTALCS.PPSSPP.Project2DFX.zip'; doc = '.github/docs/lcspsp.md' }
+        }
+        $tags = if ($env:RELEASE -eq 'all') { @($games.Keys) } else { @($env:RELEASE) }
+        $results = @()
+        foreach ($tag in $tags)
+        {
+          $game = $games[$tag]
+          try
+          {
+            if (-not $game) { throw "unknown release '$tag'" }
+            if (-not (Test-Path $game.asset)) { throw "$($game.asset) wasn't built" }
+            gh release view $tag --repo $env:GITHUB_REPOSITORY --json name --jq .name | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "no release with the tag $tag (create it first)" }
+            gh release upload $tag $game.asset --repo $env:GITHUB_REPOSITORY --clobber
+            if ($LASTEXITCODE -ne 0) { throw "uploading $($game.asset) failed" }
+            gh release edit $tag --repo $env:GITHUB_REPOSITORY --notes-file $game.doc
+            if ($LASTEXITCODE -ne 0) { throw "updating the release notes failed" }
+            $results += "| $tag | ok | $(Split-Path $game.asset -Leaf) |"
+          }
+          catch
+          {
+            Write-Output "::error title=Release $tag::$($_.Exception.Message)"
+            $results += "| $tag | FAILED | $($_.Exception.Message) |"
+          }
+        }
+        "## Releases`n`n| Release | Result | |`n|---|---|---|`n" + ($results -join "`n") | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        $results | ForEach-Object { Write-Output $_ }
+        if ($results -match 'FAILED') { exit 1 }

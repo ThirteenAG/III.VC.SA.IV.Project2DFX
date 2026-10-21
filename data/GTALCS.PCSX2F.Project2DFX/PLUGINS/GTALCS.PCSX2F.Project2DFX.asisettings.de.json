@@ -1,0 +1,23 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "Ferne Lichter",
+  "page.traffic": "Ferner Verkehr",
+  "RenderLodLights": "Ferne Lichter",
+  "CoronaRadiusMultiplier": "Lichtgröße",
+  "CoronaRadiusMultiplier.description": "Multiplikator der Größe der fernen Lichter.",
+  "CoronaFarClip": "Sichtweite der Lichter",
+  "ConsoleLights.description": "Straßenlaternen und andere Lichter leuchten nachts weit über die Stadt.",
+  "CoronaLimit": "Lichterlimit",
+  "CoronaLimit.description": "Höchstzahl gleichzeitig angezeigter ferner Lichter.",
+  "DistantCars": "Ferne Autos",
+  "DistantCars.description": "In der Ferne fahren 3D-Autos auf den Straßen.",
+  "DistantBoats": "Ferne Boote",
+  "DistantBoats.description": "In der Ferne fahren 3D-Boote auf dem Wasser.",
+  "MaxCars": "Limit ferner Autos",
+  "MaxCars.description": "Höchstzahl ferner Autos gleichzeitig.",
+  "MaxBoats": "Limit ferner Boote",
+  "MaxBoats.description": "Höchstzahl ferner Boote gleichzeitig.",
+  "TrafficDrawDistance": "Sichtweite des Verkehrs",
+  "TrafficDrawDistance.description": "Entfernung, ab der ferner Verkehr ausgeblendet wird.",
+  "ConsoleFarClip.description": "Wie weit entfernt ferne Lichter gezeichnet werden. Kleinere Werte laufen schneller."
+}

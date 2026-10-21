@@ -4,9 +4,14 @@
 
 ## Installation
 
-- Download and install [GTAIV Fusion Fix](https://github.com/ThirteenAG/GTAIV.EFLC.FusionFix#readme), it includes required [ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader).
-- Switch to Project2DFX in Distant Lights menu option.
-- Optional: Download [IV.Project2DFX](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/download/gtaiv/IV.Project2DFX.zip) and put all files to plugins folder to override Fusion Fix option with a separate plugin.
+- Download and install [GTAIV Fusion Fix](https://github.com/ThirteenAG/GTAIV.EFLC.FusionFix#readme), it includes the required [ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader).
+- Download [IV.Project2DFX](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases/download/gtaiv/IV.Project2DFX.zip) and put all files into the `plugins` folder, or choose Project2DFX as an extra in FusionFixHub or on the Fusion Fix page of fusionfix.io.
+
+## Settings
+
+- **Distant Lights** turns the lights on or off; with Fusion Fix it is on the Plugins page of the game's menu and in Fusion Fix's overlay (Ctrl+F10).
+- Light size, brightness, growth with distance, draw distance and hiding the game's own distant lights are in `IVLodLights.cfg` and in FusionFixHub. Changes apply at once while the game runs.
+- The settings file is written next to the plugin on the first start; an old `IVLodLights.ini` isn't read.
 
 ## Screenshots
 

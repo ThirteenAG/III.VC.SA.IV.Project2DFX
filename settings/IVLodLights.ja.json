@@ -1,0 +1,17 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "遠くの光",
+  "RenderLodLights": "遠くの光",
+  "RenderLodLights.description": "夜、街灯などの光が街のはるか遠くまで輝きます（コンソール版と同様）。オフ：ゲーム本来の遠くの光。",
+  "CoronaRadiusMultiplier": "光の大きさ",
+  "CoronaRadiusMultiplier.description": "遠くの光の大きさの倍率。",
+  "CoronaAlphaMultiplier": "光の明るさ",
+  "CoronaAlphaMultiplier.description": "遠くの光の明るさの倍率。",
+  "SlightlyIncreaseRadiusWithDistance": "距離で拡大",
+  "SlightlyIncreaseRadiusWithDistance.description": "遠くの光が距離に応じて少し大きくなり、遠くからでも見えるようにします。",
+  "DrawDistance": "描画距離",
+  "DrawDistance.description": "遠くの光を描画する距離。自動：カメラが見える範囲まで。",
+  "DrawDistance.auto": "自動",
+  "DisableDefaultLodLights": "ゲームの遠くの光を隠す",
+  "DisableDefaultLodLights.description": "これらの光の表示中はゲーム本来の遠くの光を隠し、二重に表示されないようにします。"
+}

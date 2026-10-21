@@ -1,0 +1,17 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "Luces a lo lejos",
+  "RenderLodLights": "Luces a lo lejos",
+  "RenderLodLights.description": "De noche, las farolas y otras luces brillan a lo lejos por toda la ciudad, como en las versiones de consola. Desactivado: las luces lejanas del juego.",
+  "CoronaRadiusMultiplier": "Tamaño de las luces",
+  "CoronaRadiusMultiplier.description": "Multiplicador del tamaño de las luces lejanas.",
+  "CoronaAlphaMultiplier": "Brillo de las luces",
+  "CoronaAlphaMultiplier.description": "Multiplicador del brillo de las luces lejanas.",
+  "SlightlyIncreaseRadiusWithDistance": "Crecer con la distancia",
+  "SlightlyIncreaseRadiusWithDistance.description": "Las luces lejanas crecen un poco con la distancia para seguir viéndose desde lejos.",
+  "DrawDistance": "Distancia de dibujado",
+  "DrawDistance.description": "Hasta qué distancia se dibujan las luces lejanas. Auto: hasta donde ve la cámara.",
+  "DrawDistance.auto": "Auto",
+  "DisableDefaultLodLights": "Ocultar las luces lejanas del juego",
+  "DisableDefaultLodLights.description": "Oculta las luces lejanas del juego mientras se muestran estas, para que no aparezcan dos veces."
+}

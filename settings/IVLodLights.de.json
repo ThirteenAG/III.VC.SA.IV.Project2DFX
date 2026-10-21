@@ -1,0 +1,17 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "Ferne Lichter",
+  "RenderLodLights": "Ferne Lichter",
+  "RenderLodLights.description": "Straßenlaternen und andere Lichter leuchten nachts weit über die Stadt, wie in den Konsolenversionen. Aus: die fernen Lichter des Spiels.",
+  "CoronaRadiusMultiplier": "Lichtgröße",
+  "CoronaRadiusMultiplier.description": "Multiplikator der Größe der fernen Lichter.",
+  "CoronaAlphaMultiplier": "Lichthelligkeit",
+  "CoronaAlphaMultiplier.description": "Multiplikator der Helligkeit der fernen Lichter.",
+  "SlightlyIncreaseRadiusWithDistance": "Mit Entfernung wachsen",
+  "SlightlyIncreaseRadiusWithDistance.description": "Ferne Lichter werden mit der Entfernung etwas größer und bleiben so auch weit weg sichtbar.",
+  "DrawDistance": "Sichtweite",
+  "DrawDistance.description": "Wie weit entfernt ferne Lichter gezeichnet werden. Auto: so weit, wie die Kamera sieht.",
+  "DrawDistance.auto": "Auto",
+  "DisableDefaultLodLights": "Ferne Lichter des Spiels ausblenden",
+  "DisableDefaultLodLights.description": "Blendet die fernen Lichter des Spiels aus, solange diese angezeigt werden, damit sie nicht doppelt erscheinen."
+}

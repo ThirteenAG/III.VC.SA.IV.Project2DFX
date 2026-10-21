@@ -19,3 +19,6 @@
 [submodule "external/pspsdk"]
 	path = external/pspsdk
 	url = https://github.com/ThirteenAG/pspsdk
+[submodule "external/FusionFixUtils"]
+	path = external/FusionFixUtils
+	url = https://github.com/ThirteenAG/FusionFixUtils

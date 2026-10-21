@@ -1,0 +1,23 @@
+{
+  "plugin.name": "Project2DFX",
+  "page.lights": "Lumières lointaines",
+  "page.traffic": "Circulation lointaine",
+  "RenderLodLights": "Lumières lointaines",
+  "CoronaRadiusMultiplier": "Taille des lumières",
+  "CoronaRadiusMultiplier.description": "Multiplicateur de la taille des lumières lointaines.",
+  "CoronaFarClip": "Distance des lumières",
+  "ConsoleLights.description": "Les réverbères et autres lumières brillent loin à travers la ville la nuit.",
+  "CoronaLimit": "Limite de lumières",
+  "CoronaLimit.description": "Nombre maximal de lumières lointaines affichées à la fois.",
+  "DistantCars": "Voitures lointaines",
+  "DistantCars.description": "Des voitures 3D roulent au loin sur les routes.",
+  "DistantBoats": "Bateaux lointains",
+  "DistantBoats.description": "Des bateaux 3D naviguent au loin sur l'eau.",
+  "MaxCars": "Limite de voitures lointaines",
+  "MaxCars.description": "Nombre maximal de voitures lointaines à la fois.",
+  "MaxBoats": "Limite de bateaux lointains",
+  "MaxBoats.description": "Nombre maximal de bateaux lointains à la fois.",
+  "TrafficDrawDistance": "Distance de la circulation",
+  "TrafficDrawDistance.description": "Distance à laquelle la circulation lointaine disparaît.",
+  "ConsoleFarClip.description": "Jusqu'à quelle distance les lumières lointaines sont affichées. Plus bas, c'est plus rapide."
+}
