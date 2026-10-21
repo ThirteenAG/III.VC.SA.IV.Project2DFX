@@ -20,28 +20,28 @@
     {
       "id": "LODLIGHTS.CoronaRadiusMultiplier", "type": "float", "default": 1.0, "min": 0, "max": 4, "step": 0.05, "decimals": 2,
       "label": "@CoronaRadiusMultiplier", "description": "@CoronaRadiusMultiplier.description",
-      "control": [ "slider" ], "visibility": "editor", "enabledIf": { "setting": "LODLIGHTS.RenderLodLights", "equals": 1 }
+      "control": [ "slider" ], "enabledIf": { "setting": "LODLIGHTS.RenderLodLights", "equals": 1 }
     },
     {
       "id": "LODLIGHTS.CoronaAlphaMultiplier", "type": "float", "default": 1.0, "min": 0, "max": 4, "step": 0.05, "decimals": 2,
       "label": "@CoronaAlphaMultiplier", "description": "@CoronaAlphaMultiplier.description",
-      "control": [ "slider" ], "visibility": "editor", "enabledIf": { "setting": "LODLIGHTS.RenderLodLights", "equals": 1 }
+      "control": [ "slider" ], "enabledIf": { "setting": "LODLIGHTS.RenderLodLights", "equals": 1 }
     },
     {
       "id": "LODLIGHTS.SlightlyIncreaseRadiusWithDistance", "type": "bool", "default": 1,
       "label": "@SlightlyIncreaseRadiusWithDistance", "description": "@SlightlyIncreaseRadiusWithDistance.description",
-      "control": [ "switch", "checkbox" ], "visibility": "editor", "enabledIf": { "setting": "LODLIGHTS.RenderLodLights", "equals": 1 }
+      "control": [ "switch", "checkbox" ], "enabledIf": { "setting": "LODLIGHTS.RenderLodLights", "equals": 1 }
     },
     {
       "id": "LODLIGHTS.DrawDistance", "type": "float", "default": 0, "min": 0, "max": 10000, "step": 100, "unit": "m",
       "special": [ { "value": 0, "label": "@DrawDistance.auto" } ],
       "label": "@DrawDistance", "description": "@DrawDistance.description",
-      "control": [ "slider" ], "visibility": "editor", "enabledIf": { "setting": "LODLIGHTS.RenderLodLights", "equals": 1 }
+      "control": [ "slider" ], "enabledIf": { "setting": "LODLIGHTS.RenderLodLights", "equals": 1 }
     },
     {
       "id": "LODLIGHTS.DisableDefaultLodLights", "type": "bool", "default": 1,
       "label": "@DisableDefaultLodLights", "description": "@DisableDefaultLodLights.description",
-      "control": [ "switch", "checkbox" ], "visibility": "editor", "enabledIf": { "setting": "LODLIGHTS.RenderLodLights", "equals": 1 }
+      "control": [ "switch", "checkbox" ], "enabledIf": { "setting": "LODLIGHTS.RenderLodLights", "equals": 1 }
     }
   ]
 }

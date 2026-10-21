@@ -190,8 +190,9 @@ export namespace Natives
         Vector3* m_pOriginalData[4];
         Vector4 m_TemporaryData[4];
         uint32_t m_Stack[16];
+        uint32_t m_Return[4];
 
-        Context() : m_pReturn(m_Stack), m_nArgCount(0), m_pArgs(m_Stack), m_nDataCount(0), m_pOriginalData{}, m_TemporaryData{}, m_Stack{}
+        Context() : m_pReturn(m_Return), m_nArgCount(0), m_pArgs(m_Stack), m_nDataCount(0), m_pOriginalData{}, m_TemporaryData{}, m_Stack{}, m_Return{}
         {
         }
 
@@ -257,7 +258,7 @@ export namespace Natives
     bool DoesTextLabelExist(const char* label)
     {
         Context context;
-        return Call<DOES_TEXT_LABEL_EXIST>(context, label) && (context.m_Stack[0] & 0xFF) != 0;
+        return Call<DOES_TEXT_LABEL_EXIST>(context, label) && (context.m_Return[0] & 0xFF) != 0;
     }
 
     // The camera the frame is rendered from: position and far clip; false while scripts don't run

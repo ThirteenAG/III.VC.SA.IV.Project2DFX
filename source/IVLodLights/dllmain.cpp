@@ -179,28 +179,18 @@ void RegisterLamppost(WplInstance* pObj, std::pair<std::multimap<unsigned int, C
     qz *= n;
     qw *= n;
 
-    CMatrix matrix;
-    matrix.rx = 1.0f - 2.0f * qy * qy - 2.0f * qz * qz;
-    matrix.ry = 2.0f * qx * qy - 2.0f * qz * qw;
-    matrix.rz = 2.0f * qx * qz + 2.0f * qy * qw;
+    // The object's axes from its rotation: the light's offset x, y, z go along right, up and at
+    CVector right(1.0f - 2.0f * qy * qy - 2.0f * qz * qz, 2.0f * qx * qy - 2.0f * qz * qw, 2.0f * qx * qz + 2.0f * qy * qw);
+    CVector up(2.0f * qx * qy + 2.0f * qz * qw, 1.0f - 2.0f * qx * qx - 2.0f * qz * qz, 2.0f * qy * qz - 2.0f * qx * qw);
+    CVector at(2.0f * qx * qz - 2.0f * qy * qw, 2.0f * qy * qz + 2.0f * qx * qw, 1.0f - 2.0f * qx * qx - 2.0f * qy * qy);
+    CVector pos(pObj->PositionX, pObj->PositionY, pObj->PositionZ);
 
-    matrix.ux = 2.0f * qx * qy + 2.0f * qz * qw;
-    matrix.uy = 1.0f - 2.0f * qx * qx - 2.0f * qz * qz;
-    matrix.uz = 2.0f * qy * qz - 2.0f * qx * qw;
-
-    matrix.fx = 2.0f * qx * qz - 2.0f * qy * qw;
-    matrix.fy = 2.0f * qy * qz + 2.0f * qx * qw;
-    matrix.fz = 1.0f - 2.0f * qx * qx - 2.0f * qy * qy;
-
-    matrix.px = pObj->PositionX;
-    matrix.py = pObj->PositionY;
-    matrix.pz = pObj->PositionZ;
-
-    float heading = atan2(matrix.GetUp().y, -matrix.GetUp().x);
+    float heading = atan2(up.y, -up.x);
     for (auto it = range.first; it != range.second; ++it)
     {
         auto info = it->second;
-        info.vecPos = matrix * it->second.vecPos;
+        auto& offset = it->second.vecPos;
+        info.vecPos = pos + right * offset.x + up * offset.y + at * offset.z;
         info.fHeading = heading;
         m_Lampposts.push_back(info);
     }
