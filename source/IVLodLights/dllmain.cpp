@@ -10,7 +10,6 @@
 #include <sstream>
 #include <thread>
 #include "safetyhook.hpp"
-#include "FileWatch.hpp"
 #include "asi_settings/asi_settings.hpp"
 
 import CoronaLimit;
@@ -57,16 +56,7 @@ void BindSettings()
     Values.increaseRadiusWithDistance = &s.Int("LODLIGHTS.SlightlyIncreaseRadiusWithDistance");
     Values.disableDefaultLodLights = &s.Int("LODLIGHTS.DisableDefaultLodLights");
     Values.drawDistance = &s.Float("LODLIGHTS.DrawDistance");
-
-    // A hand-edited settings file is read again while the game runs; the plugin's own writes change nothing
-    if (s.Loaded() && std::filesystem::exists(s.CfgPath()))
-    {
-        static filewatch::FileWatch<std::wstring> watch(s.CfgPath().wstring(), [](const std::wstring&, const filewatch::Event change)
-        {
-            if (change == filewatch::Event::modified || change == filewatch::Event::added || change == filewatch::Event::renamed_new)
-                Settings().Reload();
-        });
-    }
+    // A hand-edited settings file is read again by the live link's watcher (LiveLink::Start)
 }
 
 struct LightColour

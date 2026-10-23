@@ -1,6 +1,5 @@
 module;
 
-#include <FileWatch.hpp>
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
@@ -235,7 +234,8 @@ export
             initial = false;
         }
 
-        // Changes from menus, editors and the settings file apply at once; a hand-edited file is read again
+        // Changes from menus, editors and hand edits of the settings file (read again by the live link's watcher) apply
+        // at once
         static std::once_flag flag;
         std::call_once(flag, [&s]()
         {
@@ -245,14 +245,6 @@ export
             {
                 if (setting.apply != "restart")
                     s.OnChange(setting.id, [] { ReadSettings(); });
-            }
-            if (std::filesystem::exists(s.CfgPath()))
-            {
-                static filewatch::FileWatch<std::wstring> watch(s.CfgPath().wstring(), [](const std::wstring&, const filewatch::Event change)
-                {
-                    if (change == filewatch::Event::modified || change == filewatch::Event::added || change == filewatch::Event::renamed_new)
-                        Settings().Reload();
-                });
             }
         });
     }
