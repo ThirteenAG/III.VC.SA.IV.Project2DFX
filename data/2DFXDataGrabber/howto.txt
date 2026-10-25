@@ -1,5 +1,40 @@
-III/VC:
-Copy 'gta3.dat' or 'gta_vc.dat' and 'maps' folder from 'data' folder to a place where 2DFXDataGrabber.exe located. Run 2DFXDataGrabber.exe and wait until it finishes creating data file.
+2DFXDataGrabber
 
-SA:
-Copy all DFF files(or all dff files with 2dfx data) from gta3.img to a folder named '2dfx'. Run 2DFXDataGrabber.exe and wait until it finishes creating data file.
+Unpack the desired input archive (7z password: 1), copy the executable beside the
+manifest and run it without arguments. Keep the input subfolders. For LCS/VCS,
+including the PS2/PSP archives, put the executable inside the extracted data folder.
+
+The first manifest found selects the output, in this order:
+  gta4.dat     -> IVLodLights.dat       (iv/*.light and matching .skel files)
+  gta3.dat     -> IIILodLights.dat      (IDE/IPL files)
+  gta_lcs.dat  -> LCSLodLights.dat      (also ADDLCSLodLights.dat)
+  gta_vcs.dat  -> VCSLodLights.dat      (also ADDVCSLodLights.dat)
+  gta_vc.dat   -> VCLodLights.dat       (IDE/IPL files)
+  otherwise   -> SALodLights.dat       (2dfx/*.txt or 2dfx/*.dff)
+The ADD files contain placed-light C++ initializers for Stories mod developers.
+Console plugins use their compiled light tables; copying a DAT does not update them.
+SA reads DFFs directly and also accepts the older converted text files. No converter
+is required. Existing formatting, corona rules and authored additions are retained
+in the portable workflow. III/VC/SA native rows also receive pool fields.
+
+Optional commands (use --help for all options):
+  2DFXDataGrabber --game iii --root "C:\Games\GTAIII" --output IIILodLights.dat
+  2DFXDataGrabber --game vc --root "C:\Games\Vice City" --output VCLodLights.dat
+  2DFXDataGrabber --game sa --root "C:\Games\San Andreas" --output SALodLights.dat
+  2DFXDataGrabber --game iv --root "C:\Inputs\iv_data"
+  2DFXDataGrabber --game lcs --root "C:\Inputs\lcs_psp_data\data"
+  2DFXDataGrabber --game vcs --root "C:\Inputs\vcs_ps2_data\data"
+III/VC/SA also read game manifests and SA IMG archives from a game installation.
+
+For III/VC/SA, --baseline ExistingLodLights.dat preserves existing corona fields,
+sections, comments and custom rows while adding or refreshing matching native pool
+fields. Add --keep-pools to preserve existing pool fields too, for example when
+using converted inputs with less precision. Releases use both options so existing
+rows and precise pool values survive regeneration. Keep a copy of your baseline.
+
+The seven fields after the twelve corona fields are:
+  PoolTexture PoolSize PoolIntensity PoolDepth PoolRed PoolGreen PoolBlue
+Texture, size, intensity and RGB come from the native shadow. Depth uses SA's native
+Z-distance, or 15 when zero and for III/VC. Missing texture ('-'), zero size or zero
+intensity produces no pool. Unmatched custom rows stay unchanged and have no pool
+unless already authored with pool fields. IV/LCS/VCS keep their existing formats.

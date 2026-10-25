@@ -190,4 +190,31 @@ export namespace CModelInfo
     CBaseModelInfo*** pp_modelInfoPtrs = nullptr;
     CBaseModelInfo* (__cdecl* GetModelInfo)(const char* name, int* id) = nullptr;
     C2dEffect* (__fastcall* Get2dEffect)(CBaseModelInfo* minfo, void* edx, int32_t i) = nullptr;
+
+    struct LightPoolData
+    {
+        float size = 0.0f;
+        float intensity = 0.0f;
+        float depth = 15.0f;
+        CRGBA colour = {};
+        RwTexture* texture = nullptr;
+    };
+
+    void ReleasePoolTexture(RwTexture* texture)
+    {
+        reinterpret_cast<int(__cdecl*)(RwTexture*)>(0x5A7330)(texture);
+    }
+
+    RwTexture* FindPoolTexture(const char* name)
+    {
+        const int slot{ reinterpret_cast<int(__cdecl*)(const char*)>(0x5275D0)("particle") };
+        if (slot < 0)
+            return nullptr;
+        reinterpret_cast<void(__cdecl*)()>(0x527900)();
+        reinterpret_cast<void(__cdecl*)(int)>(0x5278C0)(slot);
+        void* dictionary{ reinterpret_cast<void*(__cdecl*)()>(0x5A7570)() };
+        RwTexture* result{ dictionary ? reinterpret_cast<RwTexture*(__cdecl*)(void*, const char*)>(0x5A74D0)(dictionary, name) : nullptr };
+        reinterpret_cast<void(__cdecl*)()>(0x527910)();
+        return result;
+    }
 }

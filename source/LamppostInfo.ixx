@@ -3,6 +3,7 @@ module;
 #include <stdafx.h>
 #include <functional>
 #include <string>
+#include <limits>
 #include <unordered_map>
 
 export module LamppostInfo;
@@ -61,6 +62,7 @@ export class CLamppostInfo
 public:
     CVector vecPos;
     CVector vecLocalPos;
+    float fPoolBaseZ{ std::numeric_limits<float>::quiet_NaN() };
     CRGBA colour;
     float fCustomSizeMult;
     int nCoronaShowMode;
@@ -70,6 +72,16 @@ public:
     float fObjectDrawDistance;
     uint8_t nTrafficLightType = 2, nTrafficLightState = 3;
     CoronaPredicate pPredicate;
+
+    // The game's own corona range of this light, 0 when no entity carries it
+    float fGameCoronaRange = 0.0f;
+    // Index into the entities the game processes, -1 when the light has no entity
+    int32_t nEntity = -1;
+    // How far the game's own corona has faded in, eased like the game eases it
+    float fGameFade = 0.0f;
+    uint16_t nPoolModel = 0;
+    CModelInfo::LightPoolData pool;
+    std::string poolTexture;
 
     CLamppostInfo(const CVector& pos, const CVector& localpos, const CRGBA& col, float fCustomMult, int CoronaShowMode, int nNoDistance, int nDrawSearchlight, float heading, float ObjectDrawDistance = 0.0f, CoronaPredicate pPred = nullptr)
         : vecPos(pos), vecLocalPos(localpos), colour(col), fCustomSizeMult(fCustomMult), nCoronaShowMode(CoronaShowMode), nNoDistance(nNoDistance), nDrawSearchlight(nDrawSearchlight), fHeading(heading), fObjectDrawDistance(ObjectDrawDistance), pPredicate(pPred)
@@ -82,6 +94,73 @@ public:
 
 export bool m_bCatchLamppostsNow;
 export std::vector<CLamppostInfo> m_Lampposts;
+
+// Lights are matched to the entities the game processes by the entity's position: a dummy and the object the game
+// makes from it share it.
+export namespace LampEntities
+{
+    std::unordered_map<uint64_t, int32_t> Keys;
+    std::vector<uint32_t> LastProcessed;
+    uint32_t Frame = 16;
+
+    uint64_t Key(const CVector& p)
+    {
+        auto q = [](float v) { return static_cast<uint64_t>(static_cast<int64_t>(std::lround(v * 16.0f)) & 0x1FFFFF); };
+        return q(p.x) | q(p.y) << 21 | q(p.z) << 42;
+    }
+
+    std::vector<RwTexture*> PoolTextures;
+
+    void RetainPoolTexture(RwTexture* texture)
+    {
+        if (texture && std::find(PoolTextures.begin(), PoolTextures.end(), texture) == PoolTextures.end())
+        {
+            ++texture->refCount;
+            PoolTextures.push_back(texture);
+        }
+    }
+
+    // Gives the lights from firstLamp on to the entity at entityPos
+    void Attach(size_t firstLamp, const CVector& entityPos, float gameCoronaRange, uint16_t model)
+    {
+        if (firstLamp >= m_Lampposts.size())
+            return;
+        auto [it, inserted] = Keys.try_emplace(Key(entityPos), static_cast<int32_t>(LastProcessed.size()));
+        if (inserted)
+            LastProcessed.push_back(0);
+        for (size_t i = firstLamp; i < m_Lampposts.size(); ++i)
+        {
+            auto& lamp = m_Lampposts[i];
+            lamp.nEntity = it->second;
+            lamp.fGameCoronaRange = gameCoronaRange > 0.0f ? gameCoronaRange : lamp.fGameCoronaRange;
+            lamp.nPoolModel = model;
+        }
+    }
+
+    // Called when the game processes the lights of an entity
+    void MarkProcessed(const CVector& entityPos)
+    {
+        if (Keys.empty())
+            return;
+        auto it = Keys.find(Key(entityPos));
+        if (it != Keys.end())
+            LastProcessed[it->second] = Frame;
+    }
+
+    bool Processed(int32_t entity)
+    {
+        return entity >= 0 && Frame - LastProcessed[entity] <= 1;
+    }
+
+    void Clear()
+    {
+        for (auto* texture : PoolTextures)
+            CModelInfo::ReleasePoolTexture(texture);
+        PoolTextures.clear();
+        Keys.clear();
+        LastProcessed.clear();
+    }
+}
 
 export float GetDistance(RwV3d* v1, RwV3d* v2)
 {
@@ -152,6 +231,7 @@ export void LoadDatFile()
     DataFilePath.replace_extension(".dat");
 
     m_Lampposts.clear();
+    LampEntities::Clear();
     FileContent.clear();
 
     if (FILE* hFile = CFileMgr::OpenFile(DataFilePath.string().c_str(), "r"))
@@ -180,16 +260,33 @@ export void LoadDatFile()
                 }
                 else
                 {
-                    float			fOffsetX, fOffsetY, fOffsetZ;
-                    unsigned int	nRed, nGreen, nBlue, nAlpha;
-                    float			fCustomSize = 1.0f;
-                    float			fDrawDistance = 0.0f;
-                    int				nNoDistance = 0;
-                    int				nDrawSearchlight = 0;
-                    int				nCoronaShowMode = 0;
-                    if (sscanf(pLine, "%3d %3d %3d %3d %f %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &fDrawDistance, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight) != 12)
-                        sscanf(pLine, "%3d %3d %3d %3d %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight);
+                    float fOffsetX{}, fOffsetY{}, fOffsetZ{};
+                    unsigned int nRed{}, nGreen{}, nBlue{}, nAlpha{};
+                    float fCustomSize{}, fDrawDistance{};
+                    int nNoDistance{}, nDrawSearchlight{}, nCoronaShowMode{};
+                    char texture[25]{};
+                    float poolSize{}, poolIntensity{}, poolDepth{};
+                    unsigned int poolRed{}, poolGreen{}, poolBlue{};
+                    const int fields{ sscanf(pLine, "%u %u %u %u %f %f %f %f %f %d %d %d %24s %f %f %f %u %u %u",
+                        &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &fDrawDistance,
+                        &nCoronaShowMode, &nNoDistance, &nDrawSearchlight, texture, &poolSize, &poolIntensity, &poolDepth,
+                        &poolRed, &poolGreen, &poolBlue) };
+                    if ((fields != 12 && fields != 19) || nRed > 255 || nGreen > 255 || nBlue > 255 || nAlpha > 255 ||
+                        !std::isfinite(fOffsetX) || !std::isfinite(fOffsetY) || !std::isfinite(fOffsetZ) ||
+                        !std::isfinite(fCustomSize) || !std::isfinite(fDrawDistance))
+                        continue;
                     CLamppostInfo info(CVector(0.0f, 0.0f, 0.0f), CVector(fOffsetX, fOffsetY, fOffsetZ), CRGBA(static_cast<unsigned char>(nRed), static_cast<unsigned char>(nGreen), static_cast<unsigned char>(nBlue), static_cast<unsigned char>(nAlpha)), fCustomSize, nCoronaShowMode, nNoDistance, nDrawSearchlight, 0.0f, fDrawDistance);
+                    if (fields == 19 && texture[0] != '-' && std::isfinite(poolSize) && poolSize > 0.0f && poolSize <= 30.0f &&
+                        std::isfinite(poolIntensity) && poolIntensity > 0.0f && poolIntensity <= 255.0f &&
+                        std::isfinite(poolDepth) && poolDepth > 0.0f && poolDepth <= 255.0f &&
+                        poolRed <= 255 && poolGreen <= 255 && poolBlue <= 255 && !(poolRed > poolGreen * 2 && poolRed > poolBlue * 2))
+                    {
+                        info.poolTexture = texture;
+                        info.pool.size = poolSize;
+                        info.pool.intensity = poolIntensity;
+                        info.pool.depth = poolDepth;
+                        info.pool.colour = CRGBA(static_cast<unsigned char>(poolRed), static_cast<unsigned char>(poolGreen), static_cast<unsigned char>(poolBlue), 255);
+                    }
                     info.pPredicate = pCurPredicate;
                     FileContent.insert(std::make_pair(PackKey(nModel, nCurIndexForModel++), info));
                 }

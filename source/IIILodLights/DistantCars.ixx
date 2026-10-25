@@ -478,6 +478,8 @@ void CMovingThings::UpdateDistantCarImpostors()
     boats.Update(dt, boatCapacity, density, camera, farClip);
 }
 
+static DistantTraffic::RealCars realCars;
+
 template<class Simulation>
 static void RenderTraffic(Simulation& simulation, DistantCarRenderer::Frame& models, const CVector& camPos, float maxDist)
 {
@@ -493,7 +495,9 @@ static void RenderTraffic(Simulation& simulation, DistantCarRenderer::Frame& mod
 
         CVector toImpostor = simulation.RenderPosition(impostor) - camPos;
         float distSqr = toImpostor.MagnitudeSqr2D();
-        if (distSqr < SQR(140.0f) || distSqr > SQR(maxDist))
+        // Seen from high above, nearby cars stay: they can't be driven into from up there
+        float high = Clamp((camPos.z - simulation.RenderPosition(impostor).z - 40.0f) / 60.0f, 0.0f, 1.0f);
+        if (distSqr > SQR(maxDist) || (distSqr < SQR(140.0f) && high <= 0.0f))
             continue;
 
         float dist = Sqrt(distSqr);
@@ -520,8 +524,8 @@ static void RenderTraffic(Simulation& simulation, DistantCarRenderer::Frame& mod
         }
 
         float fadeFar = Clamp((maxDist - dist) / 250.0f, 0.0f, 1.0f);
-        float fadeNear = Clamp((dist * nearScale - 140.0f) / 120.0f, 0.0f, 1.0f);
-        float fade = fadeFar * fadeNear;
+        float fadeNear = (std::max)(high, Clamp((dist * nearScale - 140.0f) / 120.0f, 0.0f, 1.0f));
+        float fade = fadeFar * fadeNear * realCars.Fade(simulation.RenderPosition(impostor));
 
         if (models.Add(simulation.RenderPosition(impostor), simulation.RenderDirection(impostor), impostor.m_visual, impostor.m_nCoronaId, fade, impostor.m_bWaterNode))
             continue;
@@ -602,6 +606,13 @@ void CMovingThings::RenderDistantCarImpostors()
     CVector camPos = TheCamera->GetPosition();
     float maxDist = CTimeCycle::m_fCurrentFarClip;
     DistantCarRenderer::Frame models(camPos, maxDist);
+    // CPools::ms_pVehiclePool; 0x5A8 is the size of the largest vehicle class
+    static void** vehiclePool = []() -> void**
+    {
+        auto pattern = hook::pattern("53 56 57 55 8B 2D ? ? ? ? 83 EC 20");
+        return pattern.empty() ? nullptr : *pattern.get_first<void**>(6);
+    }();
+    realCars.Gather(vehiclePool ? *vehiclePool : nullptr, 0x5A8, [](uint8_t* vehicle) { return *(CVector*)(vehicle + 0x34); });
     RenderTraffic(traffic, models, camPos, maxDist);
     RenderTraffic(boats, models, camPos, maxDist);
     models.Flush();

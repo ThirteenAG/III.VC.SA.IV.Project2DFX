@@ -4,7 +4,7 @@
 
 **VC.Project2DFX** adds the Project2DFX LOD corona effect to Grand Theft Auto: Vice City, lighting up the neon-soaked skyline with thousands of distant lamppost and streetlight glows, and greatly extends the draw distance.
 
-[Website](https://fusionfix.io/p2dfx) · [Source Code](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX) · [Default INI](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/blob/master/data/VCLodLights/VCLodLights.ini)
+[Website](https://fusionfix.io/p2dfx) · [Source Code](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX)
 
 </div>
 
@@ -16,11 +16,10 @@
 <tr>
 <td width="58%" valign="middle">
 
-- **LOD Coronas** - up to 25000 lamppost, streetlight and neon glows are rendered across the entire map, with a configurable corona radius and an alpha curve that boosts distant coronas
-- **Dynamic Far Clip** - extended draw distance that adapts to your height and targets a smooth framerate
-- **Distant Cars** - up to 2000 distant vehicles with visible headlight and taillight trails
-- **Maritime Traffic** - distant boat lights along water paths
-- **Static Shadows** - stronger and further-reaching shadows for peds, cars and traffic lights
+- **LOD Coronas** - lamppost, streetlight and neon glows are rendered across the entire map
+- **Draw Distance** - a farther view with LOD buildings out to the fog, and a separate setting for small objects and trees
+- **Distant Traffic** - distant cars and boats, as lights or as 3D vehicles
+- **Shadows** - shadows under street lamps and traffic lights, and of cars and people, drawn much farther
 - **Volumetric Light Cones** - light beams are rendered as volumetric cones across the city at night
 
 </td>
@@ -84,40 +83,28 @@ Game version 1.0 US is required.
   <summary> Configuring VC.Project2DFX - click to expand </summary>
 <br>
 
-All options are stored in `VCLodLights.ini` inside the `scripts` folder:
+The settings are in the game's menu with an ASI Settings menu host, in FusionFixHub, or in `VCLodLights.cfg` next to the plugin.
 
-```
-[LodLights]
-RenderLodLights = 1                 ; enable distant LOD coronas (0|1)
-MaxNumberOfLodLights = 25000        ; maximum number of coronas rendered at once
-CoronaRadiusMultiplier = 1.0
-SlightlyIncreaseRadiusWithDistance = 1
-MaritimeTraffic = 1                 ; 1 = distant boat lights on water paths, 0 = disabled
+Distant Light Pools use the street lamps’ own colours and take over beyond the game’s nearby pools. Warning lights and traffic signals do not receive distant pools. At longer distances, pools widen along rows of lamps and brighten gradually so roads remain visible from above. Distant pools require a compatible Direct3D 9 renderer and the game’s anti-aliasing (MSAA) off. They use a smooth depth-based falloff; with MSAA on or unsupported depth sampling, only the game’s nearby pools remain. The effect follows visible geometry; it does not trace shadows through walls.
 
-[StaticShadows]
-IncreasePedsCarsShadowsDrawDistance = 1
-StaticShadowsIntensity = 2.0
-StaticShadowsDrawDistance = 300.0
+| Setting | What it does | Vanilla · Recommended · Enhanced |
+|---|---|---|
+| View Distance (m) | Extra metres added to the weather’s view distance and fog start | 0 (game) · +1000 · +2000 |
+| Draw Distance | How far objects and LOD models stay visible; raise it for more scenery, or lower it for better performance | 1 (game) · 2.5 · 4 |
+| Detail Distance | How far small objects and trees are drawn | 1 (game) · 2 · 3 |
+| Shadow Distance | How far shadows under lamps and traffic lights, and of cars and people, are drawn (after restart) | 1 (game) · 4 · 7.5 |
+| Distant Lights | Street lamps and other lights glow far across the map at night | off · on · on |
+| Distant Light Pools | Distant street lamps light roads, slopes and nearby walls, following the visible surfaces; requires MSAA off | off · on · on |
+| Distant Traffic | Cars and boats far away: off, only their lights, or the vehicles too | off · vehicles · vehicles |
+| Searchlights | Light cones of searchlights and street lamps | off · on · on |
+| Varied Explosions | Explosions use different effects (after restart) | off · on · on |
+| Bullet Traces | Gunshots leave bullet traces instead of smoke trails (after restart) | off · on · on |
 
-[SearchLights]                        ; volumetric light cones
-RenderSearchlightEffects = 1
-RenderOnlyDuringFoggyWeather = 0
+The bundled [Open Limit Adjuster](https://github.com/GTAmodding/III.VC.SA.LimitAdjuster) lets the game's lists grow with the draw distance. Without it View Distance is capped at +500 m, and Draw Distance and Detail Distance at 1.5.
 
-[FarClip]
-FarClipMultiplier = 0.0             ; 0.0 = dynamic, <= 10.0 = fixed multiplier, > 10.0 = static farclip
-HeightFactor = 0.05
-MinMultiplier = 2.0
-MaxMultiplier = 4.0
-TargetFPS = 60
+View Distance adds the same number of metres to the current weather’s far clip and fog start. For example, +1000 m turns a 600 m view into 1600 m and a 1200 m view into 2200 m. The weather’s own differences and fog ramp remain, with normal transitions as the weather and time change. Interiors, cutscenes, and San Andreas underwater and tunnel views keep the game’s distance. Draw Distance controls objects and LOD models separately; more view distance cannot create scenery beyond their range.
 
-[IDETweaker]
-DrawDistance = 5.0                  ; original maximum value is 1.8
-MaxDrawDistanceForNormalObjects = 0.0
-
-[Misc]
-RandomExplosionEffects = 1
-ReplaceSmokeTrailWithBulletTrail = 1
-```
+View Distance and Draw Distance apply live. Detail Distance applies live; Shadow Distance requires a restart. Start with Recommended and lower Draw Distance or Detail Distance if performance suffers.
 
 </details>
 

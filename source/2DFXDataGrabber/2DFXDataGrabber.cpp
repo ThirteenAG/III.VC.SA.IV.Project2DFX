@@ -1,1307 +1,857 @@
-#include <stdio.h>
-#include <tchar.h>
-#include <windows.h>
-#include <iostream>
-#include <fstream>
-#include <string>
 #include <algorithm>
+#include <array>
+#include <cmath>
+#include <cctype>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <functional>
 #include <iomanip>
-#include <bitset>
-#include <rw.h>
+#include <iostream>
+#include <map>
+#include <set>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
-#define M_PI                                    3.14159265358979323846   // pi
-#define RAD_TO_DEG								(180.0/M_PI)
-#define DEG_TO_RAD								(M_PI/180.0)
-#define RADTODEG(x)                             ((x) * 180.0f / M_PI)
+#include "Portable.hpp"
 
-inline RwV3d makeV3d(float x, float y, float z) { RwV3d v = { x, y, z }; return v; }
-inline float dot(const RwV3d& a, const RwV3d& b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-inline RwV3d scale(const RwV3d& a, float r) { return makeV3d(a.x * r, a.y * r, a.z * r); }
-inline void makeRotation(CMatrix* dst, const RwV3d* axis, float angle, const RwV3d* translation)
+namespace fs = std::filesystem;
+
+namespace
 {
-    float len = dot(*axis, *axis);
-    if (len != 0.0f) len = 1.0f / sqrtf(len);
-    RwV3d v = scale(*axis, len);
-    angle = angle * (float)M_PI / 180.0f;
-    float s = sinf(angle);
-    float c = cosf(angle);
-    float t = 1.0f - c;
+    using Bytes = std::vector<uint8_t>;
 
-    CMatrix identMat;
-    identMat.GetRight() = { 1.0f, 0.0f, 0.0f };
-    identMat.GetUp() = { 0.0f, 1.0f, 0.0f };
-    identMat.GetForward() = { 0.0f, 0.0f, 1.0f };
-    identMat.GetPosition() = { 0.0f, 0.0f, 0.0f };
-
-    *dst = identMat;
-    dst->GetPosition() = *translation;
-    dst->GetRight().x = c + v.x * v.x * t;
-    dst->GetRight().y = v.x * v.y * t + v.z * s;
-    dst->GetRight().z = v.z * v.x * t - v.y * s;
-    dst->GetUp().x = v.x * v.y * t - v.z * s;
-    dst->GetUp().y = c + v.y * v.y * t;
-    dst->GetUp().z = v.y * v.z * t + v.x * s;
-    dst->GetForward().x = v.z * v.x * t + v.y * s;
-    dst->GetForward().y = v.y * v.z * t - v.x * s;
-    dst->GetForward().z = c + v.z * v.z * t;
-    //dst->GetPosition().x = 0.0;
-    //dst->GetPosition().y = 0.0;
-    //dst->GetPosition().z = 0.0;
-}
-
-
-using namespace std;
-
-enum BlinkTypes
-{
-    DEFAULT,
-    RANDOM_FLASHING,
-    T_1S_ON_1S_OFF,
-    T_2S_ON_2S_OFF,
-    T_3S_ON_3S_OFF,
-    T_4S_ON_4S_OFF,
-    T_5S_ON_5S_OFF,
-    T_6S_ON_4S_OFF
-};
-
-string Filename;
-
-void ConvertDFFTo2DFX()
-{
-    if (SetCurrentDirectory(".\\2dfx\\"))
+    struct Light
     {
-        WIN32_FIND_DATA fd;
-        HANDLE dffFile = FindFirstFile("*.dff", &fd);
-        if (dffFile != INVALID_HANDLE_VALUE)
+        std::string model;
+        std::array<float, 3> position{};
+        std::array<unsigned, 4> colour{ 0, 0, 0, 255 };
+        std::array<unsigned, 3> poolColour{};
+        float size{}, distance{}, poolSize{}, intensity{}, depth{ 15.0f };
+        unsigned blink{}, noDistance{}, searchlight{}, nativeMode{};
+        std::string texture{ "-" };
+    };
+
+    std::string Lower(std::string s)
+    {
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return s;
+    }
+
+    std::string Trim(const std::string& s)
+    {
+        const auto first{ s.find_first_not_of(" \t\r\n") };
+        return first == s.npos ? "" : s.substr(first, s.find_last_not_of(" \t\r\n") - first + 1);
+    }
+
+    std::vector<std::string> Tokens(std::string line)
+    {
+        const auto comment{ line.find('#') };
+        if (comment != line.npos)
+            line.resize(comment);
+        std::replace(line.begin(), line.end(), ',', ' ');
+        std::istringstream input(line);
+        std::vector<std::string> result;
+        std::string token;
+        while (input >> std::quoted(token))
+            result.push_back(token);
+        return result;
+    }
+
+    float Number(const std::string& token)
+    {
+        size_t used{};
+        const float value{ std::stof(token, &used) };
+        if (used != token.size() || !std::isfinite(value))
+            throw std::runtime_error("Invalid number: " + token);
+        return value;
+    }
+
+    unsigned Integer(const std::string& token)
+    {
+        size_t used{};
+        const auto value{ std::stoul(token, &used) };
+        if (used != token.size() || token.front() == '-' || value > UINT32_MAX)
+            throw std::runtime_error("Invalid unsigned integer: " + token);
+        return static_cast<unsigned>(value);
+    }
+
+    template<typename T> T Read(const Bytes& data, size_t offset)
+    {
+        if (offset > data.size() || sizeof(T) > data.size() - offset)
+            throw std::runtime_error("Truncated binary record");
+        T value{};
+        std::memcpy(&value, data.data() + offset, sizeof(value));
+        return value;
+    }
+
+    std::string Name(const Bytes& data, size_t offset, size_t length)
+    {
+        if (offset > data.size() || length > data.size() - offset)
+            throw std::runtime_error("Truncated binary name");
+        std::string result;
+        for (size_t i{}; i < length && data[offset + i]; ++i)
         {
-            static int i = 0;
-            do
-            {
-                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-                {
-
-                    unsigned int pos = 5;
-                    while (fd.cFileName[pos])
-                        ++pos;
-                    if (fd.cFileName[pos - 4] == '.' && (fd.cFileName[pos - 3] == 'd' || fd.cFileName[pos - 3] == 'D') &&
-                        (fd.cFileName[pos - 2] == 'f' || fd.cFileName[pos - 2] == 'F') && (fd.cFileName[pos - 1] == 'f' || fd.cFileName[pos - 1] == 'F'))
-                    {
-                        ifstream DFFContent(fd.cFileName, ios::in | ios::binary);
-                        string ext = fd.cFileName; ext.replace(ext.find("dff"), 3, "2dfx");
-                        std::string str((std::istreambuf_iterator<char>(DFFContent)), std::istreambuf_iterator<char>());
-                        size_t pos = str.find("coronastar");
-                        if (pos != string::npos)
-                        {
-                            if ((*(unsigned int*)(str.c_str() + (pos - 49))) > 117)
-                            {
-                                i = 0;
-                                do
-                                {
-                                    i++;
-                                    pos -= 1;
-                                    std::cout << *(unsigned int*)(str.c_str() + (pos - 49)) << std::endl;
-                                    if (i > 100)
-                                        break;
-
-                                } while ((*(unsigned int*)(str.c_str() + (pos - 49))) < 2 || (*(unsigned int*)(str.c_str() + (pos - 49))) > 15);
-                            }
-
-                            ofstream out2DFX(ext, ios::out | ios::binary);
-                            out2DFX.write(str.c_str() + (pos - 49), str.size() - (pos - 49));
-                            out2DFX.close();
-                        }
-                        DFFContent.close();
-                        //DeleteFile(fd.cFileName);
-                    }
-                }
-
-            } while (FindNextFile(dffFile, &fd));
-            FindClose(dffFile);
+            const auto c{ data[offset + i] };
+            if (c <= 32 || c > 126 || c == '"')
+                throw std::runtime_error("Invalid binary name");
+            result.push_back(static_cast<char>(c));
         }
-
-        SetCurrentDirectory("..\\");
+        return Lower(result);
     }
 
-    SHELLEXECUTEINFO ShExecInfo = { 0 };
-    ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
-    ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
-    ShExecInfo.hwnd = NULL;
-    ShExecInfo.lpVerb = NULL;
-    ShExecInfo.lpFile = ".\\SA2dfx.exe";
-    ShExecInfo.lpParameters = "";
-    ShExecInfo.lpDirectory = NULL;
-    ShExecInfo.nShow = SW_SHOWNORMAL;
-    ShExecInfo.hInstApp = NULL;
-    ShellExecuteEx(&ShExecInfo);
-    WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
-
-    ofstream LodLights;
-    LodLights.open(Filename, fstream::trunc);
-
-    LodLights << "#%modelname" << endl;
-    LodLights << "#Red, Green, Blue, Alpha, OffsetX, OffsetY, OffsetZ, CustomSize, DrawDistance, BlinkType, NoDistance, DrawSearchlight" << endl;
-    LodLights << "#0.45 - custom size reserved for traffic lights" << endl;
-    LodLights << endl;
-
-    SetCurrentDirectory(".\\2dfx\\");
-
-    WIN32_FIND_DATA fd;
-    HANDLE TXTFile = FindFirstFile("*.txt", &fd);
-    if (TXTFile != INVALID_HANDLE_VALUE)
+    Bytes Load(const fs::path& path)
     {
-        do
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        if (!file)
+            throw std::runtime_error("Cannot open " + path.string());
+        const auto size{ file.tellg() };
+        if (size < 0 || size > 256 * 1024 * 1024)
+            throw std::runtime_error("Invalid file size: " + path.string());
+        Bytes data(static_cast<size_t>(size));
+        file.seekg(0);
+        if (!file.read(reinterpret_cast<char*>(data.data()), data.size()))
+            throw std::runtime_error("Cannot read " + path.string());
+        return data;
+    }
+
+    unsigned Blink(unsigned type, bool sa)
+    {
+        if (sa)
         {
-            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+            switch (type)
             {
-                unsigned int pos = 5;
-                while (fd.cFileName[pos])
-                    ++pos;
-                if (fd.cFileName[pos - 4] == '.' && (fd.cFileName[pos - 3] == 't' || fd.cFileName[pos - 3] == 'T') &&
-                    (fd.cFileName[pos - 2] == 'x' || fd.cFileName[pos - 2] == 'X') && (fd.cFileName[pos - 1] == 't' || fd.cFileName[pos - 1] == 'T'))
-                {
-                    if (LodLights.is_open())
-                    {
-                        ifstream TXTFileContent(fd.cFileName); string buf;
-                        string ext = fd.cFileName; ext.replace(ext.find(".txt"), 4, "\0");
-                        LodLights << "%" << ext.c_str() << endl;
-
-                        string EntryName; float offsetX, offsetY, offsetZ, CoronaSize, DrawDistance; int R = 0, G = 0, B = 0, A = 255; int BlinkType = 0; int nNoDistance = 0; int nDrawSearchlight = 0;
-                        while (getline(TXTFileContent, buf))
-                        {
-                            if (buf[0] != '#')
-                            {
-                                if (sscanf(buf.c_str(), "%s", &EntryName[0]))
-                                {
-                                    if (buf.find("Position") != std::string::npos)
-                                    {
-                                        sscanf(buf.c_str(), "%*s %f %f %f", &offsetX, &offsetY, &offsetZ);
-                                    }
-                                    else if (buf.find("Color") != std::string::npos)
-                                    {
-                                        sscanf(buf.c_str(), "%*s %d %d %d %*d", &R, &G, &B);
-                                    }
-                                    else if (buf.find("CoronaFarClip") != std::string::npos)
-                                    {
-                                        sscanf(buf.c_str(), "%*s %f", &DrawDistance);
-                                    }
-                                    else if (buf.find("CoronaSize") != std::string::npos)
-                                    {
-                                        sscanf(buf.c_str(), "%*s %f", &CoronaSize);
-                                    }
-                                    else if (buf.find("CoronaShowMode") != std::string::npos)
-                                    {
-                                        if (buf.find("DEFAULT") != std::string::npos || buf.find("TRAFFICLIGHT") != std::string::npos ||
-                                            buf.find("TRAINCROSSLIGHT") != std::string::npos || buf.find("AT_RAIN_ONLY") != std::string::npos)
-                                        {
-                                            BlinkType = BlinkTypes::DEFAULT;
-                                        }
-                                        else if (buf.find("RANDOM_FLASHING") != std::string::npos || buf.find("RANDOM_FLASHIN_ALWAYS_AT_WET_WEATHER") != std::string::npos ||
-                                                 buf.find("ALWAYS_AT_WET_WEATHER") != std::string::npos)
-                                        {
-                                            BlinkType = BlinkTypes::DEFAULT;
-                                        }
-                                        else if (buf.find("LIGHTS_ANIM_SPEED_4X") != std::string::npos)
-                                        {
-                                            BlinkType = BlinkTypes::T_1S_ON_1S_OFF;
-                                        }
-                                        else if (buf.find("LIGHTS_ANIM_SPEED_2X") != std::string::npos)
-                                        {
-                                            BlinkType = BlinkTypes::T_2S_ON_2S_OFF;
-                                        }
-                                        else if (buf.find("LIGHTS_ANIM_SPEED_1X") != std::string::npos)
-                                        {
-                                            BlinkType = BlinkTypes::T_4S_ON_4S_OFF;
-                                        }
-                                        else if (buf.find("5S_ON_5S_OFF") != std::string::npos)
-                                        {
-                                            BlinkType = BlinkTypes::T_5S_ON_5S_OFF;
-                                        }
-                                        else if (buf.find("6S_ON_4S_OFF") != std::string::npos || buf.find("6S_ON_4S_OFF_2") != std::string::npos)
-                                        {
-                                            BlinkType = BlinkTypes::T_6S_ON_4S_OFF;
-                                        }
-
-
-                                        if (ext.find("lamppost1") != std::string::npos || ext.find("lamppost2") != std::string::npos ||
-                                        ext.find("lamppost3") != std::string::npos || ext.find("mlamppost") != std::string::npos ||
-                                        ext.find("vegaslampost") != std::string::npos || ext.find("vegaslampost2") != std::string::npos ||
-                                        ext.find("streetlamp1") != std::string::npos || ext.find("streetlamp2") != std::string::npos ||
-                                        ext.find("ce_radarmast3") != std::string::npos || ext.find("radarmast1_lawn") != std::string::npos ||
-                                        ext.find("radarmast1_lawn01") != std::string::npos || ext.find("bollardlight") != std::string::npos ||
-                                        ext.find("sub_floodlite") != std::string::npos || ext.find("cj_traffic_light5") != std::string::npos ||
-                                        ext.find("lamppost_coast") != std::string::npos || ext.find("airuntest_las") != std::string::npos ||
-                                        ext.find("vegasairportlight") != std::string::npos || ext.find("gay_lamppost") != std::string::npos ||
-                                        ext.find("gay_traffic_light") != std::string::npos || ext.find("cj_traffic_light4") != std::string::npos ||
-                                        ext.find("lodnsmitter_sfs01") != std::string::npos || ext.find("lodrailbge01_sfse") != std::string::npos ||
-                                        ext.find("lodrailbge02_sfse") != std::string::npos || ext.find("lodrailbge04_sfse") != std::string::npos ||
-                                        ext.find("lodrailbge09_sfse") != std::string::npos || ext.find("lodtainercrane_04") != std::string::npos ||
-                                        ext.find("lod_refchimny01") != std::string::npos || ext.find("mtraffic1") != std::string::npos ||
-                                        ext.find("mtraffic2") != std::string::npos || ext.find("mtraffic3") != std::string::npos ||
-                                        ext.find("mtraffic4") != std::string::npos || ext.find("trafficlight1") != std::string::npos ||
-                                        ext.find("vgsstriptlights1") != std::string::npos || ext.find("circuslampost03") != std::string::npos)
-                                        {
-                                            nDrawSearchlight = 1;
-                                        }
-
-                                        //if (ext.find("cj_traffic_light3") != std::string::npos || ext.find("cj_traffic_light4") != std::string::npos ||
-                                        //ext.find("cj_traffic_light5") != std::string::npos || ext.find("gay_traffic_light") != std::string::npos ||
-                                        //ext.find("mtraffic1") != std::string::npos || ext.find("mtraffic2") != std::string::npos ||
-                                        //ext.find("mtraffic4") != std::string::npos || ext.find("trafficlight1") != std::string::npos ||
-                                        //ext.find("vgsstriptlights1") != std::string::npos || ext.find("traincross1") != std::string::npos)
-                                        if (buf.find("TRAFFICLIGHT") != std::string::npos)
-                                        {
-                                            CoronaSize = 0.45f;
-                                            nDrawSearchlight = 0;
-                                            //if ((R == 255 && G == 148 && B == 52) || (R == 255 && G == 255 && B == 221))
-                                            //    CoronaSize = 1.0f;
-                                        }
-
-                                        if (buf.find("TRAINCROSSLIGHT") != std::string::npos)
-                                        {
-                                            CoronaSize = 0.1f;
-                                        }
-
-                                        //if (CoronaSize > 1.0f)
-                                        //    CoronaSize = 1.2f;
-
-                                        (offsetX == -0.0f) ? offsetX = 0.0f : offsetX;
-                                        (offsetY == -0.0f) ? offsetY = 0.0f : offsetY;
-                                        (offsetZ == -0.0f) ? offsetZ = 0.0f : offsetZ;
-
-                                        if (CoronaSize > 0.0f)
-                                        {
-                                            auto GetPrecison = [](float value) -> int
-                                            {
-                                                int width = 10;
-                                                int digits = 0;
-
-                                                if (value < 0.0f)
-                                                {
-                                                    value *= -1.0f;
-                                                    digits++;
-                                                }
-                                                digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
-                                                int precision = (((width - digits - 1) >= 0) ? (width - digits - 1) : 0);
-                                                return precision;
-                                            };
-
-                                            LodLights << std::right
-                                                << std::setfill('0')
-                                                << std::setw(3) << R << " "
-                                                << std::setw(3) << G << " "
-                                                << std::setw(3) << B << " "
-                                                << std::setw(3) << A << " "
-                                                << std::setfill(' ')
-                                                << std::left
-                                                << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetX)) << offsetX << " "
-                                                << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetY)) << offsetY << " "
-                                                << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " "
-                                                << std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " "
-                                                << std::setw(4) << std::fixed << std::setprecision(2) << DrawDistance << " "
-                                                << std::right << std::setfill('0')
-                                                << std::setw(2) << BlinkType << " "
-                                                << std::left << std::setfill(' ')
-                                                << std::setw(1) << nNoDistance << " "
-                                                << std::setw(1) << nDrawSearchlight
-                                                << std::endl;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        TXTFileContent.close();
-                    }
-                }
+            case 3: return 2;
+            case 4: return 3;
+            case 5: return 5;
+            case 11: return 6;
+            case 12: case 13: return 7;
+            default: return 0;
             }
-
-        } while (FindNextFile(TXTFile, &fd));
-        FindClose(TXTFile);
-    }
-
-    LodLights << "%lodnsmitter_sfs01" << endl;
-    LodLights << "255 000 000 255 -9.2980000 -11.402000 -68.624001 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 10.5050000 -0.0400000 -68.624001 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -9.2120000 11.2440000 -68.624001 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -7.9260000 9.12600000 -33.070000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 7.93200000 -0.0020000 -33.070000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -7.9740000 -9.2030000 -33.070000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -6.8400000 7.28500000 0.82600000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -6.8120000 -7.4080000 0.82600000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 5.76800000 -0.0970000 0.82600000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 7.37700000 0.06100000 24.6870000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -7.5860000 -8.5990000 24.6870000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -7.9060000 8.64800000 24.6870000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -7.8930000 15.8600000 51.5480000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -13.689000 12.5180000 51.5480000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 13.9000000 3.25600000 51.7970010 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 13.6740000 -3.2850000 51.7970010 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -7.9330000 -15.856000 51.6160010 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -13.234000 -12.272000 51.5480000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -8.1140000 -9.2560000 89.3089980 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 8.03700000 -0.0150000 89.3089980 1.00 300.0 00 2 0" << endl;
-    LodLights << "%radarmast1_lawn" << endl;
-    LodLights << "255 000 000 0.091000000000 0.05300000 24.6200000 0.10 300.0 00 2 0" << endl;
-    LodLights << "%radarmast1_lawn01" << endl;
-    LodLights << "255 000 000 255 0.13000000 -0.0080000 24.4900000 1.00 300.0 00 2 0" << endl;
-    LodLights << "%ce_radarmast3" << endl;
-    LodLights << "255 000 000 255 0.00100000 0.03300000 32.6570000 0.50 300.0 00 2 0" << endl;
-    LodLights << "%ws_ref_bollard" << endl;
-    LodLights << "255 000 000 255 0.00900000 0.00100000 0.46900000 0.70 300.0 00 2 0" << endl;
-    LodLights << "%baybridge1_sfse" << endl;
-    LodLights << "000 111 255 255 -76.679000 -16.446000 -8.7210000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -53.127000 -16.434000 -5.5900000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -29.320000 -16.434000 -0.1430000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -6.1820000 -16.434000 7.34300000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 16.3480000 -16.434000 16.7610000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 37.8660000 -16.434000 28.0760000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 58.7830000 -16.434000 41.4320000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -76.679000 16.4680000 -8.7210000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -53.127000 16.4680000 -5.5900000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -29.320000 16.4900000 -0.1430000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -6.1820000 16.4900000 7.34300000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 16.3480000 16.4900000 16.7610000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 37.8660000 16.4900000 28.0760000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 58.7830000 16.4900000 41.4320000 1.20 300.0 00 2 0" << endl;
-    LodLights << "%baybridge2_sfse" << endl;
-    LodLights << "255 000 000 255 38.4845000 -18.216500 83.4015000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 38.4790000 18.3384000 83.4015000 1.00 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 74.8720000 16.4080000 39.9210000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 74.8720000 -16.476000 39.9210000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 56.6360000 -16.476000 56.2430000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 56.6360000 16.4080000 56.2430000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 17.5910000 -16.476000 53.3240000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 17.5910000 16.4080000 53.3240000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -0.5510000 -16.476000 37.6250000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -0.5510000 16.4080000 37.6250000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -19.959000 -16.476000 24.1330000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -19.959000 16.4080000 24.1330000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -40.829000 -16.476000 12.1530000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -62.489000 16.4080000 2.28400000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -62.489000 -16.476000 2.26900000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -84.947000 -16.476000 -5.7150000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -84.947000 16.4080000 -5.7010000 1.20 300.0 00 2 0" << endl;
-    LodLights << "%baybridge3_sfse" << endl;
-    LodLights << "255 000 000 255 -100.83000 18.3671000 89.5265000 1.00 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -100.87000 -18.140600 89.5265000 1.00 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 136.609000 -16.542000 -5.2150000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 136.609000 16.3830000 -5.2150000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 112.756000 16.3830000 -8.1900000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 112.756000 -16.542000 -8.1900000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 69.1490000 16.3830000 -8.1900000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 69.1490000 -16.542000 -8.1900000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 45.4190000 -16.542000 -4.9990000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 45.4190000 16.3830000 -4.9990000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 22.1890000 -16.542000 0.42900000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 22.1890000 16.3830000 0.42900000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -0.2570000 -16.542000 8.42400000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -0.2570000 16.3830000 8.42400000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -21.660000 16.3830000 18.3810000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -21.660000 -16.542000 18.3810000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -42.686000 -16.542000 30.2490000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -42.686000 16.3830000 30.2490000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -62.074000 -16.421000 43.8980000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -62.074000 16.5040000 43.8980000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -80.451000 -16.463000 59.1700000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -80.451000 16.4620000 59.1700000 1.20 300.0 00 2 0" << endl;
-    LodLights << "%baybridge4_sfse" << endl;
-    LodLights << "000 111 255 255 73.9600000 16.4190000 66.5760000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 73.9600000 -16.496000 66.5760000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 55.5380000 16.4190000 50.2920000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 55.5380000 -16.496000 50.2920000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 36.2830000 16.4190000 35.6030000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 36.2830000 -16.496000 35.6030000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 15.3910000 16.4190000 22.1260000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 15.3910000 -16.496000 22.1260000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -6.2090000 16.4190000 10.8280000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -6.2090000 -16.496000 10.8280000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -28.574000 16.4190000 1.46500000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -28.574000 -16.496000 1.46500000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -51.905000 16.4190000 -5.8690000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -51.905000 -16.496000 -5.8690000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -75.652000 16.4190000 -11.285000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -75.652000 -16.496000 -11.285000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -99.500000 16.4190000 -14.214000 1.20 300.0 00 2 0" << endl;
-    LodLights << "000 111 255 255 -99.500000 -16.496000 -14.214000 1.20 300.0 00 2 0" << endl;
-    LodLights << "%ggbrig_06_sfw" << endl;
-    LodLights << "255 000 000 255 19.0970000 0.12800000 115.890000 2.00 300.0 00 2 0" << endl;
-    LodLights << "%ggbrig_01_sfw" << endl;
-    LodLights << "255 000 000 255 19.0970000 0.12800000 115.890000 2.00 300.0 00 2 0" << endl;
-    LodLights << "%ggbrig_03_sfw" << endl;
-    LodLights << "255 000 000 255 19.3850000 55.7600000 19.4330000 1.20 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -19.136000 55.7600000 19.4330000 1.20 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -19.136000 -5.9890000 -30.831000 1.20 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 19.3850000 -5.9890000 -30.831000 1.20 300.0 00 2 0" << endl;
-    LodLights << "%ggbrig_05_sfw" << endl;
-    LodLights << "255 000 000 255 -19.308000 -59.193000 17.7280000 1.20 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 19.1360000 -59.193000 17.7280000 1.20 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 19.1360000 2.37500000 -31.452000 1.20 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -19.308000 2.37500000 -31.452000 1.20 300.0 00 2 0" << endl;
-    LodLights << "%cxrf_whitebrig" << endl;
-    LodLights << "249 145 34 255 -0.11800000 -29.064000 5.17500000 1.20 300.0 00 2 0" << endl;
-    LodLights << "249 145 34 255 16.63200000 -29.064000 5.17500000 1.20 300.0 00 2 0" << endl;
-    LodLights << "249 145 34 255 16.63200000 28.9200000 5.17500000 1.20 300.0 00 2 0" << endl;
-    LodLights << "249 145 34 255 -0.11800000 28.9200000 5.17500000 1.20 300.0 00 2 0" << endl;
-    LodLights << "%des_bigtelescope" << endl;
-    LodLights << "255 000 000 255 24.0510000 24.2580000 53.9150000 3.00 300.0 00 2 0" << endl;
-    LodLights << "%pylon_big1_" << endl;
-    LodLights << "255 000 000 255 4.67100000 0.13400000 36.0030000 1.20 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -4.3560000 0.13400000 36.0030000 1.20 300.0 00 2 0" << endl;
-
-    LodLights << "%additional_coronas" << endl;
-    LodLights << "255 255 255 255 -651.28700 2145.91000 74.7152000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 255 255 255 -781.25600 2140.42000 74.7152000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 255 255 255 -811.16800 2015.78000 57.1071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 255 255 255 -794.20900 2024.26000 57.1071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 255 255 255 -776.24400 2031.43000 57.1071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 255 255 255 -733.82300 2041.57000 57.1071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 255 255 255 -714.85400 2043.30000 57.1071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 255 255 255 -695.27600 2043.66000 57.1071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 255 255 255 -653.37600 2038.31000 57.1071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 255 255 255 -635.24900 2032.18000 57.1071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 255 255 255 -617.31900 2024.71000 57.1071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -750.89400 2036.27000 76.7071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "255 000 000 255 -678.84900 2040.47000 76.7071000 0.70 300.0 00 2 0" << endl;
-    LodLights << "#place you coronas here" << endl;
-
-    LodLights.close();
-    SetCurrentDirectory("..\\");
-}
-
-void ConvertLightTo2DFX()
-{
-    ofstream LodLights;
-    LodLights.open(Filename, fstream::trunc);
-
-    LodLights << "#%modelname" << endl;
-    LodLights << "#Red, Green, Blue, Alpha, OffsetX, OffsetY, OffsetZ, CustomSize, DrawDistance, BlinkType, NoDistance, DrawSearchlight" << endl;
-    LodLights << "#0.45 - custom size reserved for traffic lights" << endl;
-    LodLights << endl;
-
-    SetCurrentDirectory(".\\iv\\");
-    WIN32_FIND_DATA fd;
-    HANDLE TXTFile = FindFirstFile("*.light", &fd);
-    if (TXTFile != INVALID_HANDLE_VALUE)
-    {
-        do
+        }
+        switch (type)
         {
-            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-            {
-
-                ifstream TXTFileContent(fd.cFileName); string buf;
-                string ext = fd.cFileName; ext.replace(ext.find(".light"), 6, "\0");
-                string ext2 = ext;
-                //LodLights << "%" << ext.c_str() << endl;
-                bool mdlname = false;
-
-                //if (ext2.find("bm_nylamp110b") != std::string::npos || ext2.find("bm_nylamp1b") != std::string::npos || ext2.find("bm_nylamp2b") != std::string::npos ||
-                //	ext2.find("cj_nylamp2b") != std::string::npos)
-                //	continue;
-
-                string EntryName; float offsetX, offsetY, offsetZ, CoronaSize, DrawDistance;	int R = 0, G = 0, B = 0, A = 255; int BlinkType = 0; int nNoDistance = 0; int nDrawSearchlight = 0; int BoneID = 0; int type_matched = 0;
-                while (getline(TXTFileContent, buf))
-                {
-                    if (buf[0] != '#')
-                    {
-                        if (sscanf(buf.c_str(), "%s", &EntryName[0]))
-                        {
-                            if (buf.find("Flags") != std::string::npos && buf.find("TypeFlags") == std::string::npos)
-                            {
-                                enum LightFlags
-                                {
-                                    None,
-                                    RandomFlashing1,
-                                    RandomFlashing2,
-                                    HazardFlashing1,
-                                    SlowHazardFlashing,
-                                    VerySlowHazardFlashing,
-                                    LightAllDay,
-                                    OnAtNightOnly,
-                                    WeakLight,
-                                    VeryFastHazardFlashing,
-                                    FastHazardFlashing,
-                                    VerySlowFadeInOut1,
-                                    VerySlowFadeInOut2,
-                                    SlowFadeInOut,
-                                    HazardFlashing2,
-                                    StaticShadows,
-                                    DynamicShadows,
-                                    WeatherModifiedColor,
-                                    unk17,
-                                    unk18,
-                                    ShowRays,
-                                    NoCoronaReflections,
-                                };
-
-                                uint32_t dwFlags = 0;
-                                sscanf(buf.c_str(), "%*s %d", &dwFlags);
-                                auto bitFlags = std::bitset<32>(dwFlags);
-
-                                if (bitFlags.test(RandomFlashing1))
-                                    BlinkType = BlinkTypes::RANDOM_FLASHING;
-                                else if (bitFlags.test(RandomFlashing2))
-                                    BlinkType = BlinkTypes::RANDOM_FLASHING;
-                                else if (bitFlags.test(HazardFlashing1))
-                                    BlinkType = BlinkTypes::T_2S_ON_2S_OFF;
-                                else if (bitFlags.test(SlowHazardFlashing))
-                                    BlinkType = BlinkTypes::T_3S_ON_3S_OFF;
-                                else if (bitFlags.test(VerySlowHazardFlashing))
-                                    BlinkType = BlinkTypes::T_3S_ON_3S_OFF;
-                                else if (bitFlags.test(VeryFastHazardFlashing))
-                                    BlinkType = BlinkTypes::T_1S_ON_1S_OFF;
-                                else if (bitFlags.test(FastHazardFlashing))
-                                    BlinkType = BlinkTypes::T_2S_ON_2S_OFF;
-                                else if (bitFlags.test(HazardFlashing2))
-                                    BlinkType = BlinkTypes::T_3S_ON_3S_OFF;
-                                else
-                                    BlinkType = BlinkTypes::DEFAULT;
-                            }
-                            else if (buf.find("TypeFlags") != std::string::npos)
-                            {
-                                if (!buf.contains(" f"))
-                                    BlinkType = BlinkTypes::DEFAULT;
-                            }
-                            else if (buf.find("Position") != std::string::npos)
-                            {
-                                sscanf(buf.c_str(), "%*s %f %f %f", &offsetX, &offsetY, &offsetZ);
-                            }
-                            else if (buf.find("Color") != std::string::npos)
-                            {
-                                sscanf(buf.c_str(), "%*s %d %d %d %*d", &R, &G, &B);
-                            }
-                            else if (buf.find("CoronaSize") != std::string::npos)
-                            {
-                                sscanf(buf.c_str(), "%*s %f", &CoronaSize);
-
-                                if (CoronaSize > 1.0f)
-                                    CoronaSize = 1.2f;
-
-                                if (ext.find("traf") != std::string::npos)
-                                    CoronaSize = 0.45f;
-
-                                (offsetX == -0.0f) ? offsetX = 0.0f : offsetX;
-                                (offsetY == -0.0f) ? offsetY = 0.0f : offsetY;
-                                (offsetZ == -0.0f) ? offsetZ = 0.0f : offsetZ;
-                            }
-                            else if (buf.find("_f28 ") != std::string::npos)
-                            {
-                                sscanf(buf.c_str(), "%*s %f", &DrawDistance);
-
-                            }
-                            else if (buf.find("Type Spot") != std::string::npos || buf.find("Type Omni") != std::string::npos)
-                            {
-                                type_matched = ((buf.find("Type Omni") != std::string::npos) ? 1 : 2);
-                            }
-                            else if (buf.find("BoneID ") != std::string::npos)
-                            {
-                                if (type_matched)
-                                {
-                                    sscanf(buf.c_str(), "%*s %d", &BoneID);
-
-                                    ext = ext2 + ".skel";
-                                    ifstream TXTFileContent2(ext); string buf2;
-                                    bool br = false;
-                                    if (TXTFileContent2.is_open())
-                                    {
-                                        int SkelBoneID = 0;
-                                        while (getline(TXTFileContent2, buf2))
-                                        {
-                                            //if (offsetZ >= 21.0f)
-                                            //	break;
-                                            if (buf2.find("Id ") != std::string::npos)
-                                            {
-                                                sscanf(buf2.c_str(), "%*s %d", &SkelBoneID);
-                                            }
-                                            else if (buf2.find("WorldOffset") != std::string::npos)
-                                            {
-                                                if (BoneID == SkelBoneID)
-                                                {
-                                                    float offsetX2, offsetY2, offsetZ2;
-                                                    sscanf(buf2.c_str(), "%*s %f %f %f", &offsetX2, &offsetY2, &offsetZ2);
-                                                    offsetX += offsetX2;
-                                                    offsetY += offsetY2;
-                                                    offsetZ += offsetZ2;
-                                                    BoneID = -1;
-                                                }
-                                            }
-
-                                            //if (buf2.find("NumBones 0") != std::string::npos || buf2.find("NumBones 1") != std::string::npos)
-                                            //{
-                                            //	br = true;
-                                            //	break;
-                                            //}
-                                        }
-                                        TXTFileContent2.close();
-                                    }
-                                    //else
-                                    //	continue;
-
-                                    //if (br)
-                                    //	continue;
-
-                                    if (CoronaSize > 0.0f)
-                                    {
-                                        auto GetPrecison = [](float value) -> int
-                                        {
-                                            int width = 10;
-                                            int digits = 0;
-
-                                            if (value < 0.0f)
-                                            {
-                                                value *= -1.0f;
-                                                digits++;
-                                            }
-                                            digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
-                                            int precision = (((width - digits - 1) >= 0) ? (width - digits - 1) : 0);
-                                            return precision;
-                                        };
-
-                                        if (!mdlname)
-                                        {
-                                            LodLights << "%" << ext2.c_str() << endl;
-                                            mdlname = true;
-                                        }
-
-                                        LodLights << std::right
-                                            << std::setfill('0')
-                                            << std::setw(3) << R << " "
-                                            << std::setw(3) << G << " "
-                                            << std::setw(3) << B << " "
-                                            << std::setw(3) << ((type_matched == 1) ? 128 : A) << " "
-                                            << std::setfill(' ')
-                                            << std::left
-                                            << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetX)) << offsetX << " "
-                                            << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetY)) << offsetY << " "
-                                            << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " "
-                                            << std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " "
-                                            << std::setw(4) << std::fixed << std::setprecision(2) << DrawDistance << " "
-                                            << std::right << std::setfill('0')
-                                            << std::setw(2) << BlinkType << " "
-                                            << std::left << std::setfill(' ')
-                                            << std::setw(1) << nNoDistance << " "
-                                            << std::setw(1) << nDrawSearchlight
-                                            << std::endl;
-                                    }
-                                    type_matched = 0;
-                                }
-                            }
-
-                        }
-                    }
-                }
-                TXTFileContent.close();
-            }
-
-        } while (FindNextFile(TXTFile, &fd));
-        FindClose(TXTFile);
-    }
-
-    // Dukes Bay Bridge: custom model-local coronas at the emissive tube fittings.
-    // The native point lights have zero-size coronas, so normal extraction skips
-    // them. Each station has two fittings on opposite sides of the roadway.
-    LodLights << "%AM_FM1_BridgeLite" << endl;
-    LodLights << "238 208 143 128 -15.851560 -71.448487 -1.1883540 1.20 100.00 00 0 0" << endl;
-    LodLights << "238 208 143 128 -9.1441650 -73.578612 -1.1579590 1.20 100.00 00 0 0" << endl;
-    LodLights << "238 208 143 128 -3.5186770 0.32116700 -0.8319090 1.20 100.00 00 0 0" << endl;
-    LodLights << "238 208 143 128 3.51855500 0.36804200 -0.8015140 1.20 100.00 00 0 0" << endl;
-    LodLights << "238 208 143 128 -3.5854490 73.2401130 -1.1883540 1.20 100.00 00 0 0" << endl;
-    LodLights << "238 208 143 128 3.45202600 73.2868670 -1.1579590 1.20 100.00 00 0 0" << endl;
-    LodLights << "238 208 143 128 -3.5854490 146.509300 -2.5617680 1.20 100.00 00 0 0" << endl;
-    LodLights << "238 208 143 128 3.45202600 146.556050 -2.5319820 1.20 100.00 00 0 0" << endl;
-    LodLights << "%bxe_fw_hi_snglel02" << endl;
-    LodLights << "241 218 167 128 -3.7841800 -20.243042 7.73803700 1.20 100.00 00 0 0" << endl;
-    LodLights << "241 218 167 128 3.25305200 -20.196043 7.76757800 1.20 100.00 00 0 0" << endl;
-    LodLights << "238 208 143 128 -3.7841800 53.7133750 4.69055200 1.20 100.00 00 0 0" << endl;
-    LodLights << "238 208 143 128 3.25305200 53.7605000 4.72021400 1.20 100.00 00 0 0" << endl;
-    LodLights << "%bxe_fw_hi_snglel" << endl;
-    LodLights << "238 208 143 128 -3.7841800 16.5852050 5.37573300 1.20 100.00 00 0 0" << endl;
-    LodLights << "238 208 143 128 3.25293000 16.6317120 5.40600600 1.20 100.00 00 0 0" << endl;
-
-    //LodLights << "%bm_nylamp110b" << endl;
-    //LodLights << "255 219 155 255 -1.1508710 -0.0219250 6.95975000 0.80 00 0 0" << endl;
-    //LodLights << "255 219 155 255 1.10668200 -0.0219260 6.95970100 0.80 00 0 0" << endl;
-    //LodLights << "%bm_nylamp1b" << endl;
-    //LodLights << "255 221 163 255 -1.6176590 -0.0347459 7.78166600 0.80 00 0 0" << endl;
-    //LodLights << "255 221 163 255 1.58855900 -0.0347870 7.78166800 0.80 00 0 0" << endl;
-    //LodLights << "%bm_nylamp2b" << endl;
-    //LodLights << "255 221 163 255 -2.5801490 -0.0306550 7.68636900 0.80 00 0 0" << endl;
-    //LodLights << "255 221 163 255 2.56053300 -0.0384880 7.68502200 0.80 00 0 0" << endl;
-    //LodLights << "%cj_nylamp2b" << endl;
-    //LodLights << "255 221 163 255 -2.1766780 0.12343800 8.0072020 0.80 00 0 0" << endl;
-    //LodLights << "255 221 163 255 2.21655300 0.12538500 8.0055760 0.80 00 0 0" << endl;
-
-    LodLights.close();
-    SetCurrentDirectory("..\\");
-}
-
-int _tmain(int argc, _TCHAR* argv[])
-{
-    string line, line2;
-
-    ifstream GTAData;
-    GTAData.open(".\\gta4.dat", std::ifstream::in);
-    if (GTAData.is_open())
-    {
-        GTAData.close();
-        Filename = "IVLodLights.dat";
-        ConvertLightTo2DFX();
-        return 0;
-    }
-
-    GTAData.open(".\\gta3.dat", std::ifstream::in);
-    Filename = "IIILodLights.dat";
-    if (!GTAData.is_open())
-    {
-        GTAData.open(".\\gta_lcs.dat", std::ifstream::in);
-        Filename = "LCSLodLights.dat";
-        if (!GTAData.is_open())
-        {
-            GTAData.open(".\\gta_vcs.dat", std::ifstream::in);
-            Filename = "VCSLodLights.dat";
-            if (!GTAData.is_open())
-            {
-                GTAData.open(".\\gta_vc.dat", std::ifstream::in);
-                Filename = "VCLodLights.dat";
-                if (!GTAData.is_open())
-                {
-                    Filename = "SALodLights.dat";
-                    ConvertDFFTo2DFX();
-                    return 0;
-                }
-            }
+        case 2: case 3: case 10: return 1;
+        case 4: case 5: case 13: return 2;
+        case 6: case 7: return 3;
+        case 8: case 9: return 5;
+        case 14: return 7;
+        default: return 0;
         }
     }
 
-    fstream IDEData;
-    fstream IPLData;
-    fstream FX2DData;
-
-    IDEData.open(".\\IDEData.txt", ofstream::trunc | fstream::out);
-    IPLData.open(".\\IPLData.txt", ofstream::trunc | fstream::out);
-    FX2DData.open(".\\2DFXData.txt", ofstream::trunc | fstream::out);
-
-    while (getline(GTAData, line))
+    bool Searchlight(const std::string& model, bool sa)
     {
-        if (line[0] != '#')
+        static const std::vector<std::string> common{ "lamppost1", "lamppost2", "lamppost3", "sub_floodlite", "mlamppost", "bollardlight" };
+        static const std::vector<std::string> classic{ "doublestreetlght1", "lampost_coast", "doc_floodlite" };
+        static const std::vector<std::string> sanAndreas{ "vegaslampost", "streetlamp1", "streetlamp2", "ce_radarmast3", "radarmast1_lawn", "cj_traffic_light5", "lamppost_coast", "airuntest_las", "vegasairportlight", "gay_lamppost", "gay_traffic_light", "cj_traffic_light4", "lodnsmitter_sfs01", "lodrailbge01_sfse", "lodrailbge02_sfse", "lodrailbge04_sfse", "lodrailbge09_sfse", "lodtainercrane_04", "lod_refchimny01", "mtraffic1", "mtraffic2", "mtraffic3", "mtraffic4", "trafficlight1", "vgsstriptlights1", "circuslampost03" };
+        const auto contains{ [&](const auto& names)
         {
-            if (line[0] == 'I' && line[1] == 'D' && line[2] == 'E')
-            {
-                cout << line.c_str() + 9 << endl;
-                string IDEline;
-                ifstream IDEFile(line.c_str() + 9);
-                if (IDEFile.is_open())
-                {
-                    while (getline(IDEFile, IDEline))
-                    {
-                        if (IDEline[0] != '#')
-                        {
-                            int ID; string ModelName;
-                            IDEline.erase(std::remove(IDEline.begin(), IDEline.end(), ','), IDEline.end());
-                            if (sscanf(IDEline.c_str(), "%d %s %*s %*d %*s", &ID, &ModelName[0]))
-                            {
-                                if (IDEline.find("coronastar") == std::string::npos)
-                                {
-                                    IDEData << IDEline << endl;
-                                }
-                                else
-                                {
-                                    FX2DData << IDEline << endl;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else if (line[0] == 'I' && line[1] == 'P' && line[2] == 'L')
-            {
-                cout << line.c_str() + 9 << endl;
-                string IPLline;
-                ifstream IDEFile(line.c_str() + 9);
-                if (IDEFile.is_open())
-                {
-                    while (getline(IDEFile, IPLline))
-                    {
-                        if (IPLline[0] != '#')
-                        {
-                            int ID; string ModelName;
-                            IPLline.erase(std::remove(IPLline.begin(), IPLline.end(), ','), IPLline.end());
-                            if (sscanf(IPLline.c_str(), "%d %s %*s %*d %*s", &ID, &ModelName[0]))
-                            {
-                                if (IPLline.find("coronastar") == std::string::npos)
-                                {
-                                    IPLData << IPLline << endl;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+            return std::any_of(names.begin(), names.end(), [&](const auto& name) { return model.find(name) != model.npos; });
+        } };
+        return contains(common) || contains(sa ? sanAndreas : classic);
     }
-    //GTAData.close();
-    IDEData.close();
-    IPLData.close();
-    FX2DData.close();
 
-
-    ofstream LodLights;
-    LodLights.open(Filename, fstream::trunc);
-    IDEData.open("IDEData.txt", std::ifstream::in);
-    IPLData.open("IPLData.txt", std::ifstream::in);
-    FX2DData.open("2DFXData.txt", std::ifstream::in);
-    if (FX2DData.is_open())
+    class Extractor
     {
-        LodLights << "#%modelname" << endl;
-        LodLights << "#Red, Green, Blue, Alpha, OffsetX, OffsetY, OffsetZ, CustomSize, DrawDistance, BlinkType, NoDistance, DrawSearchlight" << endl;
-        LodLights << "#0.45 - custom size reserved for traffic lights" << endl;
-        LodLights << endl;
+        fs::path root;
+        bool sa;
+        std::map<unsigned, std::string> models;
+        std::vector<fs::path> archives, placements;
+        std::set<fs::path> manifests;
+        std::set<std::string> extracted;
 
-        static int PrevID;
-        static int TrafficLCount;
-        while (getline(FX2DData, line))
+        fs::path Resolve(const std::string& name, bool optional = false) const
         {
-            int ID; float offsetX, offsetY, offsetZ; int R = 0, G = 0, B = 0, A = 255; int BlinkType = 0; int nNoDistance = 0; int nDrawSearchlight = 0; int unk1, type; string Corona, Shadow; float Distance, OuterRange, CoronaSize, InnerRange; int ShadowIntensity, Wet, Flare, Dust;
-            line.erase(std::remove(line.begin(), line.end(), ','), line.end());
-            if (sscanf(line.c_str(), "%d %f %f %f %d %d %d %d %d %s %s %f %f %f %f %d %d %d %d %d",
-                &ID, &offsetX, &offsetY, &offsetZ, &R, &G, &B, &unk1, &type, &Corona[0], &Shadow[0], &Distance, &OuterRange, &CoronaSize, &InnerRange, &ShadowIntensity, &BlinkType, &Wet, &Flare, &Dust))
+            fs::path path{ name };
+            if (fs::exists(root / path))
+                return root / path;
+            // Also accept the original copied-data directory layout.
+            auto it{ path.begin() };
+            if (it != path.end() && Lower(it->string()) == "data")
             {
-                enum
-                {
-                    LIGHT_ON,
-                    LIGHT_ON_NIGHT,
-                    LIGHT_FLICKER,
-                    LIGHT_FLICKER_NIGHT,
-                    LIGHT_FLASH1,
-                    LIGHT_FLASH1_NIGHT,
-                    LIGHT_FLASH2,
-                    LIGHT_FLASH2_NIGHT,
-                    LIGHT_FLASH3,
-                    LIGHT_FLASH3_NIGHT,
-                    LIGHT_RANDOM_FLICKER,
-                    LIGHT_RANDOM_FLICKER_NIGHT,
-                    LIGHT_SPECIAL,
-                    LIGHT_BRIDGE_FLASH1,
-                    LIGHT_BRIDGE_FLASH2,
-                };
+                fs::path relative;
+                for (++it; it != path.end(); ++it)
+                    relative /= *it;
+                if (fs::exists(root / relative))
+                    return root / relative;
+            }
+            if (optional)
+                return {};
+            throw std::runtime_error("Missing input: " + (root / path).string());
+        }
 
-                auto MapLightTypeToBlinkType = [](uint8_t lightType) -> BlinkTypes
-                {
-                    switch (lightType)
-                    {
-                        case LIGHT_ON:
-                        case LIGHT_ON_NIGHT:
-                        case LIGHT_SPECIAL:
-                            return BlinkTypes::DEFAULT; // Always on
-
-                        case LIGHT_FLICKER:
-                            return BlinkTypes::RANDOM_FLASHING;
-                        case LIGHT_FLICKER_NIGHT:
-                            return BlinkTypes::RANDOM_FLASHING;
-                        case LIGHT_RANDOM_FLICKER:
-                            return BlinkTypes::RANDOM_FLASHING;
-                        case LIGHT_RANDOM_FLICKER_NIGHT:
-                            return BlinkTypes::DEFAULT; //BlinkTypes::RANDOM_FLASHING;
-
-                        case LIGHT_FLASH1:
-                        case LIGHT_FLASH1_NIGHT:
-                        case LIGHT_BRIDGE_FLASH1:
-                            // & 0x200 = 512ms period = ~0.5s on/off
-                            return BlinkTypes::T_1S_ON_1S_OFF;
-
-                        case LIGHT_FLASH2:
-                        case LIGHT_FLASH2_NIGHT:
-                            // & 0x400 = 1024ms period = ~1s on/off
-                            return BlinkTypes::T_2S_ON_2S_OFF;
-
-                        case LIGHT_FLASH3:
-                        case LIGHT_FLASH3_NIGHT:
-                            // & 0x800 = 2048ms period = ~2s on/off
-                            return BlinkTypes::T_4S_ON_4S_OFF;
-
-                        case LIGHT_BRIDGE_FLASH2:
-                            // (& 0x1FF) < 60 = very short blink every ~512ms
-                            // This is asymmetric: brief on, long off
-                            return BlinkTypes::T_6S_ON_4S_OFF; // Or create a new custom pattern
-
-                        default:
-                            return BlinkTypes::DEFAULT;
-                    }
-                };
-
-                BlinkType = MapLightTypeToBlinkType(BlinkType);
-
-                //if (BlinkType == 0 || BlinkType == 1 || BlinkType == 12)
-                //{
-                //    BlinkType = BlinkTypes::DEFAULT;
-                //}
-                //else if (BlinkType == 2 || BlinkType == 3 || BlinkType == 10 || BlinkType == 11)
-                //{
-                //    BlinkType = BlinkTypes::DEFAULT; //BlinkType = BlinkTypes::RANDOM_FLASHING;
-                //}
-                //else if (BlinkType == 4 || BlinkType == 5 || BlinkType == 13)
-                //{
-                //    BlinkType = BlinkTypes::T_1S_ON_1S_OFF;
-                //}
-                //else if (BlinkType == 6 || BlinkType == 7)
-                //{
-                //    BlinkType = BlinkTypes::T_2S_ON_2S_OFF;
-                //}
-                //else if (BlinkType == 8 || BlinkType == 9)
-                //{
-                //    BlinkType = BlinkTypes::T_3S_ON_3S_OFF;
-                //}
-
-                if (CoronaSize > 1.0f)
-                    CoronaSize = 1.2f;
-
-                if (!CoronaSize || ID == 4481 || ID == 4483) //destruct2 destruct03
+        void ReadIDE(const fs::path& path)
+        {
+            std::ifstream file(path);
+            if (!file)
+                throw std::runtime_error("Cannot open " + path.string());
+            std::string line, section;
+            size_t lineNumber{};
+            while (std::getline(file, line))
+            {
+                ++lineNumber;
+                const auto t{ Tokens(line) };
+                if (t.empty())
                     continue;
-
-                auto GetPrecison = [](float value) -> int
+                if (t.size() == 1)
                 {
-                    int width = 10;
-                    int digits = 0;
-
-                    if (value < 0.0f)
-                    {
-                        value *= -1.0f;
-                        digits++;
-                    }
-                    digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
-                    int precision = (((width - digits - 1) >= 0) ? (width - digits - 1) : 0);
-                    return precision;
-                };
-
-                if (PrevID != ID)
+                    section = Lower(t[0]);
+                    continue;
+                }
+                try
                 {
-                    IDEData.clear();
-                    IDEData.seekg(0, ios::beg);
-                    while (getline(IDEData, line2))
+                    if (section == "objs" || section == "tobj" || section == "anim" || section == "hier")
+                        models[Integer(t[0])] = Lower(t.at(1));
+                    else if (section == "2dfx" && !sa)
                     {
-                        line2.erase(std::remove(line2.begin(), line2.end(), ','), line2.end());
-                        int IdeID; string ModelName2;
-                        if (sscanf(line2.c_str(), "%d %s %*s %*d %*s", &IdeID, &ModelName2[0]))
+                        if (t.size() < 9 || Integer(t[8]) != 0)
+                            continue;
+                        if (t.size() != 20)
+                            throw std::runtime_error("Expected 20 light fields");
+                        Light light;
+                        const auto id{ Integer(t[0]) };
+                        light.model = std::to_string(id);
+                        for (size_t i{}; i < 3; ++i)
                         {
-                            if (IdeID == ID)
-                            {
-                                LodLights << "%" << ModelName2.c_str() << endl;
-                                break;
-                            }
+                            light.position[i] = Number(t[i + 1]);
+                            light.colour[i] = Integer(t[i + 4]);
+                            light.poolColour[i] = light.colour[i];
+                            if (light.colour[i] > 255)
+                                throw std::runtime_error("Colour out of range");
                         }
+                        light.texture = Lower(t[10]);
+                        light.distance = Number(t[11]);
+                        light.size = Number(t[13]);
+                        light.poolSize = Number(t[14]);
+                        light.intensity = static_cast<float>(Integer(t[15]));
+                        light.blink = Blink(Integer(t[16]), false);
+                        // Keep light records independently of corona filtering for baseline matching.
+                        lights.push_back(light);
                     }
-                    std::transform(line2.begin(), line2.end(), line2.begin(), ::tolower);
+                }
+                catch (const std::exception& e)
+                {
+                    throw std::runtime_error(path.string() + ":" + std::to_string(lineNumber) + ": " + e.what());
+                }
+            }
+        }
 
-                    if (line2.find("lamppost1") != std::string::npos || line2.find("lamppost2") != std::string::npos ||
-                        line2.find("lamppost3") != std::string::npos || line2.find("sub_floodlite") != std::string::npos ||
-                        line2.find("mlamppost") != std::string::npos || line2.find("doublestreetlght1") != std::string::npos ||
-                        line2.find("bollardlight") != std::string::npos || line2.find("lampost_coast") != std::string::npos ||
-                        line2.find("doc_floodlite") != std::string::npos)
+        void ReadManifest(const fs::path& path)
+        {
+            if (!manifests.insert(fs::weakly_canonical(path)).second)
+                return;
+            std::ifstream file(path);
+            if (!file)
+                throw std::runtime_error("Cannot open " + path.string());
+            std::string line;
+            while (std::getline(file, line))
+            {
+                const auto t{ Tokens(line) };
+                if (t.size() < 2)
+                    continue;
+                const auto type{ Lower(t[0]) };
+                if (type == "ide")
+                    ReadIDE(Resolve(t[1]));
+                else if (type == "ipl" && Lower(fs::path(t[1]).extension().string()) == ".ipl")
+                {
+                    // Portable bundles omit zone and occlusion placement files.
+                    const auto placement{ Resolve(t[1], path.parent_path() == root) };
+                    if (!placement.empty())
+                        placements.push_back(placement);
+                }
+                else if (type == "img" && sa)
+                    archives.push_back(Resolve(t[1]));
+            }
+        }
+
+        void ReadEffects(const Bytes& data, size_t begin, size_t end, const std::string& model)
+        {
+            if (end - begin < 4)
+                throw std::runtime_error("Truncated 2DFX header");
+            const auto count{ Read<uint32_t>(data, begin) };
+            size_t cursor{ begin + 4 };
+            if (count > (end - cursor) / 20)
+                throw std::runtime_error("Invalid 2DFX count");
+            for (uint32_t i{}; i < count; ++i)
+            {
+                if (end - cursor < 20)
+                    throw std::runtime_error("Truncated 2DFX record");
+                const auto type{ Read<uint32_t>(data, cursor + 12) };
+                const auto size{ Read<uint32_t>(data, cursor + 16) };
+                const size_t payload{ cursor + 20 };
+                if (size > end - payload)
+                    throw std::runtime_error("2DFX payload exceeds chunk");
+                if (type == 0)
+                {
+                    if (size != 76 && size != 80)
+                        throw std::runtime_error("Unsupported light payload size " + std::to_string(size));
+                    Light light;
+                    light.model = model;
+                    for (size_t axis{}; axis < 3; ++axis)
+                        light.position[axis] = Read<float>(data, cursor + axis * 4);
+                    for (size_t channel{}; channel < 3; ++channel)
                     {
-                        nDrawSearchlight = 1;
+                        light.colour[channel] = data[payload + channel];
+                        light.poolColour[channel] = light.colour[channel];
                     }
-
-                    if (line2.find("mtraffic1") != std::string::npos || line2.find("mtraffic2") != std::string::npos ||
-                        line2.find("mtraffic4") != std::string::npos || line2.find("trafficlight1") != std::string::npos)
+                    light.distance = Read<float>(data, payload + 4);
+                    light.size = Read<float>(data, payload + 12);
+                    light.poolSize = Read<float>(data, payload + 16);
+                    const auto flash{ data[payload + 20] };
+                    light.nativeMode = flash;
+                    light.blink = Blink(flash, true);
+                    light.intensity = data[payload + 23];
+                    light.texture = Name(data, payload + 49, 24);
+                    const auto z{ data[payload + 73] };
+                    light.depth = z ? static_cast<float>(z) : 15.0f;
+                    light.searchlight = Searchlight(model, true);
+                    if (flash == 7)
                     {
-                        CoronaSize = 0.45f;
-                        nDrawSearchlight = 0;
-                        R = 255;
-                        G = 0;
-                        B = 0;
-                        TrafficLCount = 0;
+                        light.size = 0.45f;
+                        light.searchlight = 0;
                     }
+                    if (flash == 8)
+                        light.size = 0.1f;
+                    lights.push_back(light);
+                }
+                cursor = payload + size;
+            }
+            if (cursor != end)
+                throw std::runtime_error("Trailing bytes in 2DFX chunk");
+        }
 
-                    (offsetX == -0.0f) ? offsetX = 0.0f : offsetX;
-                    (offsetY == -0.0f) ? offsetY = 0.0f : offsetY;
-                    (offsetZ == -0.0f) ? offsetZ = 0.0f : offsetZ;
+        void ReadChunks(const Bytes& data, size_t begin, size_t end, const std::string& model, unsigned depth = 0)
+        {
+            if (depth > 16)
+                throw std::runtime_error("RenderWare nesting too deep");
+            for (size_t cursor{ begin }; cursor < end;)
+            {
+                if (end - cursor < 12)
+                    throw std::runtime_error("Truncated RenderWare header");
+                const auto type{ Read<uint32_t>(data, cursor) };
+                const auto size{ Read<uint32_t>(data, cursor + 4) };
+                if (size > end - cursor - 12)
+                    throw std::runtime_error("RenderWare chunk exceeds parent");
+                const size_t next{ cursor + 12 + size };
+                if (type == 0x253F2F8)
+                    ReadEffects(data, cursor + 12, next, model);
+                else if (type == 3 || type == 0x10 || type == 0xF || type == 0x1A || type == 0x14)
+                    ReadChunks(data, cursor + 12, next, model, depth + 1);
+                cursor = next;
+            }
+        }
 
-                    LodLights << std::right
-                        << std::setfill('0')
-                        << std::setw(3) << R << " "
-                        << std::setw(3) << G << " "
-                        << std::setw(3) << B << " "
-                        << std::setw(3) << A << " "
-                        << std::setfill(' ')
-                        << std::left
-                        << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetX)) << offsetX << " "
-                        << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetY)) << offsetY << " "
-                        << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " "
-                        << std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " ";
+        void ReadTextEffects(const fs::path& path)
+        {
+            std::ifstream file(path);
+            if (!file)
+                throw std::runtime_error("Cannot open " + path.string());
+            Light light;
+            bool active{};
+            std::string line;
+            const auto finish{ [&]()
+            {
+                if (active)
+                    lights.push_back(light);
+            } };
+            while (std::getline(file, line))
+            {
+                const auto t{ Tokens(line) };
+                if (t.size() < 2)
+                    continue;
+                if (t[0] == "2dfxType")
+                {
+                    finish();
+                    light = Light{};
+                    light.model = Lower(path.stem().string());
+                    active = t[1] == "LIGHT";
+                }
+                else if (active)
+                {
+                    if (t[0] == "Position")
+                        for (size_t i{}; i < 3; ++i)
+                            light.position[i] = Number(t.at(i + 1));
+                    else if (t[0] == "Color")
+                        for (size_t i{}; i < 3; ++i)
+                            light.poolColour[i] = light.colour[i] = Integer(t.at(i + 1));
+                    else if (t[0] == "CoronaSize") light.size = Number(t[1]);
+                    else if (t[0] == "CoronaFarClip") light.distance = Number(t[1]);
+                    else if (t[0] == "ShadowSize") light.poolSize = Number(t[1]);
+                    else if (t[0] == "ShadowColorMP") light.intensity = Number(t[1]);
+                    else if (t[0] == "ShadowZDistance")
+                    {
+                        light.depth = Number(t[1]);
+                        if (light.depth == 0.0f)
+                            light.depth = 15.0f;
+                    }
+                    else if (t[0] == "ShadowTexName") light.texture = Lower(t[1]);
+                }
+            }
+            finish();
+        }
 
-                    //if (Filename == "VCSLodLights.dat" || Filename == "LCSLodLights.dat")
-                    LodLights << std::setw(4) << std::fixed << std::setprecision(2) << Distance << " ";
+        void ReadDFF(const Bytes& data, const std::string& model)
+        {
+            if (!extracted.insert(model).second)
+                return;
+            if (data.size() < 12)
+                throw std::runtime_error("Truncated DFF: " + model);
+            const size_t end{ 12ull + Read<uint32_t>(data, 4) };
+            if (end > data.size())
+                throw std::runtime_error("Truncated DFF root: " + model);
+            ReadChunks(data, 0, end, model);
+        }
 
-                    LodLights << std::right << std::setfill('0')
-                        << std::setw(2) << BlinkType << " "
-                        << std::left << std::setfill(' ')
-                        << std::setw(1) << nNoDistance << " "
-                        << std::setw(1) << nDrawSearchlight
-                        << std::endl;
+        void ReadArchive(const fs::path& path)
+        {
+            std::ifstream file(path, std::ios::binary | std::ios::ate);
+            if (!file)
+                throw std::runtime_error("Cannot open " + path.string());
+            const uint64_t fileSize{ static_cast<uint64_t>(file.tellg()) };
+            file.seekg(0);
+            Bytes header(8);
+            if (!file.read(reinterpret_cast<char*>(header.data()), 8))
+                throw std::runtime_error("Truncated IMG header");
+            Bytes directory;
+            bool version2{ std::memcmp(header.data(), "VER2", 4) == 0 };
+            uint32_t count{};
+            if (version2)
+            {
+                count = Read<uint32_t>(header, 4);
+                if (count > (fileSize - 8) / 32)
+                    throw std::runtime_error("Invalid IMG directory count");
+                directory.resize(static_cast<size_t>(count) * 32);
+                if (!file.read(reinterpret_cast<char*>(directory.data()), directory.size()))
+                    throw std::runtime_error("Truncated IMG directory");
+            }
+            else
+            {
+                auto dir{ path };
+                dir.replace_extension(".dir");
+                directory = Load(dir);
+                if (directory.size() % 32)
+                    throw std::runtime_error("Invalid IMG v1 directory");
+                count = static_cast<uint32_t>(directory.size() / 32);
+            }
+            for (uint32_t i{}; i < count; ++i)
+            {
+                const size_t entry{ static_cast<size_t>(i) * 32 };
+                const auto name{ Name(directory, entry + 8, 24) };
+                if (fs::path(name).extension() != ".dff")
+                    continue;
+                const uint64_t offset{ 2048ull * Read<uint32_t>(directory, entry) };
+                const uint64_t sectors{ version2 ? Read<uint16_t>(directory, entry + 4) : Read<uint32_t>(directory, entry + 4) };
+                const uint64_t length{ sectors * 2048 };
+                if (!length || length > 128 * 1024 * 1024 || offset > fileSize || length > fileSize - offset)
+                    throw std::runtime_error("Invalid IMG extent: " + name);
+                Bytes data(static_cast<size_t>(length));
+                file.seekg(offset);
+                if (!file.read(reinterpret_cast<char*>(data.data()), data.size()))
+                    throw std::runtime_error("Cannot read IMG entry: " + name);
+                ReadDFF(data, fs::path(name).stem().string());
+            }
+        }
 
-                    PrevID = ID;
+    public:
+        std::vector<Light> lights;
+        size_t instances{};
+
+        Extractor(fs::path path, bool sanAndreas) : root(std::move(path)), sa(sanAndreas) {}
+
+        void Run(const std::string& manifest)
+        {
+            if (fs::exists(root / "data" / "default.dat"))
+                ReadManifest(root / "data" / "default.dat");
+            if (fs::exists(root / "data" / manifest))
+                ReadManifest(root / "data" / manifest);
+            else if (fs::exists(root / manifest))
+                ReadManifest(root / manifest);
+            else if (!sa || !fs::exists(root / "2dfx"))
+                throw std::runtime_error("Game manifest not found: " + manifest);
+
+            for (const auto& path : placements)
+            {
+                const auto data{ Load(path) };
+                if (data.size() >= 4 && std::memcmp(data.data(), "bnry", 4) == 0)
+                {
+                    const auto count{ Read<uint32_t>(data, 4) };
+                    const auto offset{ Read<uint32_t>(data, 28) };
+                    if (offset > data.size() || count > (data.size() - offset) / 40)
+                        throw std::runtime_error("Truncated binary IPL: " + path.string());
+                    for (uint32_t i{}; i < count; ++i)
+                    {
+                        for (size_t field{}; field < 7; ++field)
+                            if (!std::isfinite(Read<float>(data, static_cast<size_t>(offset) + i * 40ull + field * 4)))
+                                throw std::runtime_error("Non-finite binary IPL transform: " + path.string());
+                    }
+                    instances += count;
                 }
                 else
                 {
-                    std::transform(line2.begin(), line2.end(), line2.begin(), ::tolower);
-
-                    if (line2.find("lamppost1") != std::string::npos || line2.find("lamppost2") != std::string::npos ||
-                        line2.find("lamppost3") != std::string::npos || line2.find("sub_floodlite") != std::string::npos ||
-                        line2.find("mlamppost") != std::string::npos || line2.find("doublestreetlght1") != std::string::npos ||
-                        line2.find("bollardlight") != std::string::npos || line2.find("lampost_coast") != std::string::npos ||
-                        line2.find("doc_floodlite") != std::string::npos)
+                    std::istringstream file(std::string(data.begin(), data.end()));
+                    std::string line, section;
+                    while (std::getline(file, line))
                     {
-                        nDrawSearchlight = 1;
-                    }
-
-                    if (line2.find("mtraffic1") != std::string::npos || line2.find("mtraffic2") != std::string::npos ||
-                        line2.find("mtraffic4") != std::string::npos || line2.find("trafficlight1") != std::string::npos)
-                    {
-                        CoronaSize = 0.45f;
-                        nDrawSearchlight = 0;
-
-                        TrafficLCount++;
-                        switch (TrafficLCount)
+                        const auto t{ Tokens(line) };
+                        if (t.size() == 1)
+                            section = Lower(t[0]);
+                        else if (!t.empty() && section == "inst")
                         {
-                            case 1:
-                                R = 255;
-                                G = 128;
-                                B = 0;
-                                break;
-                            case 2:
-                                R = 0;
-                                G = 255;
-                                B = 0;
-                                break;
-                            case 3:
-                                R = 255;
-                                G = 0;
-                                B = 0;
-                                break;
-                            case 4:
-                                R = 255;
-                                G = 128;
-                                B = 0;
-                                break;
-                            case 5:
-                                R = 0;
-                                G = 255;
-                                B = 0;
-                                break;
-                            default:
-                                break;
+                            if (t.size() < 11)
+                                throw std::runtime_error("Invalid IPL instance: " + path.string());
+                            Integer(t[0]);
+                            for (size_t field{ 2 }; field < t.size(); ++field)
+                                Number(t[field]);
+                            ++instances;
                         }
                     }
-
-                    (offsetX == -0.0f) ? offsetX = 0.0f : offsetX;
-                    (offsetY == -0.0f) ? offsetY = 0.0f : offsetY;
-                    (offsetZ == -0.0f) ? offsetZ = 0.0f : offsetZ;
-
-                    LodLights << std::right
-                        << std::setfill('0')
-                        << std::setw(3) << R << " "
-                        << std::setw(3) << G << " "
-                        << std::setw(3) << B << " "
-                        << std::setw(3) << A << " "
-                        << std::setfill(' ')
-                        << std::left
-                        << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetX)) << offsetX << " "
-                        << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetY)) << offsetY << " "
-                        << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " "
-                        << std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " ";
-
-                    //if (Filename == "VCSLodLights.dat" || Filename == "LCSLodLights.dat")
-                    LodLights << std::setw(4) << std::fixed << std::setprecision(2) << Distance << " ";
-
-                    LodLights << std::right << std::setfill('0')
-                        << std::setw(2) << BlinkType << " "
-                        << std::left << std::setfill(' ')
-                        << std::setw(1) << nNoDistance << " "
-                        << std::setw(1) << nDrawSearchlight
-                        << std::endl;
                 }
             }
-        }
-    }
 
-    LodLights << "%additional_coronas" << endl;
-    if (Filename == "IIILodLights.dat")
-    {
-        LodLights << "#place you coronas here" << endl;
-    }
-    else if (Filename == "VCLodLights.dat")
-    {
-        LodLights << "255 000 255 255 -682.82100 -919.10200 12.5548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -662.82100 -920.20200 13.7548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -642.82100 -920.80200 15.2548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -622.82100 -921.00200 16.8548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -682.82100 -939.70200 12.5548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -662.82100 -940.60200 13.7548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -642.82100 -941.20200 15.2548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -622.82100 -941.40200 16.8548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -602.82100 -921.10200 18.2548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -602.82100 -941.50200 18.2548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -582.82100 -921.20200 19.7548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -582.82100 -941.60200 19.7548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -562.82100 -921.20200 21.5548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -562.82100 -941.60200 21.5548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -542.82100 -921.20200 22.6548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -542.82100 -941.60200 22.6548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -522.82100 -921.20200 23.3548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -522.82100 -941.60200 23.3548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -502.82100 -941.60200 24.1548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -502.82100 -921.20200 24.1548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -482.82100 -921.60200 24.4548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -482.82100 -942.00200 24.4548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -462.82100 -922.10200 24.4548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -462.82100 -942.50200 24.4548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -442.82100 -922.40200 23.9548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -442.82100 -942.80200 23.9548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -422.82100 -922.70200 23.3548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -422.82100 -943.10200 23.3548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -402.82100 -943.50200 22.4548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -402.82100 -923.10200 22.4548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -382.82100 -944.00200 21.1548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -382.82100 -923.60200 21.1548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -362.82100 -944.70200 19.5548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -362.82100 -924.30200 19.5548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -342.82100 -945.20200 18.2548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -342.82100 -924.80200 18.2548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -322.82100 -925.90200 17.0548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -322.82100 -946.40200 17.0548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -302.82100 -927.00200 15.9548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -302.82100 -947.50200 15.9548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -282.82100 -948.30200 15.2548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "255 000 255 255 -282.82100 -927.90200 15.2548000 0.70 300.0 00 2 0" << endl;
-        LodLights << "#place you coronas here" << endl;
-    }
-    else if (Filename == "VCSLodLights.dat" || Filename == "LCSLodLights.dat")
-    {
-        LodLights.close();
-        ifstream LodLights2;
-        LodLights2.open(Filename, std::ifstream::in);
-
-        ofstream AbsLights;
-        AbsLights.open("ADD" + Filename, fstream::trunc);
-
-        while (getline(IPLData, line))
-        {
-            int ModelId; char ModelName[100]; int Interior; float PosX, PosY, PosZ;
-            float RotX, RotY, RotZ, RotW;
-
-            struct RwV3d2
+            if (sa)
             {
-                double x;
-                double y;
-                double z;
-            };
-
-            RwV3d2 trans2, scale2, axis2;
-            RwV3d trans, scale, axis;
-            double angle;
-            line.erase(std::remove(line.begin(), line.end(), ','), line.end());
-            if (sscanf(line.c_str(), "%d %s %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf",
-                &ModelId, ModelName, &Interior,
-                &trans2.x, &trans2.y, &trans2.z,
-                &scale2.x, &scale2.y, &scale2.z,
-                &axis2.x, &axis2.y, &axis2.z, &angle) != 13)
-            {
-                sscanf(line.c_str(), "%d %s %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf",
-                    &ModelId, ModelName,
-                    &trans2.x, &trans2.y, &trans2.z,
-                    &scale2.x, &scale2.y, &scale2.z,
-                    &axis2.x, &axis2.y, &axis2.z, &angle);
-            }
-
-            trans.x = trans2.x;
-            trans.y = trans2.y;
-            trans.z = trans2.z;
-
-            scale.x = scale2.x;
-            scale.y = scale2.y;
-            scale.z = scale2.z;
-
-            axis.x = axis2.x;
-            axis.y = axis2.y;
-            axis.z = axis2.z;
-
-            {
-                LodLights2.clear();
-                LodLights2.seekg(0, std::ios::beg);
-                string nModel;
-                while (getline(LodLights2, line))
+                // Loose models override archives, just as a modded extraction directory does.
+                const auto loose{ root / "2dfx" };
+                if (fs::exists(loose))
                 {
-                    if (line[0] && line[0] != '#')
+                    std::vector<fs::path> paths;
+                    for (const auto& entry : fs::directory_iterator(loose))
+                        if (Lower(entry.path().extension().string()) == ".dff")
+                            paths.push_back(entry.path());
+                    std::sort(paths.begin(), paths.end());
+                    for (const auto& path : paths)
+                        ReadDFF(Load(path), Lower(path.stem().string()));
+                    paths.clear();
+                    for (const auto& entry : fs::directory_iterator(loose))
+                        if (Lower(entry.path().extension().string()) == ".txt" && !extracted.count(Lower(entry.path().stem().string())))
+                            paths.push_back(entry.path());
+                    std::sort(paths.begin(), paths.end());
+                    for (const auto& path : paths)
+                        ReadTextEffects(path);
+                }
+                const auto main{ root / "models" / "gta3.img" };
+                if (fs::exists(main))
+                    archives.insert(archives.begin(), main);
+                std::set<fs::path> seen;
+                for (const auto& path : archives)
+                    if (seen.insert(fs::weakly_canonical(path)).second)
+                        ReadArchive(path);
+            }
+            else
+            {
+                std::map<std::string, unsigned> trafficIndices;
+                for (auto& light : lights)
+                {
+                    const auto id{ Integer(light.model) };
+                    const auto it{ models.find(id) };
+                    if (it == models.end())
+                        throw std::runtime_error("Unknown 2DFX model ID " + light.model);
+                    light.model = it->second;
+                    light.searchlight = Searchlight(light.model, false);
+                    if (light.size > 1.0f)
+                        light.size = 1.2f;
+                    if (light.model == "mtraffic1" || light.model == "mtraffic2" || light.model == "mtraffic4" || light.model == "trafficlight1")
                     {
-                        auto x = 1;
-                        if (line[0] == '%')
-                        {
-                            nModel = line.substr(1);
-                        }
-                        else
-                        {
-                            if (nModel != ModelName)
-                                continue;
-                            float			fOffsetX, fOffsetY, fOffsetZ;
-                            unsigned int	nRed, nGreen, nBlue, nAlpha;
-                            float			fCustomSize = 1.0f;
-                            float			fDistance = 0.0f;
-                            int				nNoDistance = 0;
-                            int				nDrawSearchlight = 0;
-                            int				nCoronaShowMode = 0;
-                            sscanf(line.c_str(), "%3d %3d %3d %3d %f %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &fDistance, &nCoronaShowMode, &nNoDistance, &nDrawSearchlight);
-
-                            CMatrix dummyMatrix;
-                            auto angle2 = -RADTODEG(2.0f * acos(angle));
-                            makeRotation(&dummyMatrix, &axis, angle2, &trans);
-
-                            auto pos = dummyMatrix * CVector(fOffsetX, fOffsetY, fOffsetZ);
-                            auto heading = angle;//atan2(dummyMatrix.GetUp()->y, -dummyMatrix.GetUp()->x);
-
-                            auto GetPrecison = [](float value) -> int
-                            {
-                                int width = 10;
-                                int digits = 0;
-
-                                if (value < 0.0f)
-                                {
-                                    value *= -1.0f;
-                                    digits++;
-                                }
-                                digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
-                                int precision = (((width - digits - 1) >= 0) ? (width - digits - 1) : 0);
-                                return precision;
-                            };
-
-                            AbsLights << std::left
-                                << "{ "
-                                << std::setfill(' ')
-                                << std::setw(10) << std::fixed << std::setprecision(GetPrecison(pos.x)) << pos.x << "f, "
-                                << std::setw(10) << std::fixed << std::setprecision(GetPrecison(pos.y)) << pos.y << "f, "
-                                << std::setw(10) << std::fixed << std::setprecision(GetPrecison(pos.z)) << pos.z << "f, "
-                                << std::setfill('0')
-                                << std::setw(4) << std::fixed << std::setprecision(2) << fCustomSize << "f, "
-                                << std::setw(6) << std::fixed << std::setprecision(1) << fDistance << "f, "
-                                << std::setw(4) << std::fixed << (heading < 0.0f ? std::setprecision(2) : std::setprecision(3)) << heading << "f, "
-                                << std::setfill(' ')
-                                << std::right
-                                << std::setw(3) << nRed << ", "
-                                << std::setw(3) << nGreen << ", "
-                                << std::setw(3) << nBlue << ", "
-                                << std::setw(3) << nAlpha << ", "
-                                << std::setw(1) << nCoronaShowMode << ", "
-                                << std::setw(1) << nNoDistance << " /*, "
-                                << "\"" << ModelName << "\"*/"
-                                << std::setw(1) << " },"
-                                << std::endl;
-                        }
+                        light.size = 0.45f;
+                        light.searchlight = 0;
+                        const unsigned phase{ trafficIndices[light.model]++ % 3 };
+                        light.colour = phase == 0 ? std::array<unsigned, 4>{ 255, 0, 0, 255 } :
+                            phase == 1 ? std::array<unsigned, 4>{ 255, 128, 0, 255 } : std::array<unsigned, 4>{ 0, 255, 0, 255 };
                     }
                 }
             }
+            for (const auto& light : lights)
+            {
+                for (const float value : { light.position[0], light.position[1], light.position[2], light.size, light.distance, light.poolSize, light.intensity, light.depth })
+                    if (!std::isfinite(value))
+                        throw std::runtime_error("Non-finite light field: " + light.model);
+            }
         }
+    };
+
+    std::string Pool(const Light& light)
+    {
+        std::ostringstream out;
+        out << std::setprecision(9) << ' ' << (light.texture.empty() ? "-" : light.texture)
+            << ' ' << light.poolSize << ' ' << light.intensity << ' ' << light.depth;
+        for (size_t i{}; i < 3; ++i)
+            out << ' ' << light.poolColour[i];
+        return out.str();
     }
 
-    LodLights.close();
+    void Write(const fs::path& output, const std::string& text)
+    {
+        auto temp{ output };
+        temp += ".tmp";
+        std::ofstream file(temp, std::ios::binary | std::ios::trunc);
+        if (!file || !file.write(text.data(), text.size()) || !file.flush())
+            throw std::runtime_error("Cannot write " + temp.string());
+        file.close();
+        fs::copy_file(temp, output, fs::copy_options::overwrite_existing);
+        fs::remove(temp);
+    }
 
-    //std::cout << "Press ENTER to exit." << std::endl;
-    //cin.ignore();
-    return 0;
+    std::string Merge(const std::string& original, const std::vector<Light>& lights, bool keepPools = false)
+    {
+        std::string result, model;
+        size_t matched{}, preserved{}, cursor{};
+        while (cursor < original.size())
+        {
+            auto end{ original.find('\n', cursor) };
+            if (end == original.npos)
+                end = original.size();
+            auto line{ original.substr(cursor, end - cursor) };
+            const std::string ending{ !line.empty() && line.back() == '\r' ? "\r\n" : "\n" };
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+            const auto clean{ Trim(line) };
+            if (!clean.empty() && clean[0] == '%')
+                model = Lower(clean.substr(1));
+            else if (!clean.empty() && clean[0] != '#')
+            {
+                const auto t{ Tokens(line) };
+                // Legacy custom rows are preserved verbatim when they have no native source.
+                if (t.size() != 12 && t.size() != 19)
+                {
+                    result += line;
+                    if (end < original.size())
+                        result += ending;
+                    cursor = end + 1;
+                    ++preserved;
+                    continue;
+                }
+                std::array<float, 3> position{ Number(t[4]), Number(t[5]), Number(t[6]) };
+                const Light* match{};
+                float closest{ 0.0001f };
+                for (const auto& light : lights)
+                {
+                    if (light.model != model)
+                        continue;
+                    float distance{};
+                    for (size_t i{}; i < 3; ++i)
+                        distance += (position[i] - light.position[i]) * (position[i] - light.position[i]);
+                    if (distance < closest)
+                    {
+                        closest = distance;
+                        match = &light;
+                    }
+                }
+                if (match && !(keepPools && t.size() == 19))
+                {
+                    if (t.size() == 19)
+                    {
+                        std::istringstream fields(line);
+                        std::string field;
+                        for (int i{}; i < 12; ++i)
+                            fields >> field;
+                        line.resize(static_cast<size_t>(fields.tellg()));
+                    }
+                    line += Pool(*match);
+                    ++matched;
+                }
+                else
+                    ++preserved;
+            }
+            result += line;
+            if (end < original.size())
+                result += ending;
+            cursor = end + 1;
+        }
+        std::cout << "Native pool matches: " << matched << "; existing rows preserved verbatim: " << preserved << '\n';
+        return result;
+    }
+
+    std::map<std::string, std::string> TextModels(const fs::path& root, const std::vector<Light>& lights)
+    {
+        std::map<std::string, std::string> inputs;
+        if (!fs::exists(root / "2dfx"))
+            return inputs;
+        for (const auto& entry : fs::directory_iterator(root / "2dfx"))
+        {
+            if (Lower(entry.path().extension().string()) == ".txt")
+            {
+                const auto bytes{ Load(entry.path()) };
+                inputs[entry.path().stem().string()] = std::string(bytes.begin(), bytes.end());
+            }
+        }
+        std::map<std::string, std::ostringstream> converted;
+        for (const auto& light : lights)
+        {
+            if (inputs.count(light.model))
+                continue;
+            auto& text{ converted[light.model] };
+            text << "2dfxType LIGHT\nPosition" << std::fixed << std::setprecision(6);
+            for (const auto value : light.position)
+                text << ' ' << value;
+            text << "\nColor";
+            for (const auto value : light.colour)
+                text << ' ' << value;
+            static const std::array<const char*, 14> modes{
+                "DEFAULT", "RANDOM_FLASHING", "RANDOM_FLASHIN_ALWAYS_AT_WET_WEATHER",
+                "LIGHTS_ANIM_SPEED_4X", "LIGHTS_ANIM_SPEED_2X", "LIGHTS_ANIM_SPEED_1X",
+                "ALWAYS_AT_WET_WEATHER", "TRAFFICLIGHT", "TRAINCROSSLIGHT", "AT_RAIN_ONLY",
+                "DEFAULT", "5S_ON_5S_OFF", "6S_ON_4S_OFF", "6S_ON_4S_OFF_2"
+            };
+            text << "\nCoronaFarClip " << light.distance << "\nCoronaSize " << light.size
+                << "\nCoronaShowMode " << (light.nativeMode < modes.size() ? modes[light.nativeMode] : "DEFAULT") << '\n';
+        }
+        for (const auto& [model, text] : converted)
+            inputs[model] = text.str();
+        return inputs;
+    }
+
+    std::string Generate(const std::vector<Light>& lights)
+    {
+        std::map<std::string, std::vector<const Light*>> groups;
+        for (const auto& light : lights)
+            if (light.size > 0.0f && light.model != "destruct2" && light.model != "destruct03")
+                groups[light.model].push_back(&light);
+        std::ostringstream out;
+        out << "#%modelname\r\n#Red Green Blue Alpha OffsetX OffsetY OffsetZ CustomSize DrawDistance BlinkType NoDistance DrawSearchlight PoolTexture PoolSize PoolIntensity PoolDepth PoolRed PoolGreen PoolBlue\r\n";
+        for (const auto& [model, group] : groups)
+        {
+            out << '%' << model << "\r\n";
+            for (const auto* light : group)
+            {
+                for (const auto value : light->colour)
+                    out << value << ' ';
+                out << std::setprecision(9);
+                for (const auto value : light->position)
+                    out << (value == 0.0f ? 0.0f : value) << ' ';
+                out << light->size << ' ' << light->distance << ' ' << light->blink << ' ' << light->noDistance << ' ' << light->searchlight << Pool(*light) << "\r\n";
+            }
+        }
+        return out.str();
+    }
+}
+
+int main(int argc, char** argv)
+{
+    try
+    {
+        fs::path root{ fs::current_path() }, output, baseline;
+        std::string game;
+        bool keepPools{};
+        for (int i{ 1 }; i < argc; ++i)
+        {
+            const std::string option{ argv[i] };
+            if (option == "--help" || option == "-h")
+            {
+                std::cout << "2DFXDataGrabber [--game iv|iii|lcs|vcs|vc|sa] [--root GAME_OR_DATA_DIR] [--output FILE] [--baseline FILE] [--keep-pools]\n"
+                    "Detects gta4.dat, gta3.dat, gta_lcs.dat, gta_vcs.dat, gta_vc.dat, then SA 2dfx inputs.\n"
+                    "Reads IV .light/.skel, IDE/IPL, and SA IMG/DFF or converted 2dfx/*.txt. No converter is required.\n"
+                    "--baseline preserves every existing field, section, custom row and comment; appends native pool fields to matching rows.\n"
+                    "--keep-pools also preserves existing pool fields when using --baseline.\n";
+                return 0;
+            }
+            if (option == "--keep-pools")
+            {
+                keepPools = true;
+                continue;
+            }
+            if (++i >= argc)
+                throw std::runtime_error("Missing value for " + option);
+            if (option == "--root") root = argv[i];
+            else if (option == "--output") output = argv[i];
+            else if (option == "--baseline") baseline = argv[i];
+            else if (option == "--game") game = Lower(argv[i]);
+            else throw std::runtime_error("Unknown option: " + option);
+        }
+        root = fs::absolute(root);
+        if (game.empty())
+        {
+            for (const auto& [mode, manifest] : std::vector<std::pair<std::string, std::string>>{
+                { "iv", "gta4.dat" }, { "iii", "gta3.dat" }, { "lcs", "gta_lcs.dat" },
+                { "vcs", "gta_vcs.dat" }, { "vc", "gta_vc.dat" } })
+            {
+                if (fs::exists(root / manifest) || fs::exists(root / "data" / manifest))
+                {
+                    game = mode;
+                    break;
+                }
+            }
+            if (game.empty())
+                game = "sa";
+        }
+        const std::map<std::string, std::pair<std::string, std::string>> modes{
+            { "iv", { "gta4.dat", "IVLodLights.dat" } }, { "iii", { "gta3.dat", "IIILodLights.dat" } },
+            { "lcs", { "gta_lcs.dat", "LCSLodLights.dat" } }, { "vcs", { "gta_vcs.dat", "VCSLodLights.dat" } },
+            { "vc", { "gta_vc.dat", "VCLodLights.dat" } }, { "sa", { "gta.dat", "SALodLights.dat" } }
+        };
+        const auto mode{ modes.find(game) };
+        if (mode == modes.end())
+            throw std::runtime_error("Supported games: iv, iii, lcs, vcs, vc, sa");
+        if (output.empty())
+            output = mode->second.second;
+        output = fs::absolute(output);
+        if (!baseline.empty())
+            baseline = fs::absolute(baseline);
+        const bool pools{ game == "iii" || game == "vc" || game == "sa" };
+        if (keepPools && baseline.empty())
+            throw std::runtime_error("--keep-pools requires --baseline");
+        if (!pools && !baseline.empty())
+            throw std::runtime_error("--baseline is supported for iii, vc and sa");
+        Extractor extractor(root, game == "sa");
+        const bool emptyPortable{ argc == 1 && game == "sa" && !fs::exists(root / "2dfx") &&
+            !fs::exists(root / "data" / "gta.dat") && !fs::exists(root / "gta.dat") };
+        if (pools && !emptyPortable)
+        {
+            extractor.Run(mode->second.first);
+            if (extractor.lights.empty())
+                throw std::runtime_error("No native lights found; output was not changed");
+        }
+        std::string result;
+        if (!baseline.empty())
+        {
+            const auto bytes{ Load(baseline) };
+            result = Merge(std::string(bytes.begin(), bytes.end()), extractor.lights, keepPools);
+        }
+        else if (game != "sa" || emptyPortable || (fs::exists(root / "2dfx") &&
+            std::any_of(fs::directory_iterator(root / "2dfx"), fs::directory_iterator{},
+                [&](const auto& entry) { return Lower(entry.path().extension().string()) == ".txt" || (argc == 1 && Lower(entry.path().extension().string()) == ".dff"); })))
+        {
+            const auto previous{ fs::current_path() };
+            struct RestoreDirectory
+            {
+                fs::path path;
+                ~RestoreDirectory()
+                {
+                    fs::current_path(path);
+                }
+            } restore{ previous };
+            // Copied manifests refer to paths relative to their data directory.
+            auto portableRoot{ root };
+            if (game != "sa" && !fs::exists(root / mode->second.first))
+                portableRoot /= "data";
+            fs::current_path(portableRoot);
+            if (game == "iv") result = Portable::ConvertLightTo2DFX();
+            else if (game == "sa") result = Portable::ConvertTextTo2DFX(TextModels(root, extractor.lights));
+            else result = Portable::Run(game);
+            std::string crlf;
+            for (const char c : result)
+                crlf += c == '\n' ? "\r\n" : std::string(1, c);
+            result = pools ? Merge(crlf, extractor.lights) : crlf;
+            if (game == "lcs" || game == "vcs")
+            {
+                crlf.clear();
+                for (const char c : Portable::Additional)
+                    crlf += c == '\n' ? "\r\n" : std::string(1, c);
+                Write(output.parent_path() / ("ADD" + output.filename().string()), crlf);
+            }
+        }
+        else
+            result = Generate(extractor.lights);
+        Write(output, result);
+        std::cout << "Wrote " << output.string() << '\n';
+        return 0;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "2DFXDataGrabber: " << e.what() << '\n';
+        return 1;
+    }
 }

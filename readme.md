@@ -10,6 +10,8 @@
 
 III, VC, and SA also support optional 3D distant cars with directional headlights and taillights.
 
+III, Vice City and San Andreas offer separate Draw Distance and View Distance controls. View Distance adds metres to the weather’s far clip and fog start: Recommended adds 1000 m, Enhanced adds 2000 m, and Vanilla keeps the game’s own view. Detail and shadow distances have their own controls.
+
 [Website](https://fusionfix.io/p2dfx) · [Discord](https://discord.gg/2ckFCS572Z) · [Telegram](https://t.me/fusionfix) · [YouTube](https://www.youtube.com/@FusionFix10) · [X](https://x.com/fusionfix10)
 
 </div>
@@ -85,7 +87,7 @@ III, VC, and SA also support optional 3D distant cars with directional headlight
 
 1. Install the game's Widescreen Fix ([GTA III](http://thirteenag.github.io/wfp#gta3) · [Vice City](http://thirteenag.github.io/wfp#gtavc) · [San Andreas](http://thirteenag.github.io/wfp#gtasa)) or [GTAIV Fusion Fix](https://github.com/ThirteenAG/GTAIV.EFLC.FusionFix#readme) - they include the required [ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader).
 2. Download the plugin for your game from the [Releases](https://github.com/ThirteenAG/III.VC.SA.IV.Project2DFX/releases) page.
-3. Put the `.asi`, `.ini` and `.dat` files into the `scripts` folder (`plugins` folder for GTA IV).
+3. Put all the files into the `scripts` folder (`plugins` folder for GTA IV).
 4. Launch the game and enjoy the view.
 
 ## Building
@@ -100,4 +102,3 @@ To deploy to your game automatically after each build, create a `.env` file in t
 The keys are `GTAIII_DIR`, `GRAND_THEFT_AUTO_VICE_CITY_DIR`, `GTA_SAN_ANDREAS_DIR` and `GTA_IV_DIR`. The build then copies the built `.asi` into the `scripts` folder of that game (`plugins` for GTA IV) and debugging launches the game from there. The `.env` file is ignored by git, only a plugin that is already installed is replaced, and a game without a key is not deployed at all.
 
 The Vice City Stories and Liberty City Stories plugins for PCSX2F and PPSSPP are in `source/console` and are built by the `Project2DFX.PS2` and `Project2DFX.PSP` solutions with the MIPS toolchains of the `external/ps2sdk` and `external/pspsdk` submodules (`git submodule update --init --recursive`). They are built into `data/<plugin>/` and copied into the emulator that `PCSX2F_DIR` or `PPSSPP_DIR` names in `.env`.
-

@@ -118,7 +118,6 @@ workspace "III.VC.SA.IV.Project2DFX"
    includedirs { "external/injector/zydis" }
    includedirs { "external/injector/include" }
    includedirs { "external/inireader" }
-   includedirs { "external/filewatch" }
    includedirs { "external/ModUtils" }
 
    vpaths {
@@ -165,6 +164,23 @@ project "AsiSettingsValidator"
    removefiles { "source/**", "external/**", "resources/**", "data/**" }
    files { "external/FusionFixUtils/asi_settings/tools/validator.cpp" }
 
+-- The ground light's pixel shader, compiled by MSBuild's FxCompile (Windows SDK fxc) only when it changed, into a
+-- header in the intermediate folder that source/LODLights.ixx includes
+function lightvolumeshader()
+   files { "source/LightVolumes.ps" }
+   includedirs { "$(IntDir)" }
+   filter "files:source/LightVolumes.ps"
+      buildaction "FxCompile"
+      shadertype "Pixel"
+      shadermodel "3.0"
+      shaderentry "main"
+      shaderoptions { "/O3" }
+      shadervariablename "LightVolumesShader"
+      shaderheaderfileoutput "$(IntDir)LightVolumesShader.hpp"
+      shaderobjectfileoutput "$(IntDir)LightVolumes.cso"
+   filter {}
+end
+
 project "2DFXDataGrabber"
    kind "ConsoleApp"
    targetdir "data/%{prj.name}/"
@@ -172,12 +188,15 @@ project "2DFXDataGrabber"
    characterset ("MBCS")
    removefiles { "source/*.hpp", "source/*.ixx" }
 project "IIILodLights"
+   lightvolumeshader()
    settings(languages)
    setpaths("GTAIII_DIR", "gta3.exe")
 project "VCLodLights"
+   lightvolumeshader()
    settings(languages)
    setpaths("GRAND_THEFT_AUTO_VICE_CITY_DIR", "gta-vc.exe")
 project "SALodLights"
+   lightvolumeshader()
    settings(languages)
    setpaths("GTA_SAN_ANDREAS_DIR", "gta_sa.exe")
 project "IVLodLights"

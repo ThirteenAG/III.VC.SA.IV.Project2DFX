@@ -395,6 +395,19 @@ void CMovingThings::RenderDistantCarImpostors()
     float maxDist = CTimeCycle::m_fCurrentFarClip;
     DistantCarRenderer::Frame models(camPos, maxDist);
 
+    // CPools::ms_pVehiclePool; 0xA18 is the size of the largest vehicle class
+    static void** vehiclePool = []() -> void**
+    {
+        auto pattern = hook::pattern("8B 15 ? ? ? ? 55 56 57 8B 3D");
+        return pattern.empty() ? nullptr : *pattern.get_first<void**>(2);
+    }();
+    static DistantTraffic::RealCars realCars;
+    realCars.Gather(vehiclePool ? *vehiclePool : nullptr, 0xA18, [](uint8_t* vehicle)
+    {
+        auto matrix = *(uint8_t**)(vehicle + 0x14);
+        return matrix ? *(CVector*)(matrix + 0x30) : *(CVector*)(vehicle + 4);
+    });
+
     float nearScale = DistantTraffic::ViewDistanceScale(TheCamera->Cams[TheCamera->ActiveCam].FOV);
     for (auto& impostor : aDistantCarImpostors)
     {
@@ -405,7 +418,9 @@ void CMovingThings::RenderDistantCarImpostors()
             continue;
 
         float distSqr = (traffic.RenderPosition(impostor) - camPos).MagnitudeSqr2D();
-        if (distSqr < SQR(140.0f) || distSqr > SQR(maxDist))
+        // Seen from high above, nearby cars stay: they can't be driven into from up there
+        float high = Clamp((camPos.z - traffic.RenderPosition(impostor).z - 40.0f) / 60.0f, 0.0f, 1.0f);
+        if (distSqr > SQR(maxDist) || (distSqr < SQR(140.0f) && high <= 0.0f))
             continue;
 
         float dist = Sqrt(distSqr);
@@ -429,7 +444,8 @@ void CMovingThings::RenderDistantCarImpostors()
             green = approaching ? 255 : 40;
             blue = approaching ? 230 : 40;
         }
-        float fade = Clamp((maxDist - dist) / 250.0f, 0.0f, 1.0f) * Clamp((dist * nearScale - 140.0f) / 120.0f, 0.0f, 1.0f);
+        float fade = Clamp((maxDist - dist) / 250.0f, 0.0f, 1.0f) * (std::max)(high, Clamp((dist * nearScale - 140.0f) / 120.0f, 0.0f, 1.0f));
+        fade *= realCars.Fade(traffic.RenderPosition(impostor));
 
         if (models.Add(traffic.RenderPosition(impostor), traffic.RenderDirection(impostor), impostor.m_visual, impostor.m_nCoronaId, fade, impostor.m_bWaterNode))
             continue;

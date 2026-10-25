@@ -6,6 +6,8 @@ module;
 #include <functional>
 #include <string>
 #include <windows.h>
+#include <psapi.h>
+#include <cstdint>
 #include "asi_settings/asi_settings.hpp"
 
 export module ComVars;
@@ -103,48 +105,91 @@ export
         RsInputEventHandler inputEventHandler;
     };
 
-    int numCoronas = 25000;
+    int numCoronas = 50000;
     bool bRenderLodLights;
     float fCoronaRadiusMultiplier;
-    bool bSlightlyIncreaseRadiusWithDistance;
-    float fCoronaFarClip;
-    bool autoFarClip;
+    float fCoronaRadiusBase = 1.0f; // the game's own light size, set by the plugin before the settings are read
+    bool bSlightlyIncreaseRadiusWithDistance = true;
+    float fCoronaFarClip = 0.0f;
+    bool autoFarClip = true;
     bool bRenderStaticShadowsForLODs;
     bool bIncreasePedsCarsShadowsDrawDistance;
-    float fStaticShadowsIntensity, fStaticShadowsDrawDistance;
-    float fTrafficLightsShadowsIntensity, fTrafficLightsShadowsDrawDistance;
+    float fStaticShadowsIntensity, fTrafficLightsShadowsIntensity;
     bool bRenderSearchlightEffects;
-    bool bRenderOnlyDuringFoggyWeather;
-    bool bRenderHeliSearchlights;
-    int nSmoothEffect;
-    float fSearchlightEffectVisibilityFactor;
-    bool bAdaptiveDrawDistanceEnabled;
-    float fNewFarClip, fMaxPossibleDrawDistance;
-    float fMaxDrawDistanceForNormalObjects, fTimedObjectsDrawDistance, fNeonsDrawDistance, fLODObjectsDrawDistance;
-    float fGenericObjectsDrawDistance, fAllNormalObjectsDrawDistance, fVegetationDrawDistance;
-    bool bLoadAllBinaryIPLs, bPreloadLODs;
-    float fDrawDistance;
+    bool bRenderOnlyDuringFoggyWeather = false;
+    float fSearchlightEffectVisibilityFactor = 0.4f;
     bool bRandomExplosionEffects, bReplaceSmokeTrailWithBulletTrail;
-    float fStaticSunSize;
+    bool bPreloadLODs;
 
+    // Extra outdoor camera reach in metres; 0 keeps the timecycle.
+    float fViewDistance = 1000.0f;
+    // Model LOD distance, independent of the weather
+    float fDrawDistance = 1.0f;
+    // Non-LOD objects and vegetation
+    float fDetailDistance = 1.0f;
+    // Static, ped and vehicle shadows (read once)
+    float fShadowDistance = 1.0f;
+    // 0 off, 1 lights only, 2 vehicles and boats
+    int nDistantTraffic = 2;
+    // Actual far clip ratio, used to preserve the sun size
     float fFarClipMultiplier = 1.0f;
-    float fFarClipHeightFactor;
-    float fFarClipMinMultiplier;
-    float fFarClipMaxMultiplier;
-    unsigned int nFarClipTargetFPS;
+    // 300 m cap of non-LOD objects, scaled by fDetailDistance
+    float fMaxDrawDistanceForNormalObjects = 300.0f;
 
     float fCoronaAlphaNearMinMult = 0.50f;
-    float fCoronaAlphaReachOneAt = 350.0f;
-    float fCoronaAlphaBoostStartAt = 700.0f;
+    float fCoronaAlphaReachOneAt = 150.0f;
+    float fCoronaAlphaBoostStartAt = 150.0f;
     float fCoronaAlphaFarBoostMax = 4.0f;
 
     int nNumDistantCarImpostors = 1000;
     float fDistantCarsRadiusMultiplier = 1.0f;
     bool bDistantMaritimeTraffic = true;
-    bool bDistantCars3D = false;
+    bool bDistantCars3D = true;
     bool bDistantBoats3D = true;
     bool bDistantCars3DLights = true;
     float fDistantCarsGroundOffset = 0.0f;
+
+    // Called after the settings are read, for values the plugin writes into the game.
+    void (*OnSettingsApplied)() = nullptr;
+
+    // The limit adjuster grows the game's lists as the draw distance needs. Without it the game keeps its own
+    // limits, so the distances stay close to the game's.
+    bool LimitAdjusterPresent()
+    {
+        static bool present = false;
+        if (present)
+            return true;
+        HMODULE modules[1024];
+        DWORD needed = 0;
+        if (EnumProcessModules(GetCurrentProcess(), modules, sizeof(modules), &needed))
+        {
+            for (DWORD i = 0; i < needed / sizeof(HMODULE) && i < 1024; i++)
+            {
+                if (GetProcAddress(modules[i], "OpenLA_GetVersion"))
+                {
+                    present = true;
+                    break;
+                }
+            }
+        }
+        return present;
+    }
+
+    // Streaming memory chosen by the limit adjuster in bytes, 0 when unknown.
+    uint32_t LimitAdjusterStreamingBudget()
+    {
+        HMODULE modules[1024];
+        DWORD needed = 0;
+        if (EnumProcessModules(GetCurrentProcess(), modules, sizeof(modules), &needed))
+        {
+            for (DWORD i = 0; i < needed / sizeof(HMODULE) && i < 1024; i++)
+            {
+                if (auto fn = (uint32_t(*)())GetProcAddress(modules[i], "OpenLA_GetStreamingBudget"))
+                    return fn();
+            }
+        }
+        return 0;
+    }
 
     // The settings of the plugin (ASI Settings, external/FusionFixUtils/asi_settings): described in
     // settings/<plugin>.json, embedded with its translations (source/<plugin>/Settings.rc), stored in <plugin>.cfg next to
@@ -174,65 +219,46 @@ export
         auto Bool = [&](const char* id, bool def) { return has(id) ? s.Int(id) != 0 : def; };
         auto Float = [&](const char* id, float def) { return has(id) ? s.Float(id) : def; };
 
-        // LODLIGHTS
-        bRenderLodLights = Bool("LODLIGHTS.RenderLodLights", true);
-        fCoronaRadiusMultiplier = Float("LODLIGHTS.CoronaRadiusMultiplier", 1.0f);
-        bSlightlyIncreaseRadiusWithDistance = Bool("LODLIGHTS.SlightlyIncreaseRadiusWithDistance", true);
-        fCoronaFarClip = Float("LODLIGHTS.CoronaFarClip", 0.0f);
-        autoFarClip = fCoronaFarClip <= 0.0f;
-        fCoronaAlphaNearMinMult = Float("LODLIGHTS.CoronaAlphaNearMinMult", 0.50f);
-        fCoronaAlphaReachOneAt = Float("LODLIGHTS.CoronaAlphaReachOneAt", 350.0f);
-        fCoronaAlphaBoostStartAt = Float("LODLIGHTS.CoronaAlphaBoostStartAt", 700.0f);
-        fCoronaAlphaFarBoostMax = Float("LODLIGHTS.CoronaAlphaFarBoostMax", 4.0f);
-        fDistantCarsRadiusMultiplier = Float("LODLIGHTS.DistantCarsRadiusMultiplier", 1.0f);
-        bDistantMaritimeTraffic = Bool("LODLIGHTS.MaritimeTraffic", true);
-        bDistantCars3D = Bool("LODLIGHTS.DistantCars3D", false);
-        bDistantBoats3D = Bool("LODLIGHTS.DistantBoats3D", true);
-        bDistantCars3DLights = Bool("LODLIGHTS.DistantCars3DLights", true);
-        fDistantCarsGroundOffset = Float("LODLIGHTS.DistantCarsGroundOffset", 0.0f);
-        if (!std::isfinite(fDistantCarsGroundOffset)) fDistantCarsGroundOffset = 0.0f;
-        fDistantCarsGroundOffset = (std::clamp)(fDistantCarsGroundOffset, -2.0f, 2.0f);
+        // DISTANCE
+        fViewDistance = std::clamp(float(Int("DISTANCE.ViewDistance", 1000)), 0.0f, 3000.0f);
+        fDrawDistance = std::clamp(Float("DISTANCE.DrawDistance", 2.5f), 1.0f, 5.0f);
+        fDetailDistance = std::clamp(Float("DISTANCE.DetailDistance", 2.0f), 1.0f, 4.0f);
+        if (!LimitAdjusterPresent())
+        {
+            fViewDistance = (std::min)(fViewDistance, 500.0f);
+            fDrawDistance = (std::min)(fDrawDistance, 1.5f);
+            fDetailDistance = (std::min)(fDetailDistance, 1.5f);
+        }
+        fMaxDrawDistanceForNormalObjects = 300.0f * fDetailDistance;
 
-        // STATICSHADOWS
-        bRenderStaticShadowsForLODs = Bool("STATICSHADOWS.RenderStaticShadowsForLODs", false);
-
-        // SEARCHLIGHTS
-        bRenderSearchlightEffects = Bool("SEARCHLIGHTS.RenderSearchlightEffects", true);
-        bRenderOnlyDuringFoggyWeather = Bool("SEARCHLIGHTS.RenderOnlyDuringFoggyWeather", false);
-        fSearchlightEffectVisibilityFactor = Float("SEARCHLIGHTS.SearchlightEffectVisibilityFactor", 0.4f);
-
-        // FARCLIP
-        fFarClipMultiplier = Float("FARCLIP.FarClipMultiplier", 1.0f);
-        fFarClipHeightFactor = Float("FARCLIP.HeightFactor", 0.05f);
-        fFarClipMinMultiplier = Float("FARCLIP.MinMultiplier", 1.0f);
-        fFarClipMaxMultiplier = Float("FARCLIP.MaxMultiplier", 30.0f);
-        nFarClipTargetFPS = Int("FARCLIP.TargetFPS", 60);
+        // LIGHTS
+        bRenderLodLights = Bool("LIGHTS.DistantLights", true);
+        bRenderStaticShadowsForLODs = Bool("LIGHTS.DistantLightShadows", true);
+        bRenderSearchlightEffects = Bool("LIGHTS.Searchlights", true);
+        nDistantTraffic = std::clamp(Int("LIGHTS.DistantTraffic", 2), 0, 2);
+        fCoronaRadiusMultiplier = fCoronaRadiusBase * std::clamp(Float("LIGHTS.DistantLightSize", 1.0f), 0.25f, 4.0f);
+        bDistantMaritimeTraffic = nDistantTraffic > 0;
+        bDistantCars3D = nDistantTraffic == 2;
+        bDistantBoats3D = nDistantTraffic == 2;
+        bDistantCars3DLights = nDistantTraffic == 2;
 
         // Settings that apply at the next start, read once: the game was patched with them
         if (initial)
         {
-            numCoronas = Int("LODLIGHTS.MaxNumberOfLodLights", 25000);
-            nNumDistantCarImpostors = Int("LODLIGHTS.MaxNumberOfDistantCars", 1000);
-            bIncreasePedsCarsShadowsDrawDistance = Bool("STATICSHADOWS.IncreasePedsCarsShadowsDrawDistance", false);
-            fStaticShadowsIntensity = Float("STATICSHADOWS.StaticShadowsIntensity", 0.0f);
-            fStaticShadowsIntensity *= 0.00390625f;
-            fStaticShadowsDrawDistance = Float("STATICSHADOWS.StaticShadowsDrawDistance", 0.0f);
-            fTrafficLightsShadowsIntensity = Float("STATICSHADOWS.TrafficLightsShadowsIntensity", 0.0f);
-            fTrafficLightsShadowsDrawDistance = Float("STATICSHADOWS.TrafficLightsShadowsDrawDistance", 0.0f);
-            fStaticSunSize = Float("FARCLIP.StaticSunSize", 20.0f);
-            fMaxDrawDistanceForNormalObjects = Float("IDETWEAKER.MaxDrawDistanceForNormalObjects", 300.0f);
-            fTimedObjectsDrawDistance = Float("IDETWEAKER.TimedObjectsDrawDistance", 0.0f);
-            fNeonsDrawDistance = Float("IDETWEAKER.NeonsDrawDistance", 0.0f);
-            fLODObjectsDrawDistance = Float("IDETWEAKER.LODObjectsDrawDistance", 0.0f);
-            fGenericObjectsDrawDistance = Float("IDETWEAKER.GenericObjectsDrawDistance", 0.0f);
-            fAllNormalObjectsDrawDistance = Float("IDETWEAKER.AllNormalObjectsDrawDistance", 0.0f);
-            fVegetationDrawDistance = Float("IDETWEAKER.VegetationDrawDistance", 0.0f);
-            fDrawDistance = Float("IDETWEAKER.DrawDistance", 0.0f);
-            bPreloadLODs = Bool("IDETWEAKER.PreloadLODs", false);
-            bRandomExplosionEffects = Bool("MISC.RandomExplosionEffects", false);
-            bReplaceSmokeTrailWithBulletTrail = Bool("MISC.ReplaceSmokeTrailWithBulletTrail", false);
+            fShadowDistance = std::clamp(Float("DISTANCE.ShadowDistance", 4.0f), 1.0f, 8.0f);
+            bIncreasePedsCarsShadowsDrawDistance = fShadowDistance >= 2.0f;
+            // Brighter game light pools so the distant ones hand over to them seamlessly; 0 keeps the game's
+            const bool distantPools = Bool("LIGHTS.DistantLightShadows", true);
+            fStaticShadowsIntensity = distantPools ? 2.0f * 0.00390625f : 0.0f;
+            fTrafficLightsShadowsIntensity = distantPools ? 0.2f : 0.0f;
+            bPreloadLODs = fDrawDistance > 1.0f;
+            bRandomExplosionEffects = Bool("EFFECTS.RandomExplosionEffects", true);
+            bReplaceSmokeTrailWithBulletTrail = Bool("EFFECTS.ReplaceSmokeTrailWithBulletTrail", true);
             initial = false;
         }
+
+        if (OnSettingsApplied)
+            OnSettingsApplied();
 
         // Changes from menus, editors and hand edits of the settings file (read again by the live link's watcher) apply
         // at once

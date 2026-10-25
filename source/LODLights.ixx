@@ -3,7 +3,10 @@ module;
 #define NOMINMAX
 #include <stdafx.h>
 #include <unordered_map>
+#include <map>
 #include "DistantLightLogic.hpp"
+#include <d3d9.h>
+#include "LightVolumesShader.hpp"
 
 export module LODLights;
 
@@ -18,6 +21,8 @@ import Game;
 import LamppostInfo;
 import Timecycle;
 import PointLights;
+
+#include "LightVolumes.hpp"
 
 // Native phase readers include cheats and VC storm/SA riot flashing.
 // Only two calls per frame; object classification is cached at map registration.
@@ -52,6 +57,39 @@ export namespace CTrafficLights
     }
 }
 
+// How the game draws the lights it owns, set by each plugin. Near a lamp the game draws its own corona and light pool;
+// ours take over where the game's fade out and look like the game's there.
+export namespace GameLights
+{
+    GameRef<float> FOV;
+    // Timecycle sprite brightness and size to the units the game's light formulas use
+    float fSpriteBrightnessScale = 1.0f;
+    float fSpriteSizeScale = 1.0f;
+    // Lamp corona pulled toward the camera
+    float fLampPull = 1.5f;
+    // Traffic light corona range
+    float fTrafficRange = 50.0f;
+    // Lamp light pool range (the game's 40 m times ShadowDistance) and its colour factor
+    float fPoolRange = 40.0f;
+    float fPoolColour = 1.0f / 256.0f;
+    // Lamps follow the day/night balance (SA) instead of switching on at 19:00
+    bool bDayNightBalance = false;
+
+    // 0..1 brightness of the game's lamps at this time
+    float LampFade()
+    {
+        const int hours = CClock::ms_nGameClockHours;
+        if (!bDayNightBalance)
+            return hours > 18 || hours < 7 ? 1.0f : 0.0f;
+        const float m = hours * 60.0f + CClock::ms_nGameClockMinutes;
+        if (m < 360.0f) return 1.0f;
+        if (m < 420.0f) return (420.0f - m) / 60.0f;
+        if (m < 1200.0f) return 0.0f;
+        if (m >= 1260.0f) return 1.0f;
+        return 1.0f - (1260.0f - m) / 60.0f;
+    }
+}
+
 export class CRegisteredCorona
 {
 public:
@@ -81,6 +119,9 @@ public:
     uint8_t        bIsAttachedToEntity : 1;
     CEntity* pEntityAttachedTo;
     CoronaPredicate pPredicate = nullptr;
+    // The game's own corona of the same light: its range and how far it has faded in
+    float HandoverRange = 0.0f;
+    float HandoverGame = 0.0f;
 
 public:
     CRegisteredCorona()
@@ -294,7 +335,7 @@ public:
     static float& ScreenMult;
 
 public:
-    static void RegisterCoronaInternal(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, int coronaType, unsigned char flareType, unsigned char reflectionType, unsigned char LOSCheck, unsigned char unused, float normalAngle, bool bNeonFade, float PullTowardsCam, bool bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool bWhiteCore, CoronaPredicate pPredicate = nullptr)
+    static void RegisterCoronaInternal(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, int coronaType, unsigned char flareType, unsigned char reflectionType, unsigned char LOSCheck, unsigned char unused, float normalAngle, bool bNeonFade, float PullTowardsCam, bool bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool bWhiteCore, CoronaPredicate pPredicate = nullptr, float handoverRange = 0.0f, float handoverGame = 0.0f)
     {
         UNREFERENCED_PARAMETER(unused);
         UNREFERENCED_PARAMETER(bFadeIntensity);
@@ -435,6 +476,8 @@ public:
         pSuitableSlot->pEntityAttachedTo = nullptr;
 
         pSuitableSlot->pPredicate = pPredicate;
+        pSuitableSlot->HandoverRange = handoverRange;
+        pSuitableSlot->HandoverGame = handoverGame;
     }
 
     // Explicit removal must work regardless of camera position/range. Registering
@@ -462,9 +505,9 @@ public:
             it->second->GetFrom()->RegisteredThisFrame = CurrentFrameStamp;
     }
 
-    static void RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, int coronaType, unsigned char flareType, bool enableReflection, bool checkObstacles, int unused, float normalAngle, bool longDistance, float nearClip, unsigned char bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool reflectionDelay, CoronaPredicate pPredicate = nullptr)
+    static void RegisterCorona(unsigned int nID, CEntity* pAttachTo, unsigned char R, unsigned char G, unsigned char B, unsigned char A, const CVector& Position, float Size, float Range, int coronaType, unsigned char flareType, bool enableReflection, bool checkObstacles, int unused, float normalAngle, bool longDistance, float nearClip, unsigned char bFadeIntensity, float FadeSpeed, bool bOnlyFromBelow, bool reflectionDelay, CoronaPredicate pPredicate = nullptr, float handoverRange = 0.0f, float handoverGame = 0.0f)
     {
-        RegisterCoronaInternal(nID, pAttachTo, R, G, B, A, Position, Size, Range, coronaType, flareType, enableReflection, checkObstacles, unused, normalAngle, longDistance, nearClip, bFadeIntensity, FadeSpeed, bOnlyFromBelow, reflectionDelay, pPredicate);
+        RegisterCoronaInternal(nID, pAttachTo, R, G, B, A, Position, Size, Range, coronaType, flareType, enableReflection, checkObstacles, unused, normalAngle, longDistance, nearClip, bFadeIntensity, FadeSpeed, bOnlyFromBelow, reflectionDelay, pPredicate, handoverRange, handoverGame);
     }
 
     static void Update()
@@ -523,6 +566,10 @@ public:
 
     static void Shutdown()
     {
+        PoolCache.clear();
+        PoolAxes.clear();
+        PoolAxisData = nullptr;
+        aPools.clear();
         TrafficLampData = nullptr;
         TrafficLampCount = size_t(-1);
         TrafficLampIndices.clear();
@@ -608,6 +655,7 @@ public:
         for (auto& batch : m_RenderBatches)
             batch.Clear();
 
+
         auto SelectBatch = [](RwRaster* pRaster) -> RenderBatch*
         {
             for (auto& batch : m_RenderBatches)
@@ -666,8 +714,17 @@ public:
             const float halfRange = corona.Range * 0.5f;
             // 0x7C00xxxx is reserved for lamps attached to distant vehicle meshes.
             // Their opacity already includes the model's distance/envelope/fog fade.
-            const float fadeFactor = !modelLamp && vecTransformedCoords.z > halfRange ? 1.0f - (vecTransformedCoords.z - halfRange) / halfRange : 1.0f;
+            float fadeFactor = !modelLamp && vecTransformedCoords.z > halfRange ? 1.0f - (vecTransformedCoords.z - halfRange) / halfRange : 1.0f;
+            // The game's corona of this light fades over its range's second half of view depth; ours fills the rest
+            if (corona.HandoverGame > 0.0f && corona.HandoverRange > 0.0f)
+            {
+                const float gameHalf = corona.HandoverRange * 0.5f;
+                const float gameFade = vecTransformedCoords.z < gameHalf ? 1.0f : (std::max)(0.0f, 1.0f - (vecTransformedCoords.z - gameHalf) / gameHalf);
+                fadeFactor *= 1.0f - corona.HandoverGame * gameFade;
+            }
             const short fadeIntensity = static_cast<short>(corona.Intensity * fadeFactor);
+            if (fadeIntensity <= 0)
+                continue;
 
             RwTexture* pTex = corona.nTexType < 9 ? gpCoronaTexture[corona.nTexType] : nullptr;
             if (!pTex)
@@ -753,8 +810,107 @@ public:
     }
 
 
+    struct LightPool
+    {
+        const CLamppostInfo* lamp;
+        float distance, r, g, b;
+        CVector axis;
+    };
+    static inline std::vector<LightPool> aPools;
+    static inline std::map<std::string, RwTexture*> PoolCache;
+
+    static inline std::vector<CVector> PoolAxes;
+    static inline const CLamppostInfo* PoolAxisData{ nullptr };
+
+    static void RefreshPoolAxes()
+    {
+        if (PoolAxisData == m_Lampposts.data() && PoolAxes.size() == m_Lampposts.size())
+            return;
+        PoolAxisData = m_Lampposts.data();
+        PoolAxes.assign(m_Lampposts.size(), {});
+        // Match nearby rows of the same lamp, keeping growth narrower across the street.
+        std::map<std::pair<int, int>, std::vector<size_t>> cells;
+        auto Eligible = [](const CLamppostInfo& lamp)
+        {
+            return lamp.nEntity >= 0 && !lamp.nCoronaShowMode && lamp.nTrafficLightType == 2 &&
+                lamp.pool.size > 0.0f && lamp.pool.intensity > 0.0f;
+        };
+        for (size_t i = 0; i < m_Lampposts.size(); ++i)
+        {
+            const auto& lamp{ m_Lampposts[i] };
+            if (Eligible(lamp))
+                cells[{ static_cast<int>(std::floor(lamp.vecPos.x / 80.0f)),
+                    static_cast<int>(std::floor(lamp.vecPos.y / 80.0f)) }].push_back(i);
+        }
+        for (size_t i = 0; i < m_Lampposts.size(); ++i)
+        {
+            const auto& lamp{ m_Lampposts[i] };
+            if (!Eligible(lamp))
+                continue;
+            const int x{ static_cast<int>(std::floor(lamp.vecPos.x / 80.0f)) };
+            const int y{ static_cast<int>(std::floor(lamp.vecPos.y / 80.0f)) };
+            float nearest{ 80.0f * 80.0f };
+            for (int cy = y - 1; cy <= y + 1; ++cy)
+                for (int cx = x - 1; cx <= x + 1; ++cx)
+                {
+                    const auto cell{ cells.find({ cx, cy }) };
+                    if (cell == cells.end())
+                        continue;
+                    for (const auto j : cell->second)
+                    {
+                        const auto& other{ m_Lampposts[j] };
+                        if (other.nEntity == lamp.nEntity || other.nPoolModel != lamp.nPoolModel ||
+                            std::abs(other.vecPos.z - lamp.vecPos.z) > 6.0f ||
+                            std::abs(std::cos(other.fHeading - lamp.fHeading)) < 0.95f)
+                            continue;
+                        const float dx{ other.vecPos.x - lamp.vecPos.x };
+                        const float dy{ other.vecPos.y - lamp.vecPos.y };
+                        const float distance{ dx * dx + dy * dy };
+                        if (distance < 20.0f * 20.0f || distance >= nearest)
+                            continue;
+                        nearest = distance;
+                        const float inverse{ 1.0f / std::sqrt(distance) };
+                        PoolAxes[i] = { dx * inverse, dy * inverse, 0.0f };
+                    }
+                }
+        }
+    }
+
+    static void RefreshPools()
+    {
+        for (auto& lamp : m_Lampposts)
+        {
+            if (lamp.pool.texture || lamp.poolTexture.empty() || lamp.nEntity < 0 || lamp.nCoronaShowMode || lamp.nTrafficLightType != 2)
+                continue;
+            auto [it, inserted]{ PoolCache.try_emplace(lamp.poolTexture, nullptr) };
+            if (inserted)
+            {
+                it->second = CModelInfo::FindPoolTexture(lamp.poolTexture.c_str());
+                LampEntities::RetainPoolTexture(it->second);
+            }
+            lamp.pool.texture = it->second;
+        }
+    }
+
+public:
+    static void ConfigureLightVolumes(uintptr_t deviceSlot)
+    {
+        LightVolumes::DeviceSlot = reinterpret_cast<void**>(deviceSlot);
+    }
+
+    static void RenderPools()
+    {
+        if (!bRenderStaticShadowsForLODs || aPools.empty() || !Scene->m_pRwCamera)
+            return;
+        LightVolumes::LastLightCount = 0;
+        LightVolumes::RenderDepth(aPools, Scene->m_pRwCamera);
+    }
+
     static void RegisterLODLights()
     {
+        ++LampEntities::Frame;
+        aPools.clear();
+
         const bool night = CClock::GetIsTimeInRange(20, 7);
         if (CGame::currArea != 0)
         {
@@ -799,11 +955,31 @@ public:
         else
             bAlpha = static_cast<unsigned char>((-15.0f / 16.0f) * nTime + 424.0f);
 
+        // The game's own lamps: on/off (or the SA day/night balance), sprite brightness and size, the corona's ease
+        const float lampFade = GameLights::LampFade();
+        const bool lampsOn = night || lampFade > 0.0f;
+        const float fov = GameLights::FOV;
+        const float fovScale = fov > 1.0f ? 70.0f / fov : 1.0f;
+        const float spriteBrightness = (std::max)(0.0f, CTimeCycle::m_fCurrentSpriteBrightness * GameLights::fSpriteBrightnessScale);
+        const float spriteSize = CTimeCycle::m_fCurrentSpriteSize * GameLights::fSpriteSizeScale;
+        const float gameColourScale = GameLights::bDayNightBalance ? spriteBrightness : 1.0f;
+        const float gameStep = std::clamp(CTimer::ms_fTimeStep * 15.0f / 255.0f, 0.0f, 1.0f);
+        const float poolRange = GameLights::fPoolRange;
+        const float poolScale = spriteBrightness * GameLights::fPoolColour * lampFade;
+        const bool pools = bRenderStaticShadowsForLODs && lampFade > 0.0f && poolScale > 0.0f;
+
         const CVector* pCamPos = &TheCamera->GetCoords();
-        const float fScale = 1.0f;
         const float fCoronaFarClipSq = fCoronaFarClip * fCoronaFarClip;
         const float fVeryFarDistSq = 260.0f * 260.0f;
         const uint8_t frameSlice4 = CurrentFrameStamp & 3;
+
+        if (pools)
+        {
+            RefreshPools();
+            RefreshPoolAxes();
+        }
+        LightVolumes::CompactPools = GameLights::bDayNightBalance;
+        LightVolumes::Prepare();
 
         if (TrafficLampData != m_Lampposts.data() || TrafficLampCount != m_Lampposts.size())
         {
@@ -813,184 +989,176 @@ public:
             TrafficLampData = m_Lampposts.data();
             TrafficLampCount = m_Lampposts.size();
         }
-        const size_t lampCount = night ? m_Lampposts.size() : TrafficLampIndices.size();
+        const size_t lampCount = lampsOn ? m_Lampposts.size() : TrafficLampIndices.size();
         for (size_t lampIndex = 0; lampIndex < lampCount; ++lampIndex)
         {
-            auto it = m_Lampposts.cbegin() + (night ? lampIndex : TrafficLampIndices[lampIndex]);
-            const bool trafficLight = it->fCustomSizeMult == .45f;
-            if (it->vecPos.z < -15.0f || it->vecPos.z > 1030.0f)
+            auto& lamp = m_Lampposts[lampsOn ? lampIndex : TrafficLampIndices[lampIndex]];
+            const bool trafficLight = lamp.fCustomSizeMult == .45f;
+            if (lamp.vecPos.z < -15.0f || lamp.vecPos.z > 1030.0f)
                 continue;
 
-            unsigned int coronaId = reinterpret_cast<unsigned int>(&*it);
-            float dx = pCamPos->x - it->vecPos.x;
-            float dy = pCamPos->y - it->vecPos.y;
-            float dz = pCamPos->z - it->vecPos.z;
-            float fDistSqr = dx * dx + dy * dy + dz * dz;
+            // The game draws this light itself while it processes the entity; its corona eases in and out
+            const bool hasGame = lamp.nEntity >= 0 && !lamp.nNoDistance;
+            const bool gameActive = hasGame && LampEntities::Processed(lamp.nEntity);
+            if (hasGame)
+                lamp.fGameFade = std::clamp(lamp.fGameFade + (gameActive ? gameStep : -gameStep), 0.0f, 1.0f);
 
-            float fEffectiveDrawDistance = it->fObjectDrawDistance * fScale;
-            float fEffectiveCoronaDist = fEffectiveDrawDistance - 30.0f;
-            float fEffectiveCoronaDistSq = fEffectiveCoronaDist * fEffectiveCoronaDist;
+            const unsigned int coronaId = reinterpret_cast<unsigned int>(&lamp);
+            const float dx = pCamPos->x - lamp.vecPos.x;
+            const float dy = pCamPos->y - lamp.vecPos.y;
+            const float dz = pCamPos->z - lamp.vecPos.z;
+            const float fDist2DSqr = dx * dx + dy * dy;
+            const float fDistSqr = fDist2DSqr + dz * dz;
 
-            // Early exit with squared distance
-            if (!it->nNoDistance &&
-                (fDistSqr <= fEffectiveCoronaDistSq || fDistSqr >= fCoronaFarClipSq))
+            if (!lamp.nNoDistance && fDistSqr >= fCoronaFarClipSq)
                 continue;
 
-            if (fDistSqr > fVeryFarDistSq && !trafficLight && !it->nCoronaShowMode)
+            const float distance = std::sqrt(fDistSqr);
+
+            // Light pool on the ground. The game's pool is full to 3/4 of its range and fades out at the range (2D);
+            // ours fades in over the same band and out over the last quarter of the draw distance.
+            if (pools && !trafficLight && !lamp.nCoronaShowMode && lamp.nEntity >= 0 && lamp.pool.texture && lamp.pool.size > 0.0f)
+            {
+                float weight = std::clamp((fCoronaFarClip - distance) / (0.25f * fCoronaFarClip), 0.0f, 1.0f);
+                if (gameActive)
+                {
+                    const float dist2D = std::sqrt(fDist2DSqr);
+                    if (dist2D < poolRange)
+                        weight *= std::clamp((dist2D - 0.75f * poolRange) * 4.0f / poolRange, 0.0f, 1.0f);
+                }
+                if (weight > 0.004f && (!lamp.pPredicate || lamp.pPredicate()))
+                {
+                    const float c = 0.8f * poolScale * lamp.pool.intensity * weight;
+                    const float peak{ static_cast<float>((std::max)({ lamp.pool.colour.r, lamp.pool.colour.g, lamp.pool.colour.b })) };
+                    const float scale{ peak > 0.0f ? LightVolumes::Colour(peak * c, distance) / peak : 0.0f };
+                    aPools.push_back({ &lamp, distance,
+                        lamp.pool.colour.r * scale,
+                        lamp.pool.colour.g * scale,
+                        lamp.pool.colour.b * scale,
+                        LightVolumes::FarWeight(distance) > 0.0f ? PoolAxes[lampIndex] : CVector{} });
+                }
+            }
+
+            // Fully covered by the game's own corona (view depth is at most the distance)
+            const float range = trafficLight ? GameLights::fTrafficRange : lamp.fGameCoronaRange;
+            if (hasGame && lamp.fGameFade >= 1.0f && range > 0.0f && distance < range * 0.5f)
+                continue;
+
+            if (fDistSqr > fVeryFarDistSq && !trafficLight && !lamp.nCoronaShowMode && lamp.fGameFade == 0.0f)
             {
                 if (((coronaId >> 5) & 3u) != frameSlice4)
                 {
                     TouchCorona(coronaId);
+                    TouchCorona(coronaId + 1);
                     continue;
                 }
             }
 
-            float distance = std::sqrt(fDistSqr);
-            float fRadius;
+            // Fade out over the last 100 m of the far clip
+            float farFade = 1.0f;
+            if (!lamp.nNoDistance && distance > fCoronaFarClip - 100.0f)
+                farFade = std::clamp((fCoronaFarClip - distance) / 100.0f, 0.0f, 1.0f);
 
-            if (it->nNoDistance)
-                fRadius = 1.75f;
-            else
-                fRadius = SolveEqSys(fEffectiveCoronaDist, 0.0f, fEffectiveDrawDistance, 1.75f, distance);
-
-            if (bSlightlyIncreaseRadiusWithDistance)
-                fRadius *= std::min(SolveEqSys(fEffectiveCoronaDist, 1.0f, REFERENCE_FAR_CLIP, 4.0f, distance), 4.0f);
-
-            // Alpha transition with proper fade-in and fade-out
-            float fAlphaMultiplier = 1.0f;
-
-            if (!it->nNoDistance)
+            const float handoverGame = hasGame ? lamp.fGameFade : 0.0f;
+            auto Register = [&](unsigned int id, float r, float g, float b, float alpha, float size, int type)
             {
-                if (distance < fEffectiveDrawDistance)
-                {
-                    // Fade IN: 0.0 at fEffectiveCoronaDist → 1.0 at fEffectiveDrawDistance
-                    fAlphaMultiplier = std::clamp((distance - fEffectiveCoronaDist) / 30.0f, 0.0f, 1.0f);
-                }
-                else if (distance > fCoronaFarClip - 100.0f)
-                {
-                    // Fade OUT: 1.0 at (farClip - 100) → 0.0 at farClip
-                    fAlphaMultiplier = std::clamp((fCoronaFarClip - distance) / 100.0f, 0.0f, 1.0f);
-                }
-            }
-
-            {
-                // Distance from corona fade-in start zone
-                const float d = distance - fEffectiveCoronaDist;
-
-                float alphaDistMult = fCoronaAlphaNearMinMult + std::clamp(d / fCoronaAlphaReachOneAt, 0.0f, 1.0f) * (1.0f - fCoronaAlphaNearMinMult);
-
-                if (d > fCoronaAlphaBoostStartAt)
-                {
-                    const float t = std::clamp((d - fCoronaAlphaBoostStartAt) / 900.0f, 0.0f, 1.0f);
-                    alphaDistMult = 1.0f + t * (fCoronaAlphaFarBoostMax - 1.0f);
-                }
-
-                fAlphaMultiplier *= alphaDistMult;
-            }
-
-            // Calculate normalized alpha
-            float fNormalizedAlpha = ((trafficLight ? 255 : bAlpha) / 255.0f) * (it->colour.a / 255.0f) * fAlphaMultiplier;
-
-            // Helper for registration
-            auto RegisterLampCorona = [&](float normalizedAlpha)  // 0.0 to 1.0
-            {
-                // Scale alpha inversely with radius size
-                // Larger coronas get proportionally dimmer to prevent overwhelming brightness
-                float radiusAlphaScale = 1.0f;
-
-                // Calculate the final radius that will be used
-                float finalRadius = fRadius * it->fCustomSizeMult * fCoronaRadiusMultiplier;
-
-                // Apply inverse scaling: larger radius = lower alpha
-                // Example: radius 1.0 = 100% alpha, radius 2.0 = 70% alpha, radius 3.0 = 50% alpha
-                if (finalRadius > 1.0f)
-                {
-                    radiusAlphaScale = FastRadiusFalloff(finalRadius);
-                }
-
-                unsigned char alpha = static_cast<unsigned char>(std::clamp(normalizedAlpha * radiusAlphaScale * 255.0f, 0.0f, 255.0f));
-                RegisterCorona(
-                    reinterpret_cast<unsigned int>(&*it), nullptr,
-                    it->colour.r, it->colour.g, it->colour.b, alpha,
-                    it->vecPos,
-                    finalRadius,
-                    fCoronaFarClip, 1, 0, false, false, 0, 0.0f, false, 0.0f, 0, 255.0f, false, false,
-                    it->pPredicate
-                );
-
-                if (it->nNoDistance > 1 && (!it->pPredicate || it->pPredicate()))
-                {
-                    constexpr float MAX_POINTLIGHT_DIST = 22.0f;
-
-                    if (distance <= MAX_POINTLIGHT_DIST)
-                    {
-                        // Calculate light radius based on corona size
-                        float lightRadius = it->fCustomSizeMult * 10.0f;
-                        if (it->fObjectDrawDistance < 20.0f)
-                            lightRadius = it->fObjectDrawDistance;
-
-                        // Normalize color intensity (0.0 to 1.0 range)
-                        float intensity = normalizedAlpha * radiusAlphaScale;
-                        float red = (it->colour.r / 255.0f) * intensity;
-                        float green = (it->colour.g / 255.0f) * intensity;
-                        float blue = (it->colour.b / 255.0f) * intensity;
-
-                        // 0 - lod light, 1 - no distance, 2 and above - point light type
-                        auto type = PointLightType(it->nNoDistance - 2);
-
-                        // Direction pointing downward for lamppost effect
-                        CPointLights::AddLight(
-                            type,
-                            it->vecPos.x, it->vecPos.y, it->vecPos.z,
-                            0.0f, 0.0f, -1.0f,  // Direction (down)
-                            lightRadius,
-                            red, green, blue,
-                            0,  // Fog type
-                            0,  // Generate extra shadows
-                            nullptr  // Entity affected
-                        );
-                    }
-                }
+                const auto a = static_cast<unsigned char>(std::clamp(alpha * 255.0f, 0.0f, 255.0f));
+                if (!a)
+                    return;
+                RegisterCorona(id, nullptr,
+                    static_cast<unsigned char>(std::clamp(r, 0.0f, 255.0f)),
+                    static_cast<unsigned char>(std::clamp(g, 0.0f, 255.0f)),
+                    static_cast<unsigned char>(std::clamp(b, 0.0f, 255.0f)), a,
+                    lamp.vecPos, size, fCoronaFarClip, type, 0, false, false, 0, 0.0f, false,
+                    trafficLight ? 1.5f : GameLights::fLampPull, 0, 255.0f, false, false,
+                    lamp.pPredicate, range, handoverGame);
             };
 
-            if (it->fCustomSizeMult != 0.45f)
+            if (trafficLight)
             {
-                if (!it->nCoronaShowMode)
-                {
-                    RegisterLampCorona(fNormalizedAlpha);
-
-                    if (bRenderStaticShadowsForLODs && (!it->pPredicate || it->pPredicate()))
-                        CShadows::StoreStaticShadow(
-                            reinterpret_cast<unsigned int>(&*it), SSHADT_INTENSIVE,
-                            *CShadows::gpShadowExplosionTex, (CVector*)&it->vecPos,
-                            8.0f, 0.0f, 0.0f, -8.0f, bAlpha,
-                            it->colour.r / 3, it->colour.g / 3, it->colour.b / 3,
-                            15.0f, 1.0f, fCoronaFarClip, false, 0.0f
-                        );
-                }
-                else
-                {
-                    float blinking = 1.0f;
-                    if (it->nCoronaShowMode == BlinkTypes::RANDOM_FLASHING)
-                        blinking = DistantLightLogic::Pulse(timeMs, 500, 500);
-                    else if (it->nCoronaShowMode >= BlinkTypes::T_1S_ON_1S_OFF && it->nCoronaShowMode <= BlinkTypes::T_6S_ON_4S_OFF)
-                    {
-                        uint32_t on = (it->nCoronaShowMode - BlinkTypes::T_1S_ON_1S_OFF + 1) * 1000;
-                        uint32_t off = it->nCoronaShowMode == BlinkTypes::T_6S_ON_4S_OFF ? 4000 : on;
-                        blinking = DistantLightLogic::Pulse(timeMs, on, off);
-                    }
-
-                    RegisterLampCorona(blinking * fNormalizedAlpha);
-                }
+                // All bulb sets on one entity follow its native traffic group. Like the game's: the signal's colour,
+                // sprite size and brightness, no growth or boost with distance.
+                const uint8_t phase = trafficPhases[lamp.nTrafficLightType == 1 ? 0 : 1];
+                if (phase >= 3 || phase != lamp.nTrafficLightState)
+                    continue;
+                static constexpr float colours[3][3] = { { 0.0f, 255.0f, 0.0f }, { 255.0f, 128.0f, 0.0f }, { 255.0f, 0.0f, 0.0f } };
+                const float brightness = 0.7f * spriteBrightness;
+                Register(coronaId, colours[phase][0] * brightness, colours[phase][1] * brightness, colours[phase][2] * brightness,
+                    farFade, 1.75f * spriteSize * fovScale, 0);
+                continue;
             }
-            else  // Traffic lights
+
+            float blinking = 1.0f;
+            if (lamp.nCoronaShowMode == BlinkTypes::RANDOM_FLASHING)
+                blinking = DistantLightLogic::Pulse(timeMs, 500, 500);
+            else if (lamp.nCoronaShowMode >= BlinkTypes::T_1S_ON_1S_OFF && lamp.nCoronaShowMode <= BlinkTypes::T_6S_ON_4S_OFF)
             {
-                // All bulb sets on one entity follow its native traffic group.
-                // Bulb offsets describe geometry, not a different signal phase.
-                const uint8_t phase = trafficPhases[it->nTrafficLightType == 1 ? 0 : 1];
-                const bool shouldDraw = phase < 3 && phase == it->nTrafficLightState;
-                if (shouldDraw)
-                    RegisterLampCorona(fNormalizedAlpha);
+                uint32_t on = (lamp.nCoronaShowMode - BlinkTypes::T_1S_ON_1S_OFF + 1) * 1000;
+                uint32_t off = lamp.nCoronaShowMode == BlinkTypes::T_6S_ON_4S_OFF ? 4000 : on;
+                blinking = DistantLightLogic::Pulse(timeMs, on, off);
+            }
+
+            // From the game's look at its corona range to the distant look at twice that
+            const float t = hasGame && range > 0.0f ? std::clamp((distance - range) / range, 0.0f, 1.0f) : 1.0f;
+            const float from = hasGame ? range : 0.0f;
+
+            float fRadius = 1.75f;
+            if (bSlightlyIncreaseRadiusWithDistance)
+                fRadius *= std::clamp(SolveEqSys(from, 1.0f, REFERENCE_FAR_CLIP, 4.0f, distance), 1.0f, 4.0f);
+            const float distantSize = fRadius * lamp.fCustomSizeMult * fCoronaRadiusMultiplier;
+            const float gameSize = lamp.fCustomSizeMult * fovScale;
+            const float size = gameSize + (distantSize - gameSize) * t;
+
+            // Distant look: night ramp, dimmer near and brighter far, larger coronas proportionally dimmer
+            const float d = distance - from;
+            float alphaDistMult = fCoronaAlphaNearMinMult + std::clamp(d / fCoronaAlphaReachOneAt, 0.0f, 1.0f) * (1.0f - fCoronaAlphaNearMinMult);
+            if (d > fCoronaAlphaBoostStartAt)
+            {
+                const float boost = std::clamp((d - fCoronaAlphaBoostStartAt) / 900.0f, 0.0f, 1.0f);
+                alphaDistMult = 1.0f + boost * (fCoronaAlphaFarBoostMax - 1.0f);
+            }
+            const float radiusAlphaScale = distantSize > 1.0f ? FastRadiusFalloff(distantSize) : 1.0f;
+            const float distantAlpha = (bAlpha / 255.0f) * (lamp.colour.a / 255.0f) * alphaDistMult * radiusAlphaScale;
+
+            // The game's star corona near its range, the distant one beyond
+            if (t < 1.0f)
+                Register(coronaId + 1, lamp.colour.r * gameColourScale, lamp.colour.g * gameColourScale, lamp.colour.b * gameColourScale,
+                    lampFade * farFade * blinking * (1.0f - t), size, 0);
+            if (t > 0.0f)
+                Register(coronaId, lamp.colour.r, lamp.colour.g, lamp.colour.b, distantAlpha * farFade * blinking * t, size, 1);
+
+            if (lamp.nNoDistance > 1 && (!lamp.pPredicate || lamp.pPredicate()))
+            {
+                constexpr float MAX_POINTLIGHT_DIST = 22.0f;
+
+                if (distance <= MAX_POINTLIGHT_DIST)
+                {
+                    // Calculate light radius based on corona size
+                    float lightRadius = lamp.fCustomSizeMult * 10.0f;
+                    if (lamp.fObjectDrawDistance < 20.0f)
+                        lightRadius = lamp.fObjectDrawDistance;
+
+                    // Normalize color intensity (0.0 to 1.0 range)
+                    float intensity = std::clamp(distantAlpha * blinking, 0.0f, 1.0f);
+                    float red = (lamp.colour.r / 255.0f) * intensity;
+                    float green = (lamp.colour.g / 255.0f) * intensity;
+                    float blue = (lamp.colour.b / 255.0f) * intensity;
+
+                    // 0 - lod light, 1 - no distance, 2 and above - point light type
+                    auto type = PointLightType(lamp.nNoDistance - 2);
+
+                    // Direction pointing downward for lamppost effect
+                    CPointLights::AddLight(
+                        type,
+                        lamp.vecPos.x, lamp.vecPos.y, lamp.vecPos.z,
+                        0.0f, 0.0f, -1.0f,  // Direction (down)
+                        lightRadius,
+                        red, green, blue,
+                        0,  // Fog type
+                        0,  // Generate extra shadows
+                        nullptr  // Entity affected
+                    );
+                }
             }
         }
 

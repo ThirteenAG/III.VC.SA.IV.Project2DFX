@@ -20,6 +20,35 @@ namespace DistantTraffic
         return std::tan(fov * .00872664626f) / .700207538f;
     }
 
+    // The game's own cars. A distant car fades out where one of them drives, so the two never show on top of each other.
+    struct RealCars
+    {
+        std::vector<CVector> positions;
+
+        template<class PositionOf>
+        void Gather(const void* pool, size_t stride, PositionOf positionOf)
+        {
+            struct Pool { uint8_t* objects; int8_t* flags; int32_t size; }; // a negative flag is a free slot
+            positions.clear();
+            if (!pool) return;
+            auto& p = *(const Pool*)pool;
+            for (int32_t i = 0; i < p.size; ++i)
+                if (p.flags[i] >= 0) positions.push_back(positionOf(p.objects + i * stride));
+        }
+
+        float Fade(const CVector& position) const
+        {
+            float fade = 1.0f;
+            for (auto& car : positions)
+            {
+                CVector delta = car - position;
+                if (std::abs(delta.z) > 6.0f) continue;
+                fade = (std::min)(fade, std::clamp((delta.Magnitude2D() - 6.0f) / 8.0f, 0.0f, 1.0f));
+            }
+            return fade;
+        }
+    };
+
     struct Edge
     {
         Node from = InvalidNode, to = InvalidNode;

@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <unordered_map>
 #include <optional>
 #include <sstream>
 #include <thread>
@@ -86,11 +87,135 @@ struct CLamppostInfo
     int nDrawSearchlight;
     float fHeading;
     float fObjectDrawDistance;
+    // The light of its model (a line of the dat file), and how far the game's own corona of it is faded in now
+    int32_t nLook = -1;
+    float fGameAlpha = 0.0f;
+    uint32_t nSeenFrame = 0;
 };
 
 std::multimap<unsigned int, CLamppostInfo> FileContent;
 std::vector<CLamppostInfo> m_Lampposts;
 std::atomic<bool> m_bCatchLamppostsNow = false;
+
+// The game's own corona of a model's light as the game registers it near the camera: size, intensity at full fade,
+// pull toward the camera, and how far from the camera it was still seen. The distant corona takes this look over where
+// the game's ends.
+struct GameLook
+{
+    float size = 0.0f;
+    float intensity = 0.0f;
+    float pull = 0.0f;
+    float reach = 0.0f;
+    bool known = false;
+};
+std::vector<GameLook> GameLooks;
+
+struct ObservedCorona
+{
+    CVector pos;
+    float alpha, size, intensity, pull;
+};
+std::mutex ObservedMutex;
+std::vector<ObservedCorona> Observed;
+thread_local float PendingAlpha = -1.0f;
+uint32_t nLampFrame = 16;
+SafetyHookInline shDrawCorona = {};
+SafetyHookMid shProcessOne2dEffectLight = {};
+
+// The game registers the corona of a light right after it starts processing the light, which gives its entity's fade
+int __cdecl DrawCoronaHook(int id, char r, char g, char b, float intensity, void* pos, float radius, float a8, float a9, int a10, float a11, char a12, char a13, int a14)
+{
+    if (PendingAlpha >= 0.0f && pos)
+    {
+        std::lock_guard lock(ObservedMutex);
+        if (Observed.size() < 8192)
+            Observed.push_back({ *static_cast<CVector*>(pos), PendingAlpha, radius, intensity, a9 });
+    }
+    PendingAlpha = -1.0f;
+    return shDrawCorona.unsafe_ccall<int>(id, r, g, b, intensity, pos, radius, a8, a9, a10, a11, a12, a13, a14);
+}
+
+// The distant coronas go to the game directly, not through the observation
+int DrawOwnCorona(int id, uint8_t r, uint8_t g, uint8_t b, float intensity, CVector* pos, float radius, float pull)
+{
+    if (shDrawCorona)
+        return shDrawCorona.unsafe_ccall<int>(id, char(r), char(g), char(b), intensity, static_cast<void*>(pos), radius, 0.0f, pull, 0, 0.0f, char(0), char(0), 0);
+    return DrawCorona(id, char(r), char(g), char(b), intensity, pos, radius, 0.0f, pull, 0, 0.0f, 0, 0, 0);
+}
+
+std::unordered_map<int64_t, std::vector<uint32_t>> LampGrid;
+size_t LampGridCount = 0;
+
+int64_t LampCell(float x, float y)
+{
+    return (int64_t(std::floor(x * 0.5f)) << 32) ^ int64_t(uint32_t(int32_t(std::floor(y * 0.5f))));
+}
+
+// Matches the game's coronas of this frame to the lamps by position
+void MatchObservedCoronas(const CVector& camPos)
+{
+    std::vector<ObservedCorona> seen;
+    {
+        std::lock_guard lock(ObservedMutex);
+        seen.swap(Observed);
+    }
+    if (m_bCatchLamppostsNow || seen.empty())
+        return;
+
+    if (LampGridCount != m_Lampposts.size())
+    {
+        LampGrid.clear();
+        for (size_t i = 0; i < m_Lampposts.size(); ++i)
+            LampGrid[LampCell(m_Lampposts[i].vecPos.x, m_Lampposts[i].vecPos.y)].push_back(uint32_t(i));
+        LampGridCount = m_Lampposts.size();
+    }
+
+    for (const auto& o : seen)
+    {
+        if (o.alpha <= 0.0f)
+            continue;
+        int64_t best = -1;
+        float bestDist = 0.5f * 0.5f;
+        const int32_t cx = int32_t(std::floor(o.pos.x * 0.5f));
+        const int32_t cy = int32_t(std::floor(o.pos.y * 0.5f));
+        for (int32_t x = cx - 1; x <= cx + 1; ++x)
+        {
+            for (int32_t y = cy - 1; y <= cy + 1; ++y)
+            {
+                auto it = LampGrid.find((int64_t(x) << 32) ^ int64_t(uint32_t(y)));
+                if (it == LampGrid.end())
+                    continue;
+                for (uint32_t i : it->second)
+                {
+                    const auto& p = m_Lampposts[i].vecPos;
+                    const float d = (p.x - o.pos.x) * (p.x - o.pos.x) + (p.y - o.pos.y) * (p.y - o.pos.y) + (p.z - o.pos.z) * (p.z - o.pos.z);
+                    if (d < bestDist)
+                    {
+                        bestDist = d;
+                        best = i;
+                    }
+                }
+            }
+        }
+        if (best < 0)
+            continue;
+
+        auto& lamp = m_Lampposts[size_t(best)];
+        lamp.fGameAlpha = std::clamp(o.alpha, 0.0f, 1.0f);
+        lamp.nSeenFrame = nLampFrame;
+        if (lamp.nLook >= 0 && size_t(lamp.nLook) < GameLooks.size())
+        {
+            auto& look = GameLooks[lamp.nLook];
+            look.size = o.size;
+            look.pull = o.pull;
+            if (o.alpha > 0.25f)
+                look.intensity = o.intensity / o.alpha;
+            const float dx = camPos.x - lamp.vecPos.x, dy = camPos.y - lamp.vecPos.y, dz = camPos.z - lamp.vecPos.z;
+            look.reach = std::max(look.reach, std::sqrt(dx * dx + dy * dy + dz * dz));
+            look.known = look.known || o.alpha > 0.25f;
+        }
+    }
+}
 
 // The lights of the models (IVLodLights.dat next to the plugin), or of the Vice City conversion's map
 // (IVLodLights.ViceCity.dat) when its text is loaded
@@ -108,6 +233,7 @@ void LoadDatFile()
         return;
 
     unsigned int nModel = 0xFFFFFFFF;
+    int32_t nLook = 0;
     std::string line;
     while (std::getline(file, line))
     {
@@ -132,8 +258,10 @@ void LoadDatFile()
             sscanf(line.c_str(), "%3u %3u %3u %3u %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha, &fOffsetX, &fOffsetY, &fOffsetZ, &info.fCustomSizeMult, &info.nCoronaShowMode, &info.nNoDistance, &info.nDrawSearchlight);
         info.vecPos = CVector(fOffsetX, fOffsetY, fOffsetZ);
         info.colour = { uint8_t(nRed), uint8_t(nGreen), uint8_t(nBlue), uint8_t(nAlpha) };
+        info.nLook = nModel != 0xFFFFFFFF ? nLook++ : -1;
         FileContent.emplace(nModel, info);
     }
+    GameLooks.assign(size_t(nLook), {});
 
     // Lights that belong to no model are at their place in the world
     auto range = FileContent.equal_range(0xFFFFFFFF);
@@ -280,6 +408,18 @@ void RegisterLODLights()
 
     // Map loading is over once the first frame is drawn
     m_bCatchLamppostsNow = false;
+    ++nLampFrame;
+
+    // The camera only changes while scripts run; the last one is kept while the game is paused
+    static CVector camPos;
+    static float fCameraFarClip = 0.0f;
+    float x, y, z, clip;
+    if (Natives::GetRenderedCamera(x, y, z, clip))
+    {
+        camPos = CVector(x, y, z);
+        fCameraFarClip = clip;
+    }
+    MatchObservedCoronas(camPos);
 
     if (!ProjectLightsDrawn())
         return;
@@ -299,21 +439,12 @@ void RegisterLODLights()
     float fDistantCoronaBrightness, fDistantCoronaSize;
     DistantCoronaParams(fDistantCoronaBrightness, fDistantCoronaSize);
 
-    // The camera only changes while scripts run; the last one is kept while the game is paused
-    static CVector camPos;
-    static float fCameraFarClip = 0.0f;
-    float x, y, z, clip;
-    if (Natives::GetRenderedCamera(x, y, z, clip))
-    {
-        camPos = CVector(x, y, z);
-        fCameraFarClip = clip;
-    }
     float fCoronaFarClip = *Values.drawDistance > 0.0f ? *Values.drawDistance : fCameraFarClip;
     float fRadiusMultiplier = *Values.radiusMultiplier;
     float fAlphaMultiplier = *Values.alphaMultiplier;
     bool bIncreaseRadius = *Values.increaseRadiusWithDistance != 0;
 
-    for (const auto& lamppost : m_Lampposts)
+    for (auto& lamppost : m_Lampposts)
     {
         if (lamppost.vecPos.z < -15.0f || lamppost.vecPos.z > 1030.0f)
             continue;
@@ -323,43 +454,74 @@ void RegisterLODLights()
         float dz = camPos.z - lamppost.vecPos.z;
         float fDistSqr = dx * dx + dy * dy + dz * dz;
 
-        float fCoronaDist = lamppost.fObjectDrawDistance - 30.0f;
-
-        // Between the object's own lights and the far clip
-        if (!lamppost.nNoDistance && (fDistSqr <= fCoronaDist * fCoronaDist || fDistSqr >= fCoronaFarClip * fCoronaFarClip))
+        if (!lamppost.nNoDistance && fDistSqr >= fCoronaFarClip * fCoronaFarClip)
             continue;
 
         float distance = std::sqrt(fDistSqr);
 
-        float fRadius = lamppost.nNoDistance ? 3.5f : SolveEqSys(fCoronaDist, 0.0f, lamppost.fObjectDrawDistance, 3.5f, distance);
+        // The game's own corona of this lamp fades with its entity; ours fills the rest. Once the game's corona of the
+        // model's light has been seen, ours looks like it where the game's ends and turns into the distant look over
+        // the next 100 m. A lamp well inside that range that the game doesn't draw is culled, so ours isn't drawn either.
+        const bool seen = nLampFrame - lamppost.nSeenFrame <= 1;
+        const float weight = 1.0f - (seen ? lamppost.fGameAlpha : 0.0f);
+        if (weight <= 0.0f)
+            continue;
+        const GameLook* look = lamppost.nLook >= 0 && size_t(lamppost.nLook) < GameLooks.size() && GameLooks[lamppost.nLook].known ? &GameLooks[lamppost.nLook] : nullptr;
+
+        float fCoronaDist = lamppost.fObjectDrawDistance - 30.0f;
+        if (!lamppost.nNoDistance)
+        {
+            if (look ? !seen && distance < look->reach * 0.5f : distance <= fCoronaDist)
+                continue;
+        }
+        if (look)
+            fCoronaDist = look->reach;
+
+        const float t = look ? std::clamp((distance - look->reach) / 100.0f, 0.0f, 1.0f) : 1.0f;
+
+        float fRadius = lamppost.nNoDistance || look ? 3.5f : SolveEqSys(fCoronaDist, 0.0f, lamppost.fObjectDrawDistance, 3.5f, distance);
 
         if (bIncreaseRadius)
-            fRadius *= std::min(SolveEqSys(fCoronaDist, 1.0f, 9000.0f, 4.0f, distance), 3.0f);
+            fRadius *= std::clamp(SolveEqSys(fCoronaDist, 1.0f, 9000.0f, 4.0f, distance), 1.0f, 3.0f);
 
         float fAlphaDistMult = 110.0f - SolveEqSys(fCoronaDist / 4.0f, 10.0f, lamppost.fObjectDrawDistance * 4.0f, 100.0f, distance);
 
         float baseAlpha = fAlphaMultiplier * ((bAlpha * (lamppost.colour.a / 255.0f)) / fAlphaDistMult);
 
-        // Fade in as the camera moves away, as the radius does
-        if (!lamppost.nNoDistance)
+        // Without the game's look, fade in as the camera moves away, as the radius does
+        if (!lamppost.nNoDistance && !look)
             baseAlpha *= SolveEqSys(fCoronaDist, 0.0f, lamppost.fObjectDrawDistance, 1.0f, distance);
+
+        // From the game's look to the distant one
+        auto Draw = [&](float alpha, float size)
+        {
+            float pull = 0.0f;
+            if (look)
+            {
+                size = std::lerp(look->size, size, t);
+                alpha = std::lerp(look->intensity, alpha, t);
+                pull = std::lerp(look->pull, 0.0f, t);
+            }
+            alpha *= weight;
+            if (alpha > 0.0f)
+                DrawOwnCorona(reinterpret_cast<int>(&lamppost), lamppost.colour.r, lamppost.colour.g, lamppost.colour.b, alpha, &lamppost.vecPos, size, pull);
+        };
 
         if (lamppost.fCustomSizeMult != 0.45f)
         {
             float finalAlpha = baseAlpha * fDistantCoronaBrightness;
             float finalSize = fRadius * lamppost.fCustomSizeMult * fRadiusMultiplier * fDistantCoronaSize * 1270.5f;
+            float visibility = 1.0f;
 
             if (lamppost.nCoronaShowMode)
             {
-                float visibility = BlinkVisibility(lamppost.nCoronaShowMode);
+                visibility = BlinkVisibility(lamppost.nCoronaShowMode);
                 if (visibility <= 0.0f)
                     continue;
-                finalAlpha *= visibility;
                 finalSize = fRadius * lamppost.fCustomSizeMult * fRadiusMultiplier * 1270.5f;
             }
 
-            DrawCorona(reinterpret_cast<int>(&lamppost), lamppost.colour.r, lamppost.colour.g, lamppost.colour.b, finalAlpha,
-                const_cast<CVector*>(&lamppost.vecPos), finalSize, 0.0f, 0.0f, 0, 0.0f, 0, 0, 0);
+            Draw(finalAlpha * visibility, finalSize);
         }
         else
         {
@@ -386,10 +548,7 @@ void RegisterLODLights()
                 std::swap(redPhase, greenPhase);
 
             if ((isYellow && isYellowTime) || (isRed && redPhase) || (isGreen && greenPhase))
-            {
-                DrawCorona(reinterpret_cast<int>(&lamppost), lamppost.colour.r, lamppost.colour.g, lamppost.colour.b, baseAlpha,
-                    const_cast<CVector*>(&lamppost.vecPos), finalSize, 0.0f, 0.0f, 0, 0.0f, 0, 0, 0);
-            }
+                Draw(baseAlpha, finalSize);
         }
     }
 }
@@ -405,6 +564,18 @@ void Init()
     }
 
     RaiseCoronaLimit();
+
+    // The game's own lamp coronas: the light being processed gives its entity's fade, the corona it registers next
+    // gives the look
+    auto light = find_pattern("55 8B EC 83 E4 F0 81 EC 88 00 00 00 56 8B 75 08 32 C0", "55 8B EC 83 E4 F0 83 EC 54 8B 4D 30");
+    if (!light.empty())
+    {
+        shProcessOne2dEffectLight = safetyhook::create_mid(light.get_first(), [](SafetyHookContext& regs)
+        {
+            PendingAlpha = *reinterpret_cast<float*>(regs.esp + 0x14);
+        });
+        shDrawCorona = safetyhook::create_inline(reinterpret_cast<void*>(DrawCorona), DrawCoronaHook);
+    }
 
     // Once per frame, in the game's update loop (a call of an empty function)
     auto pattern = hook::pattern("E8 ? ? ? ? 83 3D ? ? ? ? ? 74 05 E8 ? ? ? ? 6A 05");

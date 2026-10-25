@@ -179,6 +179,7 @@ void InsertLamppostsForModel(CEntity* pObj, unsigned short nModelID)
     }
 
     float heading = atan2(-pObj->GetMatrix().GetRight().y, pObj->GetMatrix().GetRight().x);
+    const size_t firstLamp = m_Lampposts.size();
     for (const auto& [key, data] : foundElements)
     {
         CVector worldPos = pObj->GetMatrix() * data.vecLocalPos;
@@ -194,9 +195,18 @@ void InsertLamppostsForModel(CEntity* pObj, unsigned short nModelID)
             std::min(data.fObjectDrawDistance, modelInfo->m_lodDistances[2]),
             data.pPredicate
         ));
+        m_Lampposts.back().fGameCoronaRange = data.fObjectDrawDistance;
+        m_Lampposts.back().pool = data.pool;
+        if (modelInfo && modelInfo->m_colModel)
+        {
+            const CVector base{ pObj->GetMatrix() * CVector(data.vecLocalPos.x, data.vecLocalPos.y, modelInfo->m_colModel->boundingBox.min.z) };
+            m_Lampposts.back().fPoolBaseZ = base.z;
+        }
+        m_Lampposts.back().poolTexture = data.poolTexture;
         if (data.fCustomSizeMult == .45f)
             m_Lampposts.back().nTrafficLightType = CTrafficLights::Type(pObj, pObj->GetMatrix().GetForward());
     }
+    LampEntities::Attach(firstLamp, pObj->GetPosition(), 0.0f, nModelID);
 }
 
 void RegisterLamppost(CEntity* pObj)
@@ -276,41 +286,12 @@ namespace CWorld
     }
 }
 
-void DrawDistanceChanger()
+bool ExteriorView()
 {
-    // FarClipMultiplier > 10.0 = static farclip value.
-    if (fFarClipMultiplier > 10.0f)
-        return;
-
-    // FarClipMultiplier != 0.0 = fixed multiplier, already stored in fFarClipMultiplier.
-    if (fFarClipMultiplier != 0.0f)
-        return;
-
-    static LARGE_INTEGER freq = [] { LARGE_INTEGER f; QueryPerformanceFrequency(&f); return f; }();
-    static std::deque<int64_t> frameTimes;
-    static float adaptiveBase = fFarClipMinMultiplier;
-
-    LARGE_INTEGER now;
-    QueryPerformanceCounter(&now);
-    frameTimes.push_back(now.QuadPart);
-    if (frameTimes.size() > 60)
-        frameTimes.pop_front();
-
-    if (frameTimes.size() >= 2)
-    {
-        float smoothFPS = (float)(frameTimes.size() - 1) * (float)freq.QuadPart / (float)(frameTimes.back() - frameTimes.front());
-        const float step = (fFarClipMaxMultiplier - fFarClipMinMultiplier) * 0.002f;
-        if (smoothFPS < (float)nFarClipTargetFPS)
-            adaptiveBase -= step;
-        else
-            adaptiveBase += step;
-    }
-
-    float camZ = GetCamPos()->z;
-    float heightBonus = fFarClipHeightFactor * std::max(camZ, 0.0f);
-
-    fFarClipMultiplier = std::clamp(adaptiveBase + heightBonus, fFarClipMinMultiplier, fFarClipMaxMultiplier);
+    return CGame::currArea == 0 && !*reinterpret_cast<bool*>(0x95CCF5);
 }
+
+#include "../ViewDistance.hpp"
 
 enum eExplosionType
 {
@@ -387,23 +368,6 @@ void __cdecl AddTrace(CVector* start, CVector* end)
     shAddTrace.unsafe_ccall(start, end, 0.0f, 0, 0);
 }
 
-void DrawDistanceFMUL(SafetyHookContext& ctx)
-{
-    float f = fDrawDistance;
-    _asm {fmul dword ptr[f]}
-}
-
-#define BUFFERED_SPRITES_LIMIT 2048
-
-__declspec (naked) void CmpSpriteBufferIndexHook()
-{
-    __asm
-    {
-        cmp ds : [0x649A80] , BUFFERED_SPRITES_LIMIT
-        ret
-    }
-}
-
 void ApplyMemoryPatches()
 {
     auto pattern = hook::pattern("E8 ? ? ? ? 59 53 E8 ? ? ? ? 59 81 C4 ? ? ? ? 5D");
@@ -424,14 +388,16 @@ void ApplyMemoryPatches()
     pattern = hook::pattern("01 C2 89 C8 01 D6");
     static auto CMovingThingsUpdateHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
-        CLODLights::RegisterLODLights();
-        CMovingThings::UpdateDistantCarImpostors();
+        if (bRenderLodLights)
+            CLODLights::RegisterLODLights();
+        if (nDistantTraffic > 0)
+            CMovingThings::UpdateDistantCarImpostors();
     });
 
     pattern = hook::pattern("E8 ? ? ? ? 59 59 E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? C3");
     static auto distantCarsSceneHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext&)
     {
-        if (bRenderLodLights)
+        if (nDistantTraffic > 0)
             CMovingThings::RenderDistantCarImpostors();
     });
 
@@ -479,29 +445,39 @@ void ApplyMemoryPatches()
         CLODLights::Shutdown();
     });
 
-    if (fTrafficLightsShadowsDrawDistance)
-    {
-        injector::WriteMemory(0x455E3F + 0x2, &fTrafficLightsShadowsDrawDistance, true);
-        injector::WriteMemory(0x455F2D + 0x2, &fTrafficLightsShadowsDrawDistance, true);
-    }
+    // Shadows: the game's distances times ShadowDistance, the intensities Project2DFX was tuned with
+    static float fTrafficLightsShadowsDrawDistance = **(float**)(0x455E3F + 0x2) * fShadowDistance;
+    injector::WriteMemory(0x455E3F + 0x2, &fTrafficLightsShadowsDrawDistance, true);
+    injector::WriteMemory(0x455F2D + 0x2, &fTrafficLightsShadowsDrawDistance, true);
 
-    if (fStaticShadowsDrawDistance)
+    for (auto address : { 0x5F00E0, 0x5EDF3C, 0x5FB214 })
     {
-        injector::WriteMemory<float>(0x5F00E0, fStaticShadowsDrawDistance, true);
-        injector::WriteMemory<float>(0x5EDF3C, fStaticShadowsDrawDistance, true);
-        injector::WriteMemory<float>(0x5FB214, fStaticShadowsDrawDistance, true);
+        ProtectedGameRef<float> distance((float*)address);
+        distance = distance * fShadowDistance;
     }
 
     if (fStaticShadowsIntensity)
-    {
         injector::WriteMemory<float>(0x5FB304, fStaticShadowsIntensity, true);
-        injector::WriteMemory<int>(0x4FACE6, 255, true);
-    }
 
-    if (fTrafficLightsShadowsIntensity)
+    // The game's lamp coronas and light pools, which the distant ones hand over to
+    CLODLights::ConfigureLightVolumes(0x662EF0);
+    static auto lightVolumeRenderHook = safetyhook::create_mid(reinterpret_cast<void*>(0x48E059), [](SafetyHookContext&)
     {
+        if (bRenderLodLights)
+            CLODLights::RenderPools();
+    });
+
+    GameLights::fTrafficRange = fTrafficLightsShadowsDrawDistance;
+    GameLights::fPoolRange = *reinterpret_cast<float*>(0x5FB214);
+    GameLights::fPoolColour = *reinterpret_cast<float*>(0x5FB304);
+    static auto ProcessLightsForEntityHook = safetyhook::create_mid(reinterpret_cast<void*>(0x4FA530), [](SafetyHookContext& regs)
+    {
+        LampEntities::MarkProcessed(reinterpret_cast<CEntity*>(regs.ecx)->GetPosition());
+    });
+    if (fStaticShadowsIntensity)
+        injector::WriteMemory<int>(0x4FACE6, 255, true);
+    if (fTrafficLightsShadowsIntensity)
         injector::WriteMemory<float>(0x5F00EC, fTrafficLightsShadowsIntensity, true);
-    }
 
     if (bIncreasePedsCarsShadowsDrawDistance)
     {
@@ -511,60 +487,24 @@ void ApplyMemoryPatches()
         injector::WriteMemory<unsigned char>(0x005394C8, 0x55u, true);
         injector::WriteMemory<unsigned char>(0x005394CA, 0x55u, true);
         injector::WriteMemory<unsigned int>(0x537983, 0x008F2A00, true);
-        injector::MakeNOP(0x518DCA, 5, true);
         injector::MakeJMP(0x513CFF, 0x513D92); //ped shadows draw distance
     }
 
-    if (fDrawDistance)
+    auto cameraPattern = hook::pattern("E8 ? ? ? ? 84 C0 74 ? B9 ? ? ? ? E8 ? ? ? ? E8");
+    if (cameraPattern.size() == 1 && *cameraPattern.get_first<uint8_t>(-5) == 0xE8)
     {
-        pattern = hook::pattern("D8 0D ? ? ? ? D9 9B ? ? ? ? 80 7B");
-        static auto CRendererms_lodDistScaleHook = safetyhook::create_mid(pattern.get_first(), DrawDistanceFMUL);
+        auto cameraProcess = cameraPattern.get_first<uint8_t>();
+        ViewDistance::InstallCamera(cameraProcess + 14);
+        ViewDistance::InstallTimecycle(cameraProcess - 5);
     }
+    else
+        OutputDebugStringA("Project2DFX: view distance hooks unavailable\n");
 
-    if (fMaxDrawDistanceForNormalObjects)
-    {
-        //injector::WriteMemory<float>(0x5F72A4, fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8AB1, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8AC6, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8AD9, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8B0E, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8B21, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8B34, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8B82, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8B97, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8BAA, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8BDF, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8BF2, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8C05, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4A8DA6, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA391, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA3A6, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA3B9, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA3EE, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA401, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA414, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA462, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA477, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA48A, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA4BF, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA4D2, &fMaxDrawDistanceForNormalObjects, true);
-        injector::WriteMemory(0x4AA4E5, &fMaxDrawDistanceForNormalObjects, true);
-    }
-
-    pattern = hook::pattern("E8 ? ? ? ? 84 C0 74 ? B9 ? ? ? ? E8 ? ? ? ? E8");
-    static auto FarClipHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
-    {
-        if (CGame::currArea == 0)
-        {
-            if (fFarClipMultiplier > 10.0f)
-                CTimeCycle::m_fCurrentFarClip = fFarClipMultiplier;
-            else
-                CTimeCycle::m_fCurrentFarClip *= fFarClipMultiplier;
-        }
-    });
-
-    pattern = hook::pattern("E8 ? ? ? ? E8 ? ? ? ? A1 ? ? ? ? 50 E8 ? ? ? ? A1 ? ? ? ? 59");
-    injector::MakeCALL(pattern.get_first(), DrawDistanceChanger, true);
+    // Detail distance: the 300 m the renderer draws non-LOD objects to
+    for (auto address : { 0x4A8AB1, 0x4A8AC6, 0x4A8AD9, 0x4A8B0E, 0x4A8B21, 0x4A8B34, 0x4A8B82, 0x4A8B97, 0x4A8BAA, 0x4A8BDF, 0x4A8BF2, 0x4A8C05,
+                          0x4A8DA6, 0x4AA391, 0x4AA3A6, 0x4AA3B9, 0x4AA3EE, 0x4AA401, 0x4AA414, 0x4AA462, 0x4AA477, 0x4AA48A, 0x4AA4BF, 0x4AA4D2,
+                          0x4AA4E5 })
+        injector::WriteMemory(address, &fMaxDrawDistanceForNormalObjects, true);
 
     if (bRandomExplosionEffects)
     {
@@ -626,6 +566,7 @@ void GetMemoryAddresses()
     CClock::ms_nGameClockMinutes.SetAddress((uint8_t*)0x95CDC8);
 
     CTimeCycle::m_fCurrentFarClip.SetAddress((float*)0x8F5FD8);
+    CTimeCycle::m_fCurrentFogStart.SetAddress((float*)0x8F1AE0);
 
     CModelInfo::pp_modelInfoPtrs = (CBaseModelInfo***)(0x40394A + 3);
 
@@ -633,8 +574,12 @@ void GetMemoryAddresses()
 
     CRenderer::ms_lodDistScale.SetAddress((float*)0x5F726C);
 
-    CShadows::gpShadowExplosionTex = (RwTexture**)0x8F2A00;
-    CShadows::StoreStaticShadow = (decltype(CShadows::StoreStaticShadow))0x5130A0;
+    CTimeCycle::m_fCurrentSpriteBrightness.SetAddress((float*)0x8F5FDC);
+    CTimeCycle::m_fCurrentSpriteSize.SetAddress((float*)0x8F1AA8);
+    GameLights::FOV.SetAddress((float*)0x5FBC6C);
+    RwRasterCreate = (decltype(RwRasterCreate))0x5AD930;
+    RwRasterLock = (decltype(RwRasterLock))0x5AD9D0;
+    RwRasterUnlock = (decltype(RwRasterUnlock))0x5AD6F0;
 
     RwRenderStateSet = (decltype(RwRenderStateSet))0x5A43C0;
     RwRenderStateGet = (decltype(RwRenderStateGet))0x5A4410;

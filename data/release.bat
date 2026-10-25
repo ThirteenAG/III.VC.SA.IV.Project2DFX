@@ -15,7 +15,8 @@ if %errorlevel% neq 0 (
 copy /b/v/y "2DFXDataGrabber\2DFXDataGrabber.exe" "2DFXDataGrabber\iv_data\2DFXDataGrabber.exe"
 cd 2DFXDataGrabber
 cd iv_data
-2DFXDataGrabber.exe
+.\2DFXDataGrabber.exe
+if errorlevel 1 exit /b 1
 cd ..
 cd ..
 copy /b/v/y "2DFXDataGrabber\iv_data\IVLodLights.dat" "IVLodLights\IVLodLights.dat"
@@ -24,7 +25,8 @@ copy /b/v/y "2DFXDataGrabber\iv_data\IVLodLights.dat" "IVLodLights\IVLodLights.d
 copy /b/v/y "2DFXDataGrabber\2DFXDataGrabber.exe" "2DFXDataGrabber\sa_data\2DFXDataGrabber.exe"
 cd 2DFXDataGrabber
 cd sa_data
-2DFXDataGrabber.exe
+.\2DFXDataGrabber.exe --baseline "..\..\SALodLights\SALodLights.dat" --keep-pools
+if errorlevel 1 exit /b 1
 cd ..
 cd ..
 copy /b/v/y "2DFXDataGrabber\sa_data\SALodLights.dat" "SALodLights\SALodLights.dat"
@@ -33,7 +35,8 @@ copy /b/v/y "2DFXDataGrabber\sa_data\SALodLights.dat" "SALodLights\SALodLights.d
 copy /b/v/y "2DFXDataGrabber\2DFXDataGrabber.exe" "2DFXDataGrabber\vc_data\2DFXDataGrabber.exe"
 cd 2DFXDataGrabber
 cd vc_data
-2DFXDataGrabber.exe
+.\2DFXDataGrabber.exe --baseline "..\..\VCLodLights\VCLodLights.dat" --keep-pools
+if errorlevel 1 exit /b 1
 cd ..
 cd ..
 copy /b/v/y "2DFXDataGrabber\vc_data\VCLodLights.dat" "VCLodLights\VCLodLights.dat"
@@ -42,7 +45,8 @@ copy /b/v/y "2DFXDataGrabber\vc_data\VCLodLights.dat" "VCLodLights\VCLodLights.d
 copy /b/v/y "2DFXDataGrabber\2DFXDataGrabber.exe" "2DFXDataGrabber\iii_data\2DFXDataGrabber.exe"
 cd 2DFXDataGrabber
 cd iii_data
-2DFXDataGrabber.exe
+.\2DFXDataGrabber.exe --baseline "..\..\IIILodLights\IIILodLights.dat" --keep-pools
+if errorlevel 1 exit /b 1
 cd ..
 cd ..
 copy /b/v/y "2DFXDataGrabber\iii_data\IIILodLights.dat" "IIILodLights\IIILodLights.dat"

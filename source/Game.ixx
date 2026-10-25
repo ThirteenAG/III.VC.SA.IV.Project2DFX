@@ -31,3 +31,6 @@ export RxObjSpace3dVertex* (__cdecl* RwIm3DTransform)(RxObjSpace3dVertex* pVerts
 export int(__cdecl* RwIm3DRenderIndexedPrimitive)(int primType, short* indices, int numIndices) = nullptr;
 export int(__cdecl* RwIm2DRenderPrimitive)(int primType, void* vertices, int numVertices) = nullptr;
 export int(__cdecl* RwIm3DEnd)() = nullptr;
+export RwRaster* (__cdecl* RwRasterCreate)(int width, int height, int depth, int flags) = nullptr;
+export uint8_t* (__cdecl* RwRasterLock)(RwRaster* raster, uint8_t level, int lockMode) = nullptr;
+export RwRaster* (__cdecl* RwRasterUnlock)(RwRaster* raster) = nullptr;

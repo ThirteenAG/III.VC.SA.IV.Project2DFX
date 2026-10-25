@@ -1,0 +1,45 @@
+sampler2D SceneDepth : register(s0);
+row_major float4x4 InverseViewProjection : register(c0);
+float4 Fog : register(c4);
+float4 Texel : register(c5);
+
+float3 Position(float2 uv, float depth)
+{
+    float4 world = mul(float4(uv.x * 2 - 1, 1 - uv.y * 2, depth, 1), InverseViewProjection);
+    return world.xyz / world.w;
+}
+
+float3 Neighbour(float2 uv)
+{
+    return Position(uv, tex2D(SceneDepth, uv).r);
+}
+
+float4 main(float2 uv : TEXCOORD0, float4 light : TEXCOORD1, float4 vertical : TEXCOORD2, float4 colour : COLOR0) : COLOR0
+{
+    float depth = tex2D(SceneDepth, uv).r;
+    clip(0.9999999 - depth);
+    float3 world = Position(uv, depth);
+    float3 right = Neighbour(uv + float2(Texel.x, 0)) - world;
+    float3 left = world - Neighbour(uv - float2(Texel.x, 0));
+    float3 down = Neighbour(uv + float2(0, Texel.y)) - world;
+    float3 up = world - Neighbour(uv - float2(0, Texel.y));
+    // Prefer the continuous side of silhouettes and depth discontinuities.
+    float3 dx = dot(right, right) < dot(left, left) ? right : left;
+    float3 dy = dot(down, down) < dot(up, up) ? down : up;
+    float3 normal = normalize(cross(dy, dx));
+    float3 delta = world - light.xyz;
+    float aligned = dot(vertical.zw, vertical.zw);
+    float2 axis = aligned > 0.5 ? vertical.zw : float2(1, 0);
+    float2 horizontal = float2(dot(delta.xy, axis), dot(delta.xy, float2(-axis.y, axis.x)));
+    horizontal.y /= 1 - 0.4 * vertical.y * aligned;
+    float3 scaled = float3(horizontal * light.w, delta.z * vertical.x);
+    float falloff = saturate(1 - dot(scaled, scaled));
+    falloff *= falloff;
+    float ground = smoothstep(0.2, 0.75, normal.z);
+    float wall = 0.12 * (1 - abs(normal.z)) * saturate(1 - length(delta.xy) / 3);
+    float surface = max(ground, wall);
+    float viewDepth = Fog.w / (depth - Fog.z);
+    float fog = saturate((Fog.y - viewDepth) * Fog.x);
+    float3 lightColour = colour.rgb * falloff * fog * surface;
+    return float4(lightColour, 0);
+}

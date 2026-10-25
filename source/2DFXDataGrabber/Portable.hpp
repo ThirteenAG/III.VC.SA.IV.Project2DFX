@@ -1,0 +1,1109 @@
+#pragma once
+#include <bitset>
+#include <rw.h>
+#include <windows.h>
+
+namespace Portable
+{
+    constexpr double Pi{ 3.14159265358979323846 };
+
+    inline RwV3d makeV3d(float x, float y, float z)
+    {
+        RwV3d v{ x, y, z };
+        return v;
+    }
+    inline float dot(const RwV3d& a, const RwV3d& b)
+    {
+        return a.x * b.x + a.y * b.y + a.z * b.z;
+    }
+    inline RwV3d scale(const RwV3d& a, float r)
+    {
+        return makeV3d(a.x * r, a.y * r, a.z * r);
+    }
+    inline void makeRotation(CMatrix* dst, const RwV3d* axis, float angle, const RwV3d* translation)
+    {
+        float len{ dot(*axis, *axis) };
+        if (len != 0.0f)
+            len = 1.0f / sqrtf(len);
+        RwV3d v{ scale(*axis, len) };
+        angle = angle * (float)Pi / 180.0f;
+        float s{ sinf(angle) };
+        float c{ cosf(angle) };
+        float t{ 1.0f - c };
+
+        CMatrix identMat;
+        identMat.GetRight() = { 1.0f, 0.0f, 0.0f };
+        identMat.GetUp() = { 0.0f, 1.0f, 0.0f };
+        identMat.GetForward() = { 0.0f, 0.0f, 1.0f };
+        identMat.GetPosition() = { 0.0f, 0.0f, 0.0f };
+
+        *dst = identMat;
+        dst->GetPosition() = *translation;
+        dst->GetRight().x = c + v.x * v.x * t;
+        dst->GetRight().y = v.x * v.y * t + v.z * s;
+        dst->GetRight().z = v.z * v.x * t - v.y * s;
+        dst->GetUp().x = v.x * v.y * t - v.z * s;
+        dst->GetUp().y = c + v.y * v.y * t;
+        dst->GetUp().z = v.y * v.z * t + v.x * s;
+        dst->GetForward().x = v.z * v.x * t + v.y * s;
+        dst->GetForward().y = v.y * v.z * t - v.x * s;
+        dst->GetForward().z = c + v.z * v.z * t;
+    }
+
+    using namespace std;
+
+    enum BlinkTypes
+    {
+        DEFAULT,
+        RANDOM_FLASHING,
+        T_1S_ON_1S_OFF,
+        T_2S_ON_2S_OFF,
+        T_3S_ON_3S_OFF,
+        T_4S_ON_4S_OFF,
+        T_5S_ON_5S_OFF,
+        T_6S_ON_4S_OFF
+    };
+
+    string Filename;
+    string Additional;
+
+    string ConvertTextTo2DFX(const map<string, string>& inputs)
+    {
+        ostringstream LodLights;
+        LodLights << "#%modelname" << endl;
+        LodLights << "#Red, Green, Blue, Alpha, OffsetX, OffsetY, OffsetZ, CustomSize, DrawDistance, BlinkType, NoDistance, DrawSearchlight"
+                  << endl;
+        LodLights << "#0.45 - custom size reserved for traffic lights" << endl;
+        LodLights << endl;
+
+        for (const auto& [model, text] : inputs)
+        {
+            istringstream TXTFileContent(text);
+            string buf;
+            const string ext{ model };
+            LodLights << '%' << ext << endl;
+            char EntryName[256]{};
+            float offsetX{}, offsetY{}, offsetZ{}, CoronaSize{}, DrawDistance{};
+            int R{}, G{}, B{}, A{ 255 };
+            int BlinkType{ 0 };
+            int nNoDistance{ 0 };
+            int nDrawSearchlight{ 0 };
+            while (getline(TXTFileContent, buf))
+            {
+                if (buf[0] != '#')
+                {
+                    if (sscanf(buf.c_str(), "%255s", EntryName))
+                    {
+                        if (buf.find("Position") != std::string::npos)
+                        {
+                            sscanf(buf.c_str(), "%*s %f %f %f", &offsetX, &offsetY, &offsetZ);
+                        }
+                        else if (buf.find("Color") != std::string::npos)
+                        {
+                            sscanf(buf.c_str(), "%*s %d %d %d %*d", &R, &G, &B);
+                        }
+                        else if (buf.find("CoronaFarClip") != std::string::npos)
+                        {
+                            sscanf(buf.c_str(), "%*s %f", &DrawDistance);
+                        }
+                        else if (buf.find("CoronaSize") != std::string::npos)
+                        {
+                            sscanf(buf.c_str(), "%*s %f", &CoronaSize);
+                        }
+                        else if (buf.find("CoronaShowMode") != std::string::npos)
+                        {
+                            if (buf.find("DEFAULT") != std::string::npos || buf.find("TRAFFICLIGHT") != std::string::npos ||
+                                buf.find("TRAINCROSSLIGHT") != std::string::npos || buf.find("AT_RAIN_ONLY") != std::string::npos)
+                            {
+                                BlinkType = BlinkTypes::DEFAULT;
+                            }
+                            else if (buf.find("RANDOM_FLASHING") != std::string::npos ||
+                                     buf.find("RANDOM_FLASHIN_ALWAYS_AT_WET_WEATHER") != std::string::npos ||
+                                     buf.find("ALWAYS_AT_WET_WEATHER") != std::string::npos)
+                            {
+                                BlinkType = BlinkTypes::DEFAULT;
+                            }
+                            else if (buf.find("LIGHTS_ANIM_SPEED_4X") != std::string::npos)
+                            {
+                                BlinkType = BlinkTypes::T_1S_ON_1S_OFF;
+                            }
+                            else if (buf.find("LIGHTS_ANIM_SPEED_2X") != std::string::npos)
+                            {
+                                BlinkType = BlinkTypes::T_2S_ON_2S_OFF;
+                            }
+                            else if (buf.find("LIGHTS_ANIM_SPEED_1X") != std::string::npos)
+                            {
+                                BlinkType = BlinkTypes::T_4S_ON_4S_OFF;
+                            }
+                            else if (buf.find("5S_ON_5S_OFF") != std::string::npos)
+                            {
+                                BlinkType = BlinkTypes::T_5S_ON_5S_OFF;
+                            }
+                            else if (buf.find("6S_ON_4S_OFF") != std::string::npos || buf.find("6S_ON_4S_OFF_2") != std::string::npos)
+                            {
+                                BlinkType = BlinkTypes::T_6S_ON_4S_OFF;
+                            }
+
+                            if (ext.find("lamppost1") != std::string::npos || ext.find("lamppost2") != std::string::npos ||
+                                ext.find("lamppost3") != std::string::npos || ext.find("mlamppost") != std::string::npos ||
+                                ext.find("vegaslampost") != std::string::npos || ext.find("vegaslampost2") != std::string::npos ||
+                                ext.find("streetlamp1") != std::string::npos || ext.find("streetlamp2") != std::string::npos ||
+                                ext.find("ce_radarmast3") != std::string::npos || ext.find("radarmast1_lawn") != std::string::npos ||
+                                ext.find("radarmast1_lawn01") != std::string::npos || ext.find("bollardlight") != std::string::npos ||
+                                ext.find("sub_floodlite") != std::string::npos || ext.find("cj_traffic_light5") != std::string::npos ||
+                                ext.find("lamppost_coast") != std::string::npos || ext.find("airuntest_las") != std::string::npos ||
+                                ext.find("vegasairportlight") != std::string::npos || ext.find("gay_lamppost") != std::string::npos ||
+                                ext.find("gay_traffic_light") != std::string::npos || ext.find("cj_traffic_light4") != std::string::npos ||
+                                ext.find("lodnsmitter_sfs01") != std::string::npos || ext.find("lodrailbge01_sfse") != std::string::npos ||
+                                ext.find("lodrailbge02_sfse") != std::string::npos || ext.find("lodrailbge04_sfse") != std::string::npos ||
+                                ext.find("lodrailbge09_sfse") != std::string::npos || ext.find("lodtainercrane_04") != std::string::npos ||
+                                ext.find("lod_refchimny01") != std::string::npos || ext.find("mtraffic1") != std::string::npos ||
+                                ext.find("mtraffic2") != std::string::npos || ext.find("mtraffic3") != std::string::npos ||
+                                ext.find("mtraffic4") != std::string::npos || ext.find("trafficlight1") != std::string::npos ||
+                                ext.find("vgsstriptlights1") != std::string::npos || ext.find("circuslampost03") != std::string::npos)
+                            {
+                                nDrawSearchlight = 1;
+                            }
+
+                            if (buf.find("TRAFFICLIGHT") != std::string::npos)
+                            {
+                                CoronaSize = 0.45f;
+                                nDrawSearchlight = 0;
+                            }
+
+                            if (buf.find("TRAINCROSSLIGHT") != std::string::npos)
+                            {
+                                CoronaSize = 0.1f;
+                            }
+
+                            (offsetX == -0.0f) ? offsetX = 0.0f : offsetX;
+                            (offsetY == -0.0f) ? offsetY = 0.0f : offsetY;
+                            (offsetZ == -0.0f) ? offsetZ = 0.0f : offsetZ;
+
+                            if (CoronaSize > 0.0f)
+                            {
+                                auto GetPrecison = [](float value) -> int
+                                {
+                                    int width{ 10 };
+                                    int digits{ 0 };
+
+                                    if (value < 0.0f)
+                                    {
+                                        value *= -1.0f;
+                                        digits++;
+                                    }
+                                    digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
+                                    int precision{ (((width - digits - 1) >= 0) ? (width - digits - 1) : 0) };
+                                    return precision;
+                                };
+
+                                LodLights << std::right << std::setfill('0') << std::setw(3) << R << " " << std::setw(3) << G << " "
+                                          << std::setw(3) << B << " " << std::setw(3) << A << " " << std::setfill(' ') << std::left
+                                          << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetX)) << offsetX << " "
+                                          << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetY)) << offsetY << " "
+                                          << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " "
+                                          << std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " " << std::setw(4)
+                                          << std::fixed << std::setprecision(2) << DrawDistance << " " << std::right << std::setfill('0')
+                                          << std::setw(2) << BlinkType << " " << std::left << std::setfill(' ') << std::setw(1)
+                                          << nNoDistance << " " << std::setw(1) << nDrawSearchlight << std::endl;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        LodLights << "%lodnsmitter_sfs01" << endl;
+        LodLights << "255 000 000 255 -9.2980000 -11.402000 -68.624001 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 10.5050000 -0.0400000 -68.624001 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -9.2120000 11.2440000 -68.624001 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -7.9260000 9.12600000 -33.070000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 7.93200000 -0.0020000 -33.070000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -7.9740000 -9.2030000 -33.070000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -6.8400000 7.28500000 0.82600000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -6.8120000 -7.4080000 0.82600000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 5.76800000 -0.0970000 0.82600000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 7.37700000 0.06100000 24.6870000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -7.5860000 -8.5990000 24.6870000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -7.9060000 8.64800000 24.6870000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -7.8930000 15.8600000 51.5480000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -13.689000 12.5180000 51.5480000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 13.9000000 3.25600000 51.7970010 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 13.6740000 -3.2850000 51.7970010 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -7.9330000 -15.856000 51.6160010 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -13.234000 -12.272000 51.5480000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -8.1140000 -9.2560000 89.3089980 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 8.03700000 -0.0150000 89.3089980 1.00 300.0 00 2 0" << endl;
+        LodLights << "%radarmast1_lawn" << endl;
+        LodLights << "255 000 000 0.091000000000 0.05300000 24.6200000 0.10 300.0 00 2 0" << endl;
+        LodLights << "%radarmast1_lawn01" << endl;
+        LodLights << "255 000 000 255 0.13000000 -0.0080000 24.4900000 1.00 300.0 00 2 0" << endl;
+        LodLights << "%ce_radarmast3" << endl;
+        LodLights << "255 000 000 255 0.00100000 0.03300000 32.6570000 0.50 300.0 00 2 0" << endl;
+        LodLights << "%ws_ref_bollard" << endl;
+        LodLights << "255 000 000 255 0.00900000 0.00100000 0.46900000 0.70 300.0 00 2 0" << endl;
+        LodLights << "%baybridge1_sfse" << endl;
+        LodLights << "000 111 255 255 -76.679000 -16.446000 -8.7210000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -53.127000 -16.434000 -5.5900000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -29.320000 -16.434000 -0.1430000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -6.1820000 -16.434000 7.34300000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 16.3480000 -16.434000 16.7610000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 37.8660000 -16.434000 28.0760000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 58.7830000 -16.434000 41.4320000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -76.679000 16.4680000 -8.7210000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -53.127000 16.4680000 -5.5900000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -29.320000 16.4900000 -0.1430000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -6.1820000 16.4900000 7.34300000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 16.3480000 16.4900000 16.7610000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 37.8660000 16.4900000 28.0760000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 58.7830000 16.4900000 41.4320000 1.20 300.0 00 2 0" << endl;
+        LodLights << "%baybridge2_sfse" << endl;
+        LodLights << "255 000 000 255 38.4845000 -18.216500 83.4015000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 38.4790000 18.3384000 83.4015000 1.00 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 74.8720000 16.4080000 39.9210000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 74.8720000 -16.476000 39.9210000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 56.6360000 -16.476000 56.2430000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 56.6360000 16.4080000 56.2430000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 17.5910000 -16.476000 53.3240000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 17.5910000 16.4080000 53.3240000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -0.5510000 -16.476000 37.6250000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -0.5510000 16.4080000 37.6250000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -19.959000 -16.476000 24.1330000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -19.959000 16.4080000 24.1330000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -40.829000 -16.476000 12.1530000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -62.489000 16.4080000 2.28400000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -62.489000 -16.476000 2.26900000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -84.947000 -16.476000 -5.7150000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -84.947000 16.4080000 -5.7010000 1.20 300.0 00 2 0" << endl;
+        LodLights << "%baybridge3_sfse" << endl;
+        LodLights << "255 000 000 255 -100.83000 18.3671000 89.5265000 1.00 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -100.87000 -18.140600 89.5265000 1.00 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 136.609000 -16.542000 -5.2150000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 136.609000 16.3830000 -5.2150000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 112.756000 16.3830000 -8.1900000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 112.756000 -16.542000 -8.1900000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 69.1490000 16.3830000 -8.1900000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 69.1490000 -16.542000 -8.1900000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 45.4190000 -16.542000 -4.9990000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 45.4190000 16.3830000 -4.9990000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 22.1890000 -16.542000 0.42900000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 22.1890000 16.3830000 0.42900000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -0.2570000 -16.542000 8.42400000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -0.2570000 16.3830000 8.42400000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -21.660000 16.3830000 18.3810000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -21.660000 -16.542000 18.3810000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -42.686000 -16.542000 30.2490000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -42.686000 16.3830000 30.2490000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -62.074000 -16.421000 43.8980000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -62.074000 16.5040000 43.8980000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -80.451000 -16.463000 59.1700000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -80.451000 16.4620000 59.1700000 1.20 300.0 00 2 0" << endl;
+        LodLights << "%baybridge4_sfse" << endl;
+        LodLights << "000 111 255 255 73.9600000 16.4190000 66.5760000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 73.9600000 -16.496000 66.5760000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 55.5380000 16.4190000 50.2920000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 55.5380000 -16.496000 50.2920000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 36.2830000 16.4190000 35.6030000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 36.2830000 -16.496000 35.6030000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 15.3910000 16.4190000 22.1260000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 15.3910000 -16.496000 22.1260000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -6.2090000 16.4190000 10.8280000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -6.2090000 -16.496000 10.8280000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -28.574000 16.4190000 1.46500000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -28.574000 -16.496000 1.46500000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -51.905000 16.4190000 -5.8690000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -51.905000 -16.496000 -5.8690000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -75.652000 16.4190000 -11.285000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -75.652000 -16.496000 -11.285000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -99.500000 16.4190000 -14.214000 1.20 300.0 00 2 0" << endl;
+        LodLights << "000 111 255 255 -99.500000 -16.496000 -14.214000 1.20 300.0 00 2 0" << endl;
+        LodLights << "%ggbrig_06_sfw" << endl;
+        LodLights << "255 000 000 255 19.0970000 0.12800000 115.890000 2.00 300.0 00 2 0" << endl;
+        LodLights << "%ggbrig_01_sfw" << endl;
+        LodLights << "255 000 000 255 19.0970000 0.12800000 115.890000 2.00 300.0 00 2 0" << endl;
+        LodLights << "%ggbrig_03_sfw" << endl;
+        LodLights << "255 000 000 255 19.3850000 55.7600000 19.4330000 1.20 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -19.136000 55.7600000 19.4330000 1.20 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -19.136000 -5.9890000 -30.831000 1.20 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 19.3850000 -5.9890000 -30.831000 1.20 300.0 00 2 0" << endl;
+        LodLights << "%ggbrig_05_sfw" << endl;
+        LodLights << "255 000 000 255 -19.308000 -59.193000 17.7280000 1.20 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 19.1360000 -59.193000 17.7280000 1.20 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 19.1360000 2.37500000 -31.452000 1.20 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -19.308000 2.37500000 -31.452000 1.20 300.0 00 2 0" << endl;
+        LodLights << "%cxrf_whitebrig" << endl;
+        LodLights << "249 145 34 255 -0.11800000 -29.064000 5.17500000 1.20 300.0 00 2 0" << endl;
+        LodLights << "249 145 34 255 16.63200000 -29.064000 5.17500000 1.20 300.0 00 2 0" << endl;
+        LodLights << "249 145 34 255 16.63200000 28.9200000 5.17500000 1.20 300.0 00 2 0" << endl;
+        LodLights << "249 145 34 255 -0.11800000 28.9200000 5.17500000 1.20 300.0 00 2 0" << endl;
+        LodLights << "%des_bigtelescope" << endl;
+        LodLights << "255 000 000 255 24.0510000 24.2580000 53.9150000 3.00 300.0 00 2 0" << endl;
+        LodLights << "%pylon_big1_" << endl;
+        LodLights << "255 000 000 255 4.67100000 0.13400000 36.0030000 1.20 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -4.3560000 0.13400000 36.0030000 1.20 300.0 00 2 0" << endl;
+
+        LodLights << "%additional_coronas" << endl;
+        LodLights << "255 255 255 255 -651.28700 2145.91000 74.7152000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 255 255 255 -781.25600 2140.42000 74.7152000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 255 255 255 -811.16800 2015.78000 57.1071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 255 255 255 -794.20900 2024.26000 57.1071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 255 255 255 -776.24400 2031.43000 57.1071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 255 255 255 -733.82300 2041.57000 57.1071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 255 255 255 -714.85400 2043.30000 57.1071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 255 255 255 -695.27600 2043.66000 57.1071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 255 255 255 -653.37600 2038.31000 57.1071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 255 255 255 -635.24900 2032.18000 57.1071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 255 255 255 -617.31900 2024.71000 57.1071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -750.89400 2036.27000 76.7071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "255 000 000 255 -678.84900 2040.47000 76.7071000 0.70 300.0 00 2 0" << endl;
+        LodLights << "#place you coronas here" << endl;
+
+        return LodLights.str();
+    }
+
+    string ConvertLightTo2DFX()
+    {
+        ostringstream LodLights;
+
+        LodLights << "#%modelname" << endl;
+        LodLights << "#Red, Green, Blue, Alpha, OffsetX, OffsetY, OffsetZ, CustomSize, DrawDistance, BlinkType, NoDistance, DrawSearchlight"
+                  << endl;
+        LodLights << "#0.45 - custom size reserved for traffic lights" << endl;
+        LodLights << endl;
+
+        if (!SetCurrentDirectory(".\\iv\\"))
+            throw runtime_error("Missing iv input directory");
+        WIN32_FIND_DATA fd;
+        HANDLE TXTFile{ FindFirstFile("*.light", &fd) };
+        if (TXTFile != INVALID_HANDLE_VALUE)
+        {
+            do
+            {
+                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+                {
+
+                    ifstream TXTFileContent(fd.cFileName);
+                    string buf;
+                    string ext{ fd.cFileName };
+                    ext.replace(ext.find(".light"), 6, "\0");
+                    string ext2{ ext };
+
+                    bool mdlname{ false };
+
+                    char EntryName[256]{};
+                    float offsetX{}, offsetY{}, offsetZ{}, CoronaSize{}, DrawDistance{};
+                    int R{}, G{}, B{}, A{ 255 };
+                    int BlinkType{ 0 };
+                    int nNoDistance{ 0 };
+                    int nDrawSearchlight{ 0 };
+                    int BoneID{ 0 };
+                    int type_matched{ 0 };
+                    while (getline(TXTFileContent, buf))
+                    {
+                        if (buf[0] != '#')
+                        {
+                            if (sscanf(buf.c_str(), "%255s", EntryName))
+                            {
+                                if (buf.find("Flags") != std::string::npos && buf.find("TypeFlags") == std::string::npos)
+                                {
+                                    enum LightFlags
+                                    {
+                                        None,
+                                        RandomFlashing1,
+                                        RandomFlashing2,
+                                        HazardFlashing1,
+                                        SlowHazardFlashing,
+                                        VerySlowHazardFlashing,
+                                        LightAllDay,
+                                        OnAtNightOnly,
+                                        WeakLight,
+                                        VeryFastHazardFlashing,
+                                        FastHazardFlashing,
+                                        VerySlowFadeInOut1,
+                                        VerySlowFadeInOut2,
+                                        SlowFadeInOut,
+                                        HazardFlashing2,
+                                        StaticShadows,
+                                        DynamicShadows,
+                                        WeatherModifiedColor,
+                                        unk17,
+                                        unk18,
+                                        ShowRays,
+                                        NoCoronaReflections,
+                                    };
+
+                                    uint32_t dwFlags{ 0 };
+                                    sscanf(buf.c_str(), "%*s %d", &dwFlags);
+                                    auto bitFlags{ std::bitset<32>(dwFlags) };
+
+                                    if (bitFlags.test(RandomFlashing1))
+                                        BlinkType = BlinkTypes::RANDOM_FLASHING;
+                                    else if (bitFlags.test(RandomFlashing2))
+                                        BlinkType = BlinkTypes::RANDOM_FLASHING;
+                                    else if (bitFlags.test(HazardFlashing1))
+                                        BlinkType = BlinkTypes::T_2S_ON_2S_OFF;
+                                    else if (bitFlags.test(SlowHazardFlashing))
+                                        BlinkType = BlinkTypes::T_3S_ON_3S_OFF;
+                                    else if (bitFlags.test(VerySlowHazardFlashing))
+                                        BlinkType = BlinkTypes::T_3S_ON_3S_OFF;
+                                    else if (bitFlags.test(VeryFastHazardFlashing))
+                                        BlinkType = BlinkTypes::T_1S_ON_1S_OFF;
+                                    else if (bitFlags.test(FastHazardFlashing))
+                                        BlinkType = BlinkTypes::T_2S_ON_2S_OFF;
+                                    else if (bitFlags.test(HazardFlashing2))
+                                        BlinkType = BlinkTypes::T_3S_ON_3S_OFF;
+                                    else
+                                        BlinkType = BlinkTypes::DEFAULT;
+                                }
+                                else if (buf.find("TypeFlags") != std::string::npos)
+                                {
+                                    if (!buf.contains(" f"))
+                                        BlinkType = BlinkTypes::DEFAULT;
+                                }
+                                else if (buf.find("Position") != std::string::npos)
+                                {
+                                    sscanf(buf.c_str(), "%*s %f %f %f", &offsetX, &offsetY, &offsetZ);
+                                }
+                                else if (buf.find("Color") != std::string::npos)
+                                {
+                                    sscanf(buf.c_str(), "%*s %d %d %d %*d", &R, &G, &B);
+                                }
+                                else if (buf.find("CoronaSize") != std::string::npos)
+                                {
+                                    sscanf(buf.c_str(), "%*s %f", &CoronaSize);
+
+                                    if (CoronaSize > 1.0f)
+                                        CoronaSize = 1.2f;
+
+                                    if (ext.find("traf") != std::string::npos)
+                                        CoronaSize = 0.45f;
+
+                                    (offsetX == -0.0f) ? offsetX = 0.0f : offsetX;
+                                    (offsetY == -0.0f) ? offsetY = 0.0f : offsetY;
+                                    (offsetZ == -0.0f) ? offsetZ = 0.0f : offsetZ;
+                                }
+                                else if (buf.find("_f28 ") != std::string::npos)
+                                {
+                                    sscanf(buf.c_str(), "%*s %f", &DrawDistance);
+                                }
+                                else if (buf.find("Type Spot") != std::string::npos || buf.find("Type Omni") != std::string::npos)
+                                {
+                                    type_matched = ((buf.find("Type Omni") != std::string::npos) ? 1 : 2);
+                                }
+                                else if (buf.find("BoneID ") != std::string::npos)
+                                {
+                                    if (type_matched)
+                                    {
+                                        sscanf(buf.c_str(), "%*s %d", &BoneID);
+
+                                        ext = ext2 + ".skel";
+                                        ifstream TXTFileContent2(ext);
+                                        string buf2;
+
+                                        if (TXTFileContent2.is_open())
+                                        {
+                                            int SkelBoneID{ 0 };
+                                            while (getline(TXTFileContent2, buf2))
+                                            {
+
+                                                if (buf2.find("Id ") != std::string::npos)
+                                                {
+                                                    sscanf(buf2.c_str(), "%*s %d", &SkelBoneID);
+                                                }
+                                                else if (buf2.find("WorldOffset") != std::string::npos)
+                                                {
+                                                    if (BoneID == SkelBoneID)
+                                                    {
+                                                        float offsetX2{}, offsetY2{}, offsetZ2{};
+                                                        sscanf(buf2.c_str(), "%*s %f %f %f", &offsetX2, &offsetY2, &offsetZ2);
+                                                        offsetX += offsetX2;
+                                                        offsetY += offsetY2;
+                                                        offsetZ += offsetZ2;
+                                                        BoneID = -1;
+                                                    }
+                                                }
+                                            }
+                                            TXTFileContent2.close();
+                                        }
+
+                                        if (CoronaSize > 0.0f)
+                                        {
+                                            auto GetPrecison = [](float value) -> int
+                                            {
+                                                int width{ 10 };
+                                                int digits{ 0 };
+
+                                                if (value < 0.0f)
+                                                {
+                                                    value *= -1.0f;
+                                                    digits++;
+                                                }
+                                                digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
+                                                int precision{ (((width - digits - 1) >= 0) ? (width - digits - 1) : 0) };
+                                                return precision;
+                                            };
+
+                                            if (!mdlname)
+                                            {
+                                                LodLights << "%" << ext2.c_str() << endl;
+                                                mdlname = true;
+                                            }
+
+                                            LodLights << std::right << std::setfill('0') << std::setw(3) << R << " " << std::setw(3) << G
+                                                      << " " << std::setw(3) << B << " " << std::setw(3) << ((type_matched == 1) ? 128 : A)
+                                                      << " " << std::setfill(' ') << std::left << std::setw(10) << std::fixed
+                                                      << std::setprecision(GetPrecison(offsetX)) << offsetX << " " << std::setw(10)
+                                                      << std::fixed << std::setprecision(GetPrecison(offsetY)) << offsetY << " "
+                                                      << std::setw(10) << std::fixed << std::setprecision(GetPrecison(offsetZ)) << offsetZ
+                                                      << " " << std::setw(4) << std::fixed << std::setprecision(2) << CoronaSize << " "
+                                                      << std::setw(4) << std::fixed << std::setprecision(2) << DrawDistance << " "
+                                                      << std::right << std::setfill('0') << std::setw(2) << BlinkType << " " << std::left
+                                                      << std::setfill(' ') << std::setw(1) << nNoDistance << " " << std::setw(1)
+                                                      << nDrawSearchlight << std::endl;
+                                        }
+                                        type_matched = 0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    TXTFileContent.close();
+                }
+
+            } while (FindNextFile(TXTFile, &fd));
+            FindClose(TXTFile);
+        }
+
+        LodLights << "%AM_FM1_BridgeLite" << endl;
+        LodLights << "238 208 143 128 -15.851560 -71.448487 -1.1883540 1.20 100.00 00 0 0" << endl;
+        LodLights << "238 208 143 128 -9.1441650 -73.578612 -1.1579590 1.20 100.00 00 0 0" << endl;
+        LodLights << "238 208 143 128 -3.5186770 0.32116700 -0.8319090 1.20 100.00 00 0 0" << endl;
+        LodLights << "238 208 143 128 3.51855500 0.36804200 -0.8015140 1.20 100.00 00 0 0" << endl;
+        LodLights << "238 208 143 128 -3.5854490 73.2401130 -1.1883540 1.20 100.00 00 0 0" << endl;
+        LodLights << "238 208 143 128 3.45202600 73.2868670 -1.1579590 1.20 100.00 00 0 0" << endl;
+        LodLights << "238 208 143 128 -3.5854490 146.509300 -2.5617680 1.20 100.00 00 0 0" << endl;
+        LodLights << "238 208 143 128 3.45202600 146.556050 -2.5319820 1.20 100.00 00 0 0" << endl;
+        LodLights << "%bxe_fw_hi_snglel02" << endl;
+        LodLights << "241 218 167 128 -3.7841800 -20.243042 7.73803700 1.20 100.00 00 0 0" << endl;
+        LodLights << "241 218 167 128 3.25305200 -20.196043 7.76757800 1.20 100.00 00 0 0" << endl;
+        LodLights << "238 208 143 128 -3.7841800 53.7133750 4.69055200 1.20 100.00 00 0 0" << endl;
+        LodLights << "238 208 143 128 3.25305200 53.7605000 4.72021400 1.20 100.00 00 0 0" << endl;
+        LodLights << "%bxe_fw_hi_snglel" << endl;
+        LodLights << "238 208 143 128 -3.7841800 16.5852050 5.37573300 1.20 100.00 00 0 0" << endl;
+        LodLights << "238 208 143 128 3.25293000 16.6317120 5.40600600 1.20 100.00 00 0 0" << endl;
+
+        SetCurrentDirectory("..\\");
+        return LodLights.str();
+    }
+
+    string InputPath(const string& line)
+    {
+        istringstream input(line);
+        string type, name;
+        input >> type >> name;
+        filesystem::path path{ name };
+        if (filesystem::exists(path))
+            return path.string();
+        auto it{ path.begin() };
+        if (it != path.end())
+        {
+            string first{ it->string() };
+            transform(first.begin(), first.end(), first.begin(), ::tolower);
+            if (first == "data")
+            {
+                filesystem::path relative;
+                for (++it; it != path.end(); ++it)
+                    relative /= *it;
+                return relative.string();
+            }
+        }
+        return name;
+    }
+
+    string Run(const string& game)
+    {
+        string line, line2;
+        ifstream GTAData(game == "iii" ? "gta3.dat" : game == "vc" ? "gta_vc.dat" : game == "lcs" ? "gta_lcs.dat" : "gta_vcs.dat");
+        Filename = game == "iii"   ? "IIILodLights.dat"
+                   : game == "vc"  ? "VCLodLights.dat"
+                   : game == "lcs" ? "LCSLodLights.dat"
+                                   : "VCSLodLights.dat";
+        if (!GTAData)
+            throw runtime_error("Game manifest not found");
+
+        stringstream IDEData;
+        stringstream IPLData;
+        stringstream FX2DData;
+
+        while (getline(GTAData, line))
+        {
+            if (line[0] != '#')
+            {
+                if (line[0] == 'I' && line[1] == 'D' && line[2] == 'E')
+                {
+                    cout << InputPath(line) << endl;
+                    string IDEline;
+                    ifstream IDEFile(InputPath(line));
+                    if (IDEFile.is_open())
+                    {
+                        while (getline(IDEFile, IDEline))
+                        {
+                            if (IDEline[0] != '#')
+                            {
+                                int ID{};
+                                char ModelName[256]{};
+                                IDEline.erase(std::remove(IDEline.begin(), IDEline.end(), ','), IDEline.end());
+                                if (sscanf(IDEline.c_str(), "%d %255s %*s %*d %*s", &ID, ModelName))
+                                {
+                                    if (IDEline.find("coronastar") == std::string::npos)
+                                    {
+                                        IDEData << IDEline << endl;
+                                    }
+                                    else
+                                    {
+                                        FX2DData << IDEline << endl;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (line[0] == 'I' && line[1] == 'P' && line[2] == 'L')
+                {
+                    cout << InputPath(line) << endl;
+                    string IPLline;
+                    ifstream IDEFile(InputPath(line));
+                    if (IDEFile.is_open())
+                    {
+                        while (getline(IDEFile, IPLline))
+                        {
+                            if (IPLline[0] != '#')
+                            {
+                                int ID{};
+                                char ModelName[256]{};
+                                IPLline.erase(std::remove(IPLline.begin(), IPLline.end(), ','), IPLline.end());
+                                if (sscanf(IPLline.c_str(), "%d %255s %*s %*d %*s", &ID, ModelName))
+                                {
+                                    if (IPLline.find("coronastar") == std::string::npos)
+                                    {
+                                        IPLData << IPLline << endl;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        ostringstream LodLights;
+
+        if (FX2DData.good())
+        {
+            LodLights << "#%modelname" << endl;
+            LodLights
+                << "#Red, Green, Blue, Alpha, OffsetX, OffsetY, OffsetZ, CustomSize, DrawDistance, BlinkType, NoDistance, DrawSearchlight"
+                << endl;
+            LodLights << "#0.45 - custom size reserved for traffic lights" << endl;
+            LodLights << endl;
+
+            int PrevID{};
+            int TrafficLCount{};
+            while (getline(FX2DData, line))
+            {
+                int ID{};
+                float offsetX, offsetY, offsetZ;
+                int R{}, G{}, B{}, A{ 255 };
+                int BlinkType{ 0 };
+                int nNoDistance{ 0 };
+                int nDrawSearchlight{ 0 };
+                int unk1, type;
+                char Corona[256]{}, Shadow[256]{};
+                float Distance, OuterRange, CoronaSize, InnerRange;
+                int ShadowIntensity, Wet, Flare, Dust;
+                line.erase(std::remove(line.begin(), line.end(), ','), line.end());
+                if (sscanf(line.c_str(), "%d %f %f %f %d %d %d %d %d %255s %255s %f %f %f %f %d %d %d %d %d", &ID, &offsetX, &offsetY,
+                           &offsetZ, &R, &G, &B, &unk1, &type, Corona, Shadow, &Distance, &OuterRange, &CoronaSize, &InnerRange,
+                           &ShadowIntensity, &BlinkType, &Wet, &Flare, &Dust))
+                {
+                    enum
+                    {
+                        LIGHT_ON,
+                        LIGHT_ON_NIGHT,
+                        LIGHT_FLICKER,
+                        LIGHT_FLICKER_NIGHT,
+                        LIGHT_FLASH1,
+                        LIGHT_FLASH1_NIGHT,
+                        LIGHT_FLASH2,
+                        LIGHT_FLASH2_NIGHT,
+                        LIGHT_FLASH3,
+                        LIGHT_FLASH3_NIGHT,
+                        LIGHT_RANDOM_FLICKER,
+                        LIGHT_RANDOM_FLICKER_NIGHT,
+                        LIGHT_SPECIAL,
+                        LIGHT_BRIDGE_FLASH1,
+                        LIGHT_BRIDGE_FLASH2,
+                    };
+
+                    auto MapLightTypeToBlinkType = [](uint8_t lightType) -> BlinkTypes
+                    {
+                        switch (lightType)
+                        {
+                        case LIGHT_ON:
+                        case LIGHT_ON_NIGHT:
+                        case LIGHT_SPECIAL:
+                            return BlinkTypes::DEFAULT;
+
+                        case LIGHT_FLICKER:
+                            return BlinkTypes::RANDOM_FLASHING;
+                        case LIGHT_FLICKER_NIGHT:
+                            return BlinkTypes::RANDOM_FLASHING;
+                        case LIGHT_RANDOM_FLICKER:
+                            return BlinkTypes::RANDOM_FLASHING;
+                        case LIGHT_RANDOM_FLICKER_NIGHT:
+                            return BlinkTypes::DEFAULT;
+
+                        case LIGHT_FLASH1:
+                        case LIGHT_FLASH1_NIGHT:
+                        case LIGHT_BRIDGE_FLASH1:
+
+                            return BlinkTypes::T_1S_ON_1S_OFF;
+
+                        case LIGHT_FLASH2:
+                        case LIGHT_FLASH2_NIGHT:
+
+                            return BlinkTypes::T_2S_ON_2S_OFF;
+
+                        case LIGHT_FLASH3:
+                        case LIGHT_FLASH3_NIGHT:
+
+                            return BlinkTypes::T_4S_ON_4S_OFF;
+
+                        case LIGHT_BRIDGE_FLASH2:
+
+                            return BlinkTypes::T_6S_ON_4S_OFF;
+
+                        default:
+                            return BlinkTypes::DEFAULT;
+                        }
+                    };
+
+                    BlinkType = MapLightTypeToBlinkType(BlinkType);
+
+                    if (CoronaSize > 1.0f)
+                        CoronaSize = 1.2f;
+
+                    if (!CoronaSize || ID == 4481 || ID == 4483)
+                        continue;
+
+                    auto GetPrecison = [](float value) -> int
+                    {
+                        int width{ 10 };
+                        int digits{ 0 };
+
+                        if (value < 0.0f)
+                        {
+                            value *= -1.0f;
+                            digits++;
+                        }
+                        digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
+                        int precision{ (((width - digits - 1) >= 0) ? (width - digits - 1) : 0) };
+                        return precision;
+                    };
+
+                    if (PrevID != ID)
+                    {
+                        IDEData.clear();
+                        IDEData.seekg(0, ios::beg);
+                        while (getline(IDEData, line2))
+                        {
+                            line2.erase(std::remove(line2.begin(), line2.end(), ','), line2.end());
+                            int IdeID{};
+                            char ModelName2[256]{};
+                            if (sscanf(line2.c_str(), "%d %255s %*s %*d %*s", &IdeID, ModelName2))
+                            {
+                                if (IdeID == ID)
+                                {
+                                    LodLights << "%" << ModelName2 << endl;
+                                    break;
+                                }
+                            }
+                        }
+                        std::transform(line2.begin(), line2.end(), line2.begin(), ::tolower);
+
+                        if (line2.find("lamppost1") != std::string::npos || line2.find("lamppost2") != std::string::npos ||
+                            line2.find("lamppost3") != std::string::npos || line2.find("sub_floodlite") != std::string::npos ||
+                            line2.find("mlamppost") != std::string::npos || line2.find("doublestreetlght1") != std::string::npos ||
+                            line2.find("bollardlight") != std::string::npos || line2.find("lampost_coast") != std::string::npos ||
+                            line2.find("doc_floodlite") != std::string::npos)
+                        {
+                            nDrawSearchlight = 1;
+                        }
+
+                        if (line2.find("mtraffic1") != std::string::npos || line2.find("mtraffic2") != std::string::npos ||
+                            line2.find("mtraffic4") != std::string::npos || line2.find("trafficlight1") != std::string::npos)
+                        {
+                            CoronaSize = 0.45f;
+                            nDrawSearchlight = 0;
+                            R = 255;
+                            G = 0;
+                            B = 0;
+                            TrafficLCount = 0;
+                        }
+
+                        (offsetX == -0.0f) ? offsetX = 0.0f : offsetX;
+                        (offsetY == -0.0f) ? offsetY = 0.0f : offsetY;
+                        (offsetZ == -0.0f) ? offsetZ = 0.0f : offsetZ;
+
+                        LodLights << std::right << std::setfill('0') << std::setw(3) << R << " " << std::setw(3) << G << " " << std::setw(3)
+                                  << B << " " << std::setw(3) << A << " " << std::setfill(' ') << std::left << std::setw(10) << std::fixed
+                                  << std::setprecision(GetPrecison(offsetX)) << offsetX << " " << std::setw(10) << std::fixed
+                                  << std::setprecision(GetPrecison(offsetY)) << offsetY << " " << std::setw(10) << std::fixed
+                                  << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " " << std::setw(4) << std::fixed
+                                  << std::setprecision(2) << CoronaSize << " ";
+
+                        LodLights << std::setw(4) << std::fixed << std::setprecision(2) << Distance << " ";
+
+                        LodLights << std::right << std::setfill('0') << std::setw(2) << BlinkType << " " << std::left << std::setfill(' ')
+                                  << std::setw(1) << nNoDistance << " " << std::setw(1) << nDrawSearchlight << std::endl;
+
+                        PrevID = ID;
+                    }
+                    else
+                    {
+                        std::transform(line2.begin(), line2.end(), line2.begin(), ::tolower);
+
+                        if (line2.find("lamppost1") != std::string::npos || line2.find("lamppost2") != std::string::npos ||
+                            line2.find("lamppost3") != std::string::npos || line2.find("sub_floodlite") != std::string::npos ||
+                            line2.find("mlamppost") != std::string::npos || line2.find("doublestreetlght1") != std::string::npos ||
+                            line2.find("bollardlight") != std::string::npos || line2.find("lampost_coast") != std::string::npos ||
+                            line2.find("doc_floodlite") != std::string::npos)
+                        {
+                            nDrawSearchlight = 1;
+                        }
+
+                        if (line2.find("mtraffic1") != std::string::npos || line2.find("mtraffic2") != std::string::npos ||
+                            line2.find("mtraffic4") != std::string::npos || line2.find("trafficlight1") != std::string::npos)
+                        {
+                            CoronaSize = 0.45f;
+                            nDrawSearchlight = 0;
+
+                            TrafficLCount++;
+                            switch (TrafficLCount)
+                            {
+                            case 1:
+                                R = 255;
+                                G = 128;
+                                B = 0;
+                                break;
+                            case 2:
+                                R = 0;
+                                G = 255;
+                                B = 0;
+                                break;
+                            case 3:
+                                R = 255;
+                                G = 0;
+                                B = 0;
+                                break;
+                            case 4:
+                                R = 255;
+                                G = 128;
+                                B = 0;
+                                break;
+                            case 5:
+                                R = 0;
+                                G = 255;
+                                B = 0;
+                                break;
+                            default:
+                                break;
+                            }
+                        }
+
+                        (offsetX == -0.0f) ? offsetX = 0.0f : offsetX;
+                        (offsetY == -0.0f) ? offsetY = 0.0f : offsetY;
+                        (offsetZ == -0.0f) ? offsetZ = 0.0f : offsetZ;
+
+                        LodLights << std::right << std::setfill('0') << std::setw(3) << R << " " << std::setw(3) << G << " " << std::setw(3)
+                                  << B << " " << std::setw(3) << A << " " << std::setfill(' ') << std::left << std::setw(10) << std::fixed
+                                  << std::setprecision(GetPrecison(offsetX)) << offsetX << " " << std::setw(10) << std::fixed
+                                  << std::setprecision(GetPrecison(offsetY)) << offsetY << " " << std::setw(10) << std::fixed
+                                  << std::setprecision(GetPrecison(offsetZ)) << offsetZ << " " << std::setw(4) << std::fixed
+                                  << std::setprecision(2) << CoronaSize << " ";
+
+                        LodLights << std::setw(4) << std::fixed << std::setprecision(2) << Distance << " ";
+
+                        LodLights << std::right << std::setfill('0') << std::setw(2) << BlinkType << " " << std::left << std::setfill(' ')
+                                  << std::setw(1) << nNoDistance << " " << std::setw(1) << nDrawSearchlight << std::endl;
+                    }
+                }
+            }
+        }
+
+        LodLights << "%additional_coronas" << endl;
+        if (Filename == "IIILodLights.dat")
+        {
+            LodLights << "#place you coronas here" << endl;
+        }
+        else if (Filename == "VCLodLights.dat")
+        {
+            LodLights << "255 000 255 255 -682.82100 -919.10200 12.5548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -662.82100 -920.20200 13.7548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -642.82100 -920.80200 15.2548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -622.82100 -921.00200 16.8548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -682.82100 -939.70200 12.5548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -662.82100 -940.60200 13.7548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -642.82100 -941.20200 15.2548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -622.82100 -941.40200 16.8548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -602.82100 -921.10200 18.2548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -602.82100 -941.50200 18.2548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -582.82100 -921.20200 19.7548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -582.82100 -941.60200 19.7548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -562.82100 -921.20200 21.5548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -562.82100 -941.60200 21.5548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -542.82100 -921.20200 22.6548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -542.82100 -941.60200 22.6548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -522.82100 -921.20200 23.3548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -522.82100 -941.60200 23.3548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -502.82100 -941.60200 24.1548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -502.82100 -921.20200 24.1548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -482.82100 -921.60200 24.4548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -482.82100 -942.00200 24.4548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -462.82100 -922.10200 24.4548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -462.82100 -942.50200 24.4548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -442.82100 -922.40200 23.9548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -442.82100 -942.80200 23.9548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -422.82100 -922.70200 23.3548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -422.82100 -943.10200 23.3548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -402.82100 -943.50200 22.4548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -402.82100 -923.10200 22.4548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -382.82100 -944.00200 21.1548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -382.82100 -923.60200 21.1548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -362.82100 -944.70200 19.5548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -362.82100 -924.30200 19.5548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -342.82100 -945.20200 18.2548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -342.82100 -924.80200 18.2548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -322.82100 -925.90200 17.0548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -322.82100 -946.40200 17.0548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -302.82100 -927.00200 15.9548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -302.82100 -947.50200 15.9548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -282.82100 -948.30200 15.2548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "255 000 255 255 -282.82100 -927.90200 15.2548000 0.70 300.0 00 2 0" << endl;
+            LodLights << "#place you coronas here" << endl;
+        }
+        else if (Filename == "VCSLodLights.dat" || Filename == "LCSLodLights.dat")
+        {
+
+            istringstream LodLights2(LodLights.str());
+
+            ostringstream AbsLights;
+
+            while (getline(IPLData, line))
+            {
+                int ModelId{};
+                char ModelName[256]{};
+                int Interior{};
+
+                struct RwV3d2
+                {
+                    double x;
+                    double y;
+                    double z;
+                };
+
+                RwV3d2 trans2{}, scale2{}, axis2{};
+                RwV3d trans, scale, axis;
+                double angle{};
+                line.erase(std::remove(line.begin(), line.end(), ','), line.end());
+                if (sscanf(line.c_str(), "%d %255s %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", &ModelId, ModelName, &Interior, &trans2.x,
+                           &trans2.y, &trans2.z, &scale2.x, &scale2.y, &scale2.z, &axis2.x, &axis2.y, &axis2.z, &angle) != 13)
+                {
+                    if (sscanf(line.c_str(), "%d %255s %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", &ModelId, ModelName, &trans2.x, &trans2.y,
+                               &trans2.z, &scale2.x, &scale2.y, &scale2.z, &axis2.x, &axis2.y, &axis2.z, &angle) != 12)
+                        continue;
+                }
+
+                trans.x = static_cast<float>(trans2.x);
+                trans.y = static_cast<float>(trans2.y);
+                trans.z = static_cast<float>(trans2.z);
+
+                scale.x = static_cast<float>(scale2.x);
+                scale.y = static_cast<float>(scale2.y);
+                scale.z = static_cast<float>(scale2.z);
+
+                axis.x = static_cast<float>(axis2.x);
+                axis.y = static_cast<float>(axis2.y);
+                axis.z = static_cast<float>(axis2.z);
+
+                {
+                    LodLights2.clear();
+                    LodLights2.seekg(0, std::ios::beg);
+                    string nModel;
+                    while (getline(LodLights2, line))
+                    {
+                        if (line[0] && line[0] != '#')
+                        {
+
+                            if (line[0] == '%')
+                            {
+                                nModel = line.substr(1);
+                            }
+                            else
+                            {
+                                if (nModel != ModelName)
+                                    continue;
+                                float fOffsetX, fOffsetY, fOffsetZ;
+                                unsigned int nRed, nGreen, nBlue, nAlpha;
+                                float fCustomSize{ 1.0f };
+                                float fDistance{ 0.0f };
+                                int nNoDistance{ 0 };
+                                int nDrawSearchlight{ 0 };
+                                int nCoronaShowMode{ 0 };
+                                sscanf(line.c_str(), "%3d %3d %3d %3d %f %f %f %f %f %2d %1d %1d", &nRed, &nGreen, &nBlue, &nAlpha,
+                                       &fOffsetX, &fOffsetY, &fOffsetZ, &fCustomSize, &fDistance, &nCoronaShowMode, &nNoDistance,
+                                       &nDrawSearchlight);
+
+                                CMatrix dummyMatrix;
+                                auto angle2{ -((2.0f * acos(angle)) * 180.0f / Pi) };
+                                makeRotation(&dummyMatrix, &axis, static_cast<float>(angle2), &trans);
+
+                                auto pos{ dummyMatrix * CVector(fOffsetX, fOffsetY, fOffsetZ) };
+                                auto heading{ angle };
+
+                                auto GetPrecison = [](float value) -> int
+                                {
+                                    int width{ 10 };
+                                    int digits{ 0 };
+
+                                    if (value < 0.0f)
+                                    {
+                                        value *= -1.0f;
+                                        digits++;
+                                    }
+                                    digits += ((value < 1) ? 1 : int(1 + log10(float(abs(value)))));
+                                    int precision{ (((width - digits - 1) >= 0) ? (width - digits - 1) : 0) };
+                                    return precision;
+                                };
+
+                                AbsLights << std::left << "{ " << std::setfill(' ') << std::setw(10) << std::fixed
+                                          << std::setprecision(GetPrecison(pos.x)) << pos.x << "f, " << std::setw(10) << std::fixed
+                                          << std::setprecision(GetPrecison(pos.y)) << pos.y << "f, " << std::setw(10) << std::fixed
+                                          << std::setprecision(GetPrecison(pos.z)) << pos.z << "f, " << std::setfill('0') << std::setw(4)
+                                          << std::fixed << std::setprecision(2) << fCustomSize << "f, " << std::setw(6) << std::fixed
+                                          << std::setprecision(1) << fDistance << "f, " << std::setw(4) << std::fixed
+                                          << (heading < 0.0f ? std::setprecision(2) : std::setprecision(3)) << heading << "f, "
+                                          << std::setfill(' ') << std::right << std::setw(3) << nRed << ", " << std::setw(3) << nGreen
+                                          << ", " << std::setw(3) << nBlue << ", " << std::setw(3) << nAlpha << ", " << std::setw(1)
+                                          << nCoronaShowMode << ", " << std::setw(1) << nNoDistance << " /*, "
+                                          << "\"" << ModelName << "\"*/" << std::setw(1) << " }," << std::endl;
+                            }
+                        }
+                    }
+                }
+            }
+            Additional = AbsLights.str();
+        }
+
+        return LodLights.str();
+    }
+}

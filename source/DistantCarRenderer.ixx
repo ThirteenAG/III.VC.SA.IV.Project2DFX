@@ -177,17 +177,8 @@ export namespace DistantCarRenderer
 
             RenderStates()
             {
-                // VC/SA keep ZWRITE off on purpose. Everything that draws after the
-                // models and z-tests will be rejected inside their pixels if the
-                // models write depth, so cars would cut holes into the moving fog
-                // and the volumetric clouds (both only test, they never occlude
-                // anything themselves). The test stays on, so buildings occlude
-                // the cars, and the cars are sorted back to front, which is what
-                // the alpha blending needs.
-                // III still draws fading roads after this hook. Let those
-                // surfaces depth-test against cars instead of painting over
-                // them when the map switches between normal and LOD geometry.
-                const uintptr_t values[10] = { 0,1,bLegacyIm3D ? 1u : 0u,1,5,6,2,1,2,8 };
+                // Mesh parts must occlude one another, including the far-side wheels.
+                const uintptr_t values[10] = { 0,1,1,1,5,6,2,1,2,8 };
                 for (int i = 0; i < 10; ++i)
                 {
                     RwRenderStateGet(states[i], &saved[i]);
