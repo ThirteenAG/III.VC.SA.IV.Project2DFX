@@ -458,6 +458,9 @@ void GetMemoryAddresses()
 void Init()
 {
     fCoronaRadiusBase = 0.5f;
+    // CStreaming::Init: mov ms_memoryAvailable, imm32
+    if (*(uint16_t*)0x5B8E64 == 0x05C7 && *(uint32_t*)0x5B8E66 == 0x8A5A80)
+        pGameStreamingMemory = (uint32_t*)0x5B8E6A;
     ReadSettings();
     GetMemoryAddresses();
     ApplyMemoryPatches();

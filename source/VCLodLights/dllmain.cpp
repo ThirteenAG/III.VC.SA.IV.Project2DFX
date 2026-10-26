@@ -603,6 +603,9 @@ void GetMemoryAddresses()
 
 void Init()
 {
+    // CStreaming::Init: mov ms_memoryAvailable, imm32
+    if (*(uint16_t*)0x410799 == 0x05C7 && *(uint32_t*)0x41079B == 0x94DD54)
+        pGameStreamingMemory = (uint32_t*)0x41079F;
     ReadSettings();
     GetMemoryAddresses();
     ApplyMemoryPatches();

@@ -152,29 +152,6 @@ export
     // Called after the settings are read, for values the plugin writes into the game.
     void (*OnSettingsApplied)() = nullptr;
 
-    // The limit adjuster grows the game's lists as the draw distance needs. Without it the game keeps its own
-    // limits, so the distances stay close to the game's.
-    bool LimitAdjusterPresent()
-    {
-        static bool present = false;
-        if (present)
-            return true;
-        HMODULE modules[1024];
-        DWORD needed = 0;
-        if (EnumProcessModules(GetCurrentProcess(), modules, sizeof(modules), &needed))
-        {
-            for (DWORD i = 0; i < needed / sizeof(HMODULE) && i < 1024; i++)
-            {
-                if (GetProcAddress(modules[i], "OpenLA_GetVersion"))
-                {
-                    present = true;
-                    break;
-                }
-            }
-        }
-        return present;
-    }
-
     // Streaming memory chosen by the limit adjuster in bytes, 0 when unknown.
     uint32_t LimitAdjusterStreamingBudget()
     {
@@ -189,6 +166,40 @@ export
             }
         }
         return 0;
+    }
+
+    // The operand the game sets its streaming memory from (set by the plugin before the settings are read), so a
+    // value another mod wrote there counts too. Null where the game works it out at runtime.
+    uint32_t* pGameStreamingMemory = nullptr;
+
+    // The limit adjuster grows the game's lists and streaming memory as the draw distance needs. Without it, or when
+    // the streaming memory stays near the game's own, the distances stay close to the game's: models streamed out
+    // behind the camera would otherwise reload, and pop in, every time it turns back.
+    bool LimitAdjusterPresent()
+    {
+        static bool present = false;
+        if (present)
+            return true;
+        HMODULE modules[1024];
+        DWORD needed = 0;
+        if (EnumProcessModules(GetCurrentProcess(), modules, sizeof(modules), &needed))
+        {
+            for (DWORD i = 0; i < needed / sizeof(HMODULE) && i < 1024; i++)
+            {
+                if (auto version = (int(*)())GetProcAddress(modules[i], "OpenLA_GetVersion"))
+                {
+                    // 0: not active for this executable
+                    if (version() <= 0)
+                        break;
+                    auto memory = LimitAdjusterStreamingBudget();
+                    if (memory == 0 && pGameStreamingMemory)
+                        memory = *pGameStreamingMemory;
+                    present = memory == 0 || memory >= 128 * 1024 * 1024;
+                    break;
+                }
+            }
+        }
+        return present;
     }
 
     // The settings of the plugin (ASI Settings, external/FusionFixUtils/asi_settings): described in
