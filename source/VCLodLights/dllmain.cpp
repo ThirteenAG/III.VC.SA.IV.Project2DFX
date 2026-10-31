@@ -485,15 +485,9 @@ void ApplyMemoryPatches()
         injector::WriteMemory<unsigned char>(0x0058E2BB, 0x55u, true);
     }
 
-    auto cameraPattern = hook::pattern("E8 ? ? ? ? 84 C0 74 ? B9 ? ? ? ? E8 ? ? ? ? E8");
-    if (cameraPattern.size() == 1 && *cameraPattern.get_first<uint8_t>(-5) == 0xE8)
-    {
-        auto cameraProcess = cameraPattern.get_first<uint8_t>();
-        ViewDistance::InstallCamera(cameraProcess + 14);
-        ViewDistance::InstallTimecycle(cameraProcess - 5);
-    }
-    else
-        OutputDebugStringA("Project2DFX: view distance hooks unavailable\n");
+    auto cameraProcess = hook::get_pattern<uint8_t>("E8 ? ? ? ? E8 ? ? ? ? 84 C0 74 ? B9 ? ? ? ? E8 ? ? ? ? E8");
+    ViewDistance::InstallCamera(cameraProcess + 19);
+    ViewDistance::InstallTimecycle(cameraProcess);
 
     // Detail distance: the 300 m the renderer draws non-LOD objects to
     OnSettingsApplied = []

@@ -187,20 +187,10 @@ void ApplyMemoryPatches()
         CLODLights::Shutdown();
     });
 
-    auto timecyclePattern = hook::pattern("E8 ? ? ? ? 84 1D ? ? ? ? 74 ? B9 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? 84 C0");
-    auto cameraPattern = hook::pattern("E8 ? ? ? ? 84 C0 B9 ? ? ? ? 74 ? E8 ? ? ? ? EB ? E8");
-    auto sunCorePattern = hook::pattern("D8 0D 34 25 87 00 A1 ? ? ? ? 68 00 00 70 41");
-    auto sunCoronaPattern = hook::pattern("D8 0D 44 8B 85 00 A1 ? ? ? ? 68 00 00 70 41");
-    if (timecyclePattern.size() == 1 && cameraPattern.size() == 1 && sunCorePattern.size() == 1 && sunCoronaPattern.size() == 1
-        && *timecyclePattern.get_first<uint8_t>(-5) == 0xE8)
-    {
-        injector::WriteMemory(sunCorePattern.get_first<uint8_t>() + 2, &ViewDistance::sunCore, true);
-        injector::WriteMemory(sunCoronaPattern.get_first<uint8_t>() + 2, &ViewDistance::sunCorona, true);
-        ViewDistance::InstallCamera(cameraPattern.get_first<uint8_t>() + 14);
-        ViewDistance::InstallTimecycle(timecyclePattern.get_first<uint8_t>() - 5);
-    }
-    else
-        OutputDebugStringA("Project2DFX: view distance hooks unavailable\n");
+    injector::WriteMemory(hook::get_pattern("D8 0D 34 25 87 00 A1 ? ? ? ? 68 00 00 70 41", 2), &ViewDistance::sunCore, true);
+    injector::WriteMemory(hook::get_pattern("D8 0D 44 8B 85 00 A1 ? ? ? ? 68 00 00 70 41", 2), &ViewDistance::sunCorona, true);
+    ViewDistance::InstallCamera(hook::get_pattern<uint8_t>("E8 ? ? ? ? 84 C0 B9 ? ? ? ? 74 ? E8 ? ? ? ? EB ? E8", 14));
+    ViewDistance::InstallTimecycle(hook::get_pattern("E8 ? ? ? ? E8 ? ? ? ? 84 1D ? ? ? ? 74 ? B9 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? 84 C0"));
 
     injector::WriteMemory(0x6FC051 + 0x2, 0x7080 * 0xA, true); // sun reflection
     injector::WriteMemory<float>(0x49DCF4, 550.0f, true); //Traffic lights corona draw distance

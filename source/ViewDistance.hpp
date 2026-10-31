@@ -18,9 +18,6 @@ namespace ViewDistance
 
     void InstallWaterRange(uintptr_t address, uintptr_t offset)
     {
-        const uint8_t expected[] = { 0xD9, 0x44, 0x24, static_cast<uint8_t>(offset), 0xD8, 0xC8 };
-        if (memcmp(reinterpret_cast<void*>(address), expected, sizeof(expected)) != 0)
-            return;
         waterRangeOffset = offset;
         waterRangeHook = safetyhook::create_mid(address, [](SafetyHookContext& context)
         {

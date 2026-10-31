@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cmath>
-#include <cstring>
 #include <psapi.h>
 
 namespace ProceduralDistance
@@ -171,28 +170,6 @@ namespace ProceduralDistance
         return static_cast<int>(static_cast<uint8_t>(model->m_nAlpha) * fade);
     }
 
-    bool Validate()
-    {
-        for (const auto& operand : operands)
-        {
-            if (*reinterpret_cast<const uint16_t*>(operand.address - 2) != operand.opcode
-                || *reinterpret_cast<const uintptr_t*>(operand.address) != operand.original)
-                return false;
-        }
-        return *reinterpret_cast<const float*>(0x859AA4) == 10000.0f
-            && *reinterpret_cast<const float*>(0x85F074) == 340.0f
-            && *reinterpret_cast<const float*>(0x86BF20) == 115600.0f
-            && *reinterpret_cast<const float*>(0x858C28) == 0.05f
-            && *reinterpret_cast<const uint8_t*>(0x5DCE78) == 0x68
-            && *reinterpret_cast<const float*>(0x5DCE79) == 100.0f
-            && std::memcmp(reinterpret_cast<void*>(0x5A3850), "\x83\xEC\x7C\x53\x55\x56\x8B\xB4\x24\x8C\x00\x00\x00", 13) == 0
-            && std::memcmp(reinterpret_cast<void*>(0x554230), "\x83\xEC\x14\x56\x8B\x74\x24\x1C", 8) == 0
-            && std::memcmp(reinterpret_cast<void*>(0x732500), "\x51\x8B\x4C\x24\x08\x8B\x41\x14", 8) == 0
-            && std::memcmp(reinterpret_cast<void*>(0x49EA50), "\x8B\x41\x54\xC3", 4) == 0
-            && *reinterpret_cast<const uint16_t*>(0x5A332A) == 0x777D
-            && *reinterpret_cast<const uint16_t*>(0x5A3355) == 0x4C73;
-    }
-
     void Update()
     {
         const float requested{ std::isfinite(fDetailDistance) ? std::clamp(fDetailDistance, 1.0f, 3.0f) : 1.0f };
@@ -202,8 +179,6 @@ namespace ProceduralDistance
 
         if (!active)
         {
-            if (!Validate())
-                return;
             if (!Install(surfaceHook, reinterpret_cast<void*>(0x5A3850), AddObjects)
                 || !Install(visibilityHook, reinterpret_cast<void*>(0x554230), SetupObjectVisibility)
                 || !Install(alphaHook, reinterpret_cast<void*>(0x732500), CalculateObjectAlpha))

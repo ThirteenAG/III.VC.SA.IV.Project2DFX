@@ -326,6 +326,9 @@ namespace LightVolumes
             float top{ 1.0f };
             float bottom{ -1.0f };
             bool clipped{ false };
+            // Planes all corners are outside of: such a box is off screen, also when it reaches behind the camera
+            // (looking down, the boxes of far lamps above the camera's height do).
+            unsigned int outside{ 31 };
             for (int corner = 0; corner < 8; ++corner)
             {
                 const float p[] = { centre.x + (corner & 1 ? radius : -radius), centre.y + (corner & 2 ? radius : -radius),
@@ -334,16 +337,20 @@ namespace LightVolumes
                 for (int j = 0; j < 4; ++j)
                     for (int k = 0; k < 4; ++k)
                         clip[j] += p[k] * vp.m[k][j];
+                outside &= (clip[0] < -clip[3] ? 1 : 0) | (clip[0] > clip[3] ? 2 : 0) | (clip[1] < -clip[3] ? 4 : 0) |
+                    (clip[1] > clip[3] ? 8 : 0) | (clip[3] <= 0.1f ? 16 : 0);
                 if (clip[3] <= 0.1f)
                 {
                     clipped = true;
-                    break;
+                    continue;
                 }
                 left = (std::min)(left, clip[0] / clip[3]);
                 right = (std::max)(right, clip[0] / clip[3]);
                 top = (std::min)(top, -clip[1] / clip[3]);
                 bottom = (std::max)(bottom, -clip[1] / clip[3]);
             }
+            if (outside)
+                continue;
             if (clipped)
             {
                 left = top = -1.0f;

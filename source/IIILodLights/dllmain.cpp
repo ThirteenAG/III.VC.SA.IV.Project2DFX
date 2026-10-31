@@ -490,15 +490,9 @@ void ApplyMemoryPatches()
         injector::MakeJMP(0x513CFF, 0x513D92); //ped shadows draw distance
     }
 
-    auto cameraPattern = hook::pattern("E8 ? ? ? ? 84 C0 74 ? B9 ? ? ? ? E8 ? ? ? ? E8");
-    if (cameraPattern.size() == 1 && *cameraPattern.get_first<uint8_t>(-5) == 0xE8)
-    {
-        auto cameraProcess = cameraPattern.get_first<uint8_t>();
-        ViewDistance::InstallCamera(cameraProcess + 14);
-        ViewDistance::InstallTimecycle(cameraProcess - 5);
-    }
-    else
-        OutputDebugStringA("Project2DFX: view distance hooks unavailable\n");
+    auto cameraProcess = hook::get_pattern<uint8_t>("E8 ? ? ? ? E8 ? ? ? ? 84 C0 74 ? B9 ? ? ? ? E8 ? ? ? ? E8");
+    ViewDistance::InstallCamera(cameraProcess + 19);
+    ViewDistance::InstallTimecycle(cameraProcess);
 
     // Detail distance: the 300 m the renderer draws non-LOD objects to
     for (auto address : { 0x4A8AB1, 0x4A8AC6, 0x4A8AD9, 0x4A8B0E, 0x4A8B21, 0x4A8B34, 0x4A8B82, 0x4A8B97, 0x4A8BAA, 0x4A8BDF, 0x4A8BF2, 0x4A8C05,

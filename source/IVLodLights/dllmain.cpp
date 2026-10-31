@@ -382,8 +382,8 @@ void DistantCoronaParams(float& brightness, float& size)
         return type ? std::clamp(*type, 0, int32_t(NUM_WEATHERS) - 1) : 0;
     };
     int oldWeather = weather(CWeather::OldWeatherType);
-    int newWeather = CWeather::NewWeatherType ? weather(CWeather::NewWeatherType) : oldWeather;
-    float w = CWeather::InterpolationValue ? std::clamp(*CWeather::InterpolationValue, 0.0f, 1.0f) : 0.0f;
+    int newWeather = weather(CWeather::NewWeatherType);
+    float w = std::clamp(*CWeather::InterpolationValue, 0.0f, 1.0f);
 
     auto at = [&](auto member)
     {
@@ -557,30 +557,21 @@ void Init()
 {
     BindSettings();
 
-    if (!FindGameAddresses())
-    {
-        OutputDebugStringW(L"IVLodLights: this version of the game isn't supported\n");
-        return;
-    }
+    FindGameAddresses();
 
     RaiseCoronaLimit();
 
     // The game's own lamp coronas: the light being processed gives its entity's fade, the corona it registers next
     // gives the look
     auto light = find_pattern("55 8B EC 83 E4 F0 81 EC 88 00 00 00 56 8B 75 08 32 C0", "55 8B EC 83 E4 F0 83 EC 54 8B 4D 30");
-    if (!light.empty())
+    shProcessOne2dEffectLight = safetyhook::create_mid(light.get_first(), [](SafetyHookContext& regs)
     {
-        shProcessOne2dEffectLight = safetyhook::create_mid(light.get_first(), [](SafetyHookContext& regs)
-        {
-            PendingAlpha = *reinterpret_cast<float*>(regs.esp + 0x14);
-        });
-        shDrawCorona = safetyhook::create_inline(reinterpret_cast<void*>(DrawCorona), DrawCoronaHook);
-    }
+        PendingAlpha = *reinterpret_cast<float*>(regs.esp + 0x14);
+    });
+    shDrawCorona = safetyhook::create_inline(reinterpret_cast<void*>(DrawCorona), DrawCoronaHook);
 
     // Once per frame, in the game's update loop (a call of an empty function)
     auto pattern = hook::pattern("E8 ? ? ? ? 83 3D ? ? ? ? ? 74 05 E8 ? ? ? ? 6A 05");
-    if (pattern.empty())
-        return;
     injector::MakeCALL(pattern.get_first(0), RegisterLODLights, true);
 
     // The objects of the map as they are loaded
@@ -600,8 +591,6 @@ void Init()
     else
     {
         pattern = hook::pattern("8B 5D 08 8B 4B 1C 8D 44 24 14 50 51");
-        if (pattern.empty())
-            return;
         struct LoadObjectInstanceHook
         {
             void operator()(injector::reg_pack& regs)
@@ -627,16 +616,13 @@ void Init()
     else
     {
         pattern = hook::pattern("F3 0F 10 05 ? ? ? ? F3 0F 59 C4 F3 0F 11 45");
-        if (!pattern.empty())
+        static float* fReflectionMultiplier = *pattern.get_first<float*>(4);
+        injector::MakeNOP(pattern.get_first(0), 12, true);
+        WaterMultiplierHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
         {
-            static float* fReflectionMultiplier = *pattern.get_first<float*>(4);
-            injector::MakeNOP(pattern.get_first(0), 12, true);
-            WaterMultiplierHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
-            {
-                regs.xmm0.f32[0] = *Values.enabled ? 1.0f : *fReflectionMultiplier;
-                regs.xmm0.f32[0] *= regs.xmm4.f32[0];
-            });
-        }
+            regs.xmm0.f32[0] = *Values.enabled ? 1.0f : *fReflectionMultiplier;
+            regs.xmm0.f32[0] *= regs.xmm4.f32[0];
+        });
     }
 
     // The game's own distant lights (its first 8 kinds) are left out while these are drawn
@@ -656,18 +642,15 @@ void Init()
     else
     {
         pattern = hook::pattern("0F 8C ? ? ? ? 83 3D ? ? ? ? ? 75 ? F3 0F 10 05");
-        if (!pattern.empty())
+        static uintptr_t loopStart = (uintptr_t)pattern.get_first(6) + *pattern.get_first<int32_t>(2);
+        struct DisableDefaultLodLights
         {
-            static uintptr_t loopStart = (uintptr_t)pattern.get_first(6) + *pattern.get_first<int32_t>(2);
-            struct DisableDefaultLodLights
+            void operator()(injector::reg_pack& regs)
             {
-                void operator()(injector::reg_pack& regs)
-                {
-                    if (regs.ebx < 8 && !(*Values.disableDefaultLodLights && ProjectLightsDrawn()))
-                        *(uintptr_t*)(regs.esp - 4) = loopStart;
-                }
-            }; injector::MakeInline<DisableDefaultLodLights>(pattern.get_first(0), pattern.get_first(6));
-        }
+                if (regs.ebx < 8 && !(*Values.disableDefaultLodLights && ProjectLightsDrawn()))
+                    *(uintptr_t*)(regs.esp - 4) = loopStart;
+            }
+        }; injector::MakeInline<DisableDefaultLodLights>(pattern.get_first(0), pattern.get_first(6));
     }
 }
 

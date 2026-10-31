@@ -244,7 +244,7 @@ export namespace Natives
     bool Call(Context& context, Args... args)
     {
         static Handler handler = nullptr;
-        if (CTimer::ms_bScriptPause && *CTimer::ms_bScriptPause)
+        if (*CTimer::ms_bScriptPause)
             return false;
         if (!handler)
             handler = GetHandler(Hash);
@@ -277,46 +277,18 @@ export namespace Natives
 }
 
 // The time of day the frame is rendered at: a script's FORCE_TIME_OF_DAY locks it (m_nLockedHours/Minutes, -1 when
-// not locked) without changing the clock, and the timecycle uses the locked time. Found through the native's handler:
-// call -> (jmp) -> mov eax, [esp+4]; mov ds:m_nLockedHours, eax; mov eax, [esp+8]; mov ds:m_nLockedMinutes, eax
+// not locked) without changing the clock, and the timecycle uses the locked time
 int32_t* pLockedHours = nullptr;
 int32_t* pLockedMinutes = nullptr;
 
-void FindLockedTime()
-{
-    static bool bTried = false;
-    if (bTried)
-        return;
-    auto handler = reinterpret_cast<uint8_t*>(Natives::GetHandler(Natives::FORCE_TIME_OF_DAY));
-    if (!handler)
-        return;
-    bTried = true;
-    for (int i = 0; i < 32; ++i)
-    {
-        if (handler[i] != 0xE8)
-            continue;
-        auto target = reinterpret_cast<uint8_t*>(injector::GetBranchDestination(handler + i).as_int());
-        for (int hops = 0; target && target[0] == 0xE9 && hops < 3; ++hops)
-            target = reinterpret_cast<uint8_t*>(injector::GetBranchDestination(target).as_int());
-        if (target && !memcmp(target, "\x8B\x44\x24\x04\xA3", 5) && !memcmp(target + 9, "\x8B\x44\x24\x08\xA3", 5))
-        {
-            pLockedHours = *reinterpret_cast<int32_t**>(target + 5);
-            pLockedMinutes = *reinterpret_cast<int32_t**>(target + 14);
-        }
-        return;
-    }
-}
-
 export int RenderedHours()
 {
-    FindLockedTime();
-    return pLockedHours && *pLockedHours >= 0 && *pLockedHours < 24 ? *pLockedHours : *CClock::ms_nGameClockHours;
+    return *pLockedHours >= 0 && *pLockedHours < 24 ? *pLockedHours : *CClock::ms_nGameClockHours;
 }
 
 export int RenderedMinutes()
 {
-    FindLockedTime();
-    return pLockedHours && *pLockedHours >= 0 && *pLockedHours < 24 && pLockedMinutes && *pLockedMinutes >= 0 && *pLockedMinutes < 60 ? *pLockedMinutes : *CClock::ms_nGameClockMinutes;
+    return *pLockedHours >= 0 && *pLockedHours < 24 && *pLockedMinutes >= 0 && *pLockedMinutes < 60 ? *pLockedMinutes : *CClock::ms_nGameClockMinutes;
 }
 
 // Text of the Vice City conversion for GTA IV, which has its own map and lights
@@ -325,28 +297,20 @@ export bool HasViceCityStrings()
     return Natives::DoesTextLabelExist("COL4_17") && Natives::DoesTextLabelExist("ROK3_1");
 }
 
-// Finds what the plugin uses; false when this version of the game isn't supported
-export bool FindGameAddresses()
+// Finds what the plugin uses
+export void FindGameAddresses()
 {
     auto pattern = find_pattern("F3 0F 10 05 ? ? ? ? F3 0F 59 05 ? ? ? ? 8B 43 20 53", "F3 0F 10 05 ? ? ? ? F3 0F 59 44 24 ? 83 C4 04 83 7C 24");
-    if (pattern.empty())
-        return false;
     CTimer::fTimeStep = *pattern.get_first<float*>(4);
 
     pattern = find_pattern("A1 ? ? ? ? A3 ? ? ? ? EB 3A", "A1 ? ? ? ? 39 05 ? ? ? ? 76 1F");
-    if (pattern.empty())
-        return false;
     CTimer::m_snTimeInMilliseconds = *pattern.get_first<uint32_t*>(1);
 
     pattern = hook::pattern("0F B6 0D ? ? ? ? 0F B6 C0 0B C1");
     if (!pattern.empty())
         CTimer::ms_bScriptPause = *pattern.get_first<bool*>(15);
     else
-    {
-        pattern = hook::pattern("0F B6 0D ? ? ? ? 0F B6 15 ? ? ? ? 33 C0 0B C1");
-        if (!pattern.empty())
-            CTimer::ms_bScriptPause = *pattern.get_first<bool*>(10);
-    }
+        CTimer::ms_bScriptPause = *hook::get_pattern<bool*>("0F B6 0D ? ? ? ? 0F B6 15 ? ? ? ? 33 C0 0B C1", 10);
 
     pattern = hook::pattern("A3 ? ? ? ? 8B 44 24 ? A3 ? ? ? ? 8B 44 24 ? A3 ? ? ? ? A1");
     if (!pattern.empty())
@@ -357,51 +321,49 @@ export bool FindGameAddresses()
     else
     {
         pattern = hook::pattern("A3 ? ? ? ? 8B 44 24 ? 89 0D ? ? ? ? 8B 0D");
-        if (pattern.empty())
-            return false;
         CClock::ms_nGameClockHours = *pattern.get_first<uint8_t*>(11);
         CClock::ms_nGameClockMinutes = *pattern.get_first<uint8_t*>(23);
     }
 
+    // The setter of the locked time: mov eax, [esp+4]; mov ds:m_nLockedHours, eax; mov eax, [esp+8]; mov
+    // ds:m_nLockedMinutes, eax (older versions load both arguments first)
+    auto lockedTime = injector::GetBranchDestination(hook::get_pattern("75 04 6A 0C EB 02 6A 16 E8", 8)).as_int();
+    pattern = hook::range_pattern(lockedTime, lockedTime + 19, "8B 44 24 04 A3 ? ? ? ? 8B 44 24 08 A3");
+    if (!pattern.empty())
+    {
+        pLockedHours = *pattern.get_first<int32_t*>(5);
+        pLockedMinutes = *pattern.get_first<int32_t*>(14);
+    }
+    else
+    {
+        pattern = hook::range_pattern(lockedTime, lockedTime + 20, "8B 44 24 04 8B 4C 24 08 A3 ? ? ? ? 89 0D");
+        pLockedHours = *pattern.get_first<int32_t*>(9);
+        pLockedMinutes = *pattern.get_first<int32_t*>(15);
+    }
+
     pattern = find_pattern("A1 ? ? ? ? 83 C4 08 8B CF 68 ? ? ? ? 89", "A1 ? ? ? ? 80 3F 04");
-    if (pattern.empty())
-        return false;
     CWeather::OldWeatherType = *pattern.get_first<int32_t*>(1);
 
     pattern = find_pattern("A1 ? ? ? ? 89 46 4C A1", "A1 ? ? ? ? 77 05 A1 ? ? ? ? 80 3F 04");
-    if (!pattern.empty())
-        CWeather::NewWeatherType = *pattern.get_first<int32_t*>(1);
+    CWeather::NewWeatherType = *pattern.get_first<int32_t*>(1);
 
-    pattern = hook::pattern("F3 0F 10 05 ? ? ? ? 8B 44 24 0C 8B 4C 24 04");
-    if (!pattern.empty())
-        CWeather::InterpolationValue = *pattern.get_first<float*>(4);
+    CWeather::InterpolationValue = *hook::get_pattern<float*>("F3 0F 10 05 ? ? ? ? 8B 44 24 0C 8B 4C 24 04", 4);
 
     pattern = find_pattern("05 ? ? ? ? 50 8D 4C 24 60", "05 ? ? ? ? D9 5C 24 04 8D 4C 24 38 D9");
-    if (pattern.empty())
-        return false;
     mTimeCycle = *pattern.get_first<Timecycle*>(1);
 
     pattern = find_pattern("8B 15 ? ? ? ? 56 8D 72 01", "A1 ? ? ? ? 56 8D 70 01 81 FE");
-    if (pattern.empty())
-        return false;
     DrawCorona = pattern.get_first<int(__cdecl)(int, char, char, char, float, void*, float, float, float, int, float, char, char, int)>(0);
 
-    auto size = hook::pattern("8B 35 ? ? ? ? 85 F6 75 06 33 C0 5E C2 04 00 53 57 8B 7C 24 10").count_hint(2);
-    if (size.empty())
-        size = hook::pattern("8B 3D ? ? ? ? 85 FF 75 04 33 C0 5F C3").count_hint(2);
-    auto natives = hook::pattern("8B 1D ? ? ? ? 8B CF 8B 04 D3 3B C7 74 19 8D 64 24 00 85 C0").count_hint(2);
-    if (natives.empty())
-        natives = hook::pattern("8B 1D ? ? ? ? 8B CE 8B 04 D3 3B C6 74 17 85 C0").count_hint(2);
-    if (size.empty() || natives.empty())
-        return false;
-    Natives::ms_dwNativeTableSize = *size.get(0).get<uint32_t*>(2);
-    Natives::ms_pNatives = *natives.get(0).get<uint32_t**>(2);
+    auto size = find_pattern<2>("8B 35 ? ? ? ? 85 F6 75 06 33 C0 5E C2 04 00 53 57 8B 7C 24 10", "8B 3D ? ? ? ? 85 FF 75 04 33 C0 5F C3");
+    auto natives = find_pattern<2>("8B 1D ? ? ? ? 8B CF 8B 04 D3 3B C7 74 19 8D 64 24 00 85 C0", "8B 1D ? ? ? ? 8B CE 8B 04 D3 3B C6 74 17 85 C0");
+    Natives::ms_dwNativeTableSize = *size.get_first<uint32_t*>(2);
+    Natives::ms_pNatives = *natives.get_first<uint32_t**>(2);
 
+    // The Complete Edition looks natives up through a function
     pattern = hook::pattern("56 8B 35 ? ? ? ? 85 F6 75 06");
     if (pattern.size() >= 2)
         Natives::getNativeAddress = pattern.get(1).get<void* (__stdcall)(uint32_t)>(0);
-
-    return true;
 }
 
 export unsigned int HashStringLowercase(const char* str)
