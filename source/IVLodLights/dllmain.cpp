@@ -2,6 +2,7 @@
 #include "stdafx.h"
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <array>
 #include <atomic>
 #include <filesystem>
 #include <fstream>
@@ -361,6 +362,21 @@ bool ProjectLightsDrawn()
     return !(hour < 19 && hour > 7);
 }
 
+// The game's distant streetlights are hidden while these replace them: thresholds above the night fade's 1.0 switch
+// none on. The distant traffic stays.
+float* DistantLightThresholds = nullptr;
+std::array<float, 16> DistantLightThresholdsOriginal{};
+
+void HideDefaultLodLights(bool hide)
+{
+    static bool hidden = false;
+    if (hide == hidden)
+        return;
+    hidden = hide;
+    for (size_t i = 0; i < DistantLightThresholdsOriginal.size(); ++i)
+        injector::WriteMemory(&DistantLightThresholds[i], hide ? 2.0f : DistantLightThresholdsOriginal[i], true);
+}
+
 // The timecycle's distant corona brightness and size at the rendered time, blended between its time slots and the
 // old and new weather, so they change smoothly instead of in steps
 void DistantCoronaParams(float& brightness, float& size)
@@ -421,6 +437,7 @@ void RegisterLODLights()
     }
     MatchObservedCoronas(camPos);
 
+    HideDefaultLodLights(*Values.disableDefaultLodLights && ProjectLightsDrawn());
     if (!ProjectLightsDrawn())
         return;
 
@@ -625,33 +642,10 @@ void Init()
         });
     }
 
-    // The game's own distant lights (its first 8 kinds) are left out while these are drawn
-    pattern = hook::pattern("83 F8 08 0F 8C ? ? ? ? 83 3D");
-    if (!pattern.empty())
-    {
-        static uintptr_t loopStart = (uintptr_t)pattern.get_first(9) + *pattern.get_first<int32_t>(5);
-        struct DisableDefaultLodLights
-        {
-            void operator()(injector::reg_pack& regs)
-            {
-                if (regs.eax < 8 && !(*Values.disableDefaultLodLights && ProjectLightsDrawn()))
-                    *(uintptr_t*)(regs.esp - 4) = loopStart;
-            }
-        }; injector::MakeInline<DisableDefaultLodLights>(pattern.get_first(0), pattern.get_first(9));
-    }
-    else
-    {
-        pattern = hook::pattern("0F 8C ? ? ? ? 83 3D ? ? ? ? ? 75 ? F3 0F 10 05");
-        static uintptr_t loopStart = (uintptr_t)pattern.get_first(6) + *pattern.get_first<int32_t>(2);
-        struct DisableDefaultLodLights
-        {
-            void operator()(injector::reg_pack& regs)
-            {
-                if (regs.ebx < 8 && !(*Values.disableDefaultLodLights && ProjectLightsDrawn()))
-                    *(uintptr_t*)(regs.esp - 4) = loopStart;
-            }
-        }; injector::MakeInline<DisableDefaultLodLights>(pattern.get_first(0), pattern.get_first(6));
-    }
+    // The dusk thresholds of the game's distant streetlights, a table of 16 the night fade is compared with
+    pattern = hook::pattern("25 ? 00 00 ? 79 05 48 83 C8 F0 40 F3 0F 10 45 08 0F 2F 04 85");
+    DistantLightThresholds = *pattern.get_first<float*>(21);
+    std::copy_n(DistantLightThresholds, DistantLightThresholdsOriginal.size(), DistantLightThresholdsOriginal.begin());
 }
 
 extern "C" __declspec(dllexport) void InitializeASI()
