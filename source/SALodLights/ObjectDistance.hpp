@@ -56,7 +56,6 @@ namespace ObjectDistance
     static float grassFadeWidth{ 20.0f };
     static float grassFadeInverse{ 0.05f };
     static bool proceduralScalingActive{};
-    static bool proceduralHooksInstalled{};
     static SafetyHookInline alphaHook{}, proceduralVisibilityHook{}, surfaceHook{};
     static SafetyHookMid normalVisibilityHook{}, iplRequestHook{};
 
@@ -100,13 +99,12 @@ namespace ObjectDistance
 
     bool UsesNormalCap(const CEntity* entity)
     {
-        return normalVisibilityHook && entity
-            && !entity->bIsBIGBuilding && !entity->bIsProcObject && !entity->bDontStream;
+        return entity && !entity->bIsBIGBuilding && !entity->bIsProcObject && !entity->bDontStream;
     }
 
     bool UsesProceduralRange(const CEntity* entity)
     {
-        return proceduralHooksInstalled && entity && entity->bIsProcObject;
+        return entity && entity->bIsProcObject;
     }
 
     inline bool ValidIplBounds(const IplBounds& b)
@@ -258,7 +256,8 @@ namespace ObjectDistance
     void SetupNormalObjectVisibility(SafetyHookContext& ctx)
     {
         const auto* entity = reinterpret_cast<const CEntity*>(ctx.esi);
-        if (!UsesNormalCap(entity)) return;
+        if (!UsesNormalCap(entity))
+            return;
         const auto range = NormalObjectRange(reinterpret_cast<const CBaseModelInfo*>(ctx.edi), entity);
         *reinterpret_cast<float*>(ctx.esp + 0x14) = range.limit;
         *reinterpret_cast<float*>(ctx.esp + 0x10) = range.width;
@@ -267,13 +266,15 @@ namespace ObjectDistance
     void ExtendIplRequests(const CVector& streamingPosition)
     {
         const auto* pool = *reinterpret_cast<IplPool**>(0x8E3FB0);
-        if (!pool || !pool->objects || !pool->flags) return;
+        if (!pool || !pool->objects || !pool->flags)
+            return;
         const CVector camera = TheCamera->GetCoords();
         const float fade = *reinterpret_cast<const float*>(0x858BA4);
         const bool exterior = CGame::currArea == 0 && CEntryExitManager::ms_exitEnterState == 0;
         for (int slot = 1; slot < pool->size; ++slot)
         {
-            if (pool->flags[slot] & 0x80) continue;
+            if (pool->flags[slot] & 0x80)
+                continue;
             auto* def = &pool->objects[slot];
             const bool eligible = exterior && !def->interior && !def->disableDynamicStreaming
                 && !def->ignoreWhenDeleted && ValidIplBounds(def->bounds)
@@ -323,12 +324,9 @@ namespace ObjectDistance
         // SetupMapEntityVisibility has computed radius/fade width, but has not
         // made visibility/LOD decisions yet. The x87 stack is empty.
         normalVisibilityHook = safetyhook::create_mid(reinterpret_cast<void*>(0x554028), SetupNormalObjectVisibility);
-        if (normalVisibilityHook)
-        {
-            // outDistance already contains the real distance. Skip the old
-            // `distance += cameraScaledModelDistance - normalCap` adjustment.
-            injector::MakeJMP(0x5545E2, 0x554636, true);
-        }
+        // outDistance already holds the real distance: the old `distance += cameraScaledModelDistance - normalCap`
+        // adjustment is skipped
+        injector::MakeJMP(0x5545E2, 0x554636, true);
     }
 
     void InstallProceduralHooks()
@@ -336,18 +334,9 @@ namespace ObjectDistance
         proceduralVisibilityHook = safetyhook::create_inline(
             reinterpret_cast<void*>(0x554230), SetupProceduralVisibility);
         surfaceHook = safetyhook::create_inline(reinterpret_cast<void*>(0x5A3850), AddProceduralObjects);
-        if (proceduralVisibilityHook && surfaceHook)
-        {
-            grassFar = *reinterpret_cast<const float*>(0x8D132C);
-            for (const auto& operand : grassRampOperands)
-                ProtectedGameRef<uintptr_t>(reinterpret_cast<uintptr_t*>(operand.address)) = reinterpret_cast<uintptr_t>(operand.replacement);
-            proceduralHooksInstalled = true;
-        }
-        else
-        {
-            proceduralVisibilityHook.reset();
-            surfaceHook.reset();
-        }
+        grassFar = *reinterpret_cast<const float*>(0x8D132C);
+        for (const auto& operand : grassRampOperands)
+            ProtectedGameRef<uintptr_t>(reinterpret_cast<uintptr_t*>(operand.address)) = reinterpret_cast<uintptr_t>(operand.replacement);
     }
 
     void InstallIplStreamingHook()
@@ -363,10 +352,6 @@ namespace ObjectDistance
 
     void Install()
     {
-        static bool attempted{};
-        if (attempted) return;
-        attempted = true;
-
         // Redirect the renderer's 300 m non-LOD cap to the live distance setting.
         for (auto address : { 0x554230 + 0x3B6 + 2, 0x554230 + 0x3D0 + 2, 0x554230 + 0x3FA + 2, 0x554FE0 + 0x192 + 2, 0x554FE0 + 0x1B8 + 2,
                               0x554FE0 + 0x1DB + 2, 0x554FE0 + 0x24E + 2, 0x554FE0 + 0x258 + 2, 0x554FE0 + 0x262 + 2, 0x554FE0 + 0x314 + 2,
@@ -375,18 +360,14 @@ namespace ObjectDistance
             injector::WriteMemory(address, &fMaxDrawDistanceForNormalObjects, true);
 
         InstallAlphaHook();
-        if (alphaHook)
-        {
-            InstallNormalHook();
-            InstallProceduralHooks();
-        }
+        InstallNormalHook();
+        InstallProceduralHooks();
 
         InstallIplStreamingHook();
     }
 
     void UpdateProceduralDistance()
     {
-        if (!proceduralHooksInstalled) return;
         const float requested{ std::isfinite(fDetailDistance) ? std::clamp(fDetailDistance, 1.0f, 3.0f) : 1.0f };
         const float target{ requested > 1.0f ? (std::min)(requested, CalculateProceduralPoolScale()) : 1.0f };
         if (!proceduralScalingActive && target > 1.0f)
@@ -402,7 +383,8 @@ namespace ObjectDistance
         grassFar = *reinterpret_cast<const float*>(0x8D132C) * scale;
         grassFadeWidth = 20.0f * scale;
         grassFadeInverse = 0.05f / scale;
-        if (!proceduralScalingActive) return;
+        if (!proceduralScalingActive)
+            return;
         const float radius{ 100.0f * scale };
         if (*reinterpret_cast<const float*>(0x5DCE79) != radius)
             ProtectedGameRef<float>(reinterpret_cast<float*>(0x5DCE79)) = radius;
