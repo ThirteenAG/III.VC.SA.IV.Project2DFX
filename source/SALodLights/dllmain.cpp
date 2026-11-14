@@ -117,7 +117,7 @@ bool ExteriorView()
 }
 
 #include "../ViewDistance.hpp"
-#include "ProceduralDistance.hpp"
+#include "ObjectDistance.hpp"
 
 void ApplyMemoryPatches()
 {
@@ -152,7 +152,7 @@ void ApplyMemoryPatches()
     pattern = hook::pattern("8B 4C 24 ? 89 4F ? 89 4C 24 ? B9 ? ? ? ? 89 57 ? E8 ? ? ? ? 8A 1D");
     static auto CMovingThingsUpdateHook = safetyhook::create_mid(pattern.get_first(), [](SafetyHookContext& regs)
     {
-        ProceduralDistance::Update();
+        ObjectDistance::UpdateProceduralDistance();
         if (bRenderLodLights)
             CLODLights::RegisterLODLights();
         if (nDistantTraffic > 0)
@@ -318,12 +318,7 @@ void ApplyMemoryPatches()
             }
         }; injector::MakeInline<IncreaseDrawDistanceForObjectsHook>(0x5B3D9F, 0x5B3D9F + 6);
 
-        // The 300 m the renderer draws non-LOD objects to
-        for (auto address : { 0x554230 + 0x3B6 + 2, 0x554230 + 0x3D0 + 2, 0x554230 + 0x3FA + 2, 0x554FE0 + 0x192 + 2, 0x554FE0 + 0x1B8 + 2,
-                              0x554FE0 + 0x1DB + 2, 0x554FE0 + 0x24E + 2, 0x554FE0 + 0x258 + 2, 0x554FE0 + 0x262 + 2, 0x554FE0 + 0x314 + 2,
-                              0x554FE0 + 0x31E + 2, 0x554FE0 + 0x328 + 2, 0x554FE0 + 0x382 + 2, 0x554FE0 + 0x39A + 2, 0x554FE0 + 0x3A8 + 2,
-                              0x5B51E0 + 0x09A + 2 })
-            injector::WriteMemory(address, &fMaxDrawDistanceForNormalObjects, true);
+        ObjectDistance::Install();
     }
 
     // Keeps LOD models loaded, so they don't pop in. Only with the limit adjuster's streaming memory: they stay in it.
